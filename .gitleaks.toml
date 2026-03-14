@@ -1,0 +1,20 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "OpenLankaPayment Gitleaks Config"
+
+[allowlist]
+  description = "Allow test fixtures and example keys"
+  paths = [
+    '''_test\.go$''',
+    '''\.plan/''',
+  ]
+  regexTarget = "match"
+  regexes = [
+    '''sk_live_test_secret_key_12345''',
+    '''sk_test_''',
+    '''ak_test_''',
+    '''olp_dev_password''',
+    '''olp_test_password''',
+    '''dev_admin_secret_change_in_prod''',
+  ]
