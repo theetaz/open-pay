@@ -39,11 +39,14 @@ func (p *MockProvider) Name() string {
 func (p *MockProvider) CreatePayment(_ context.Context, req domain.ProviderPaymentRequest) (*domain.ProviderPaymentResponse, error) {
 	payID := fmt.Sprintf("mock_%s", uuid.New().String()[:12])
 
-	status := domain.StatusInitiated
-	if req.Amount == "0.01" {
+	var status domain.PaymentStatus
+	switch req.Amount {
+	case "0.01":
 		status = domain.StatusExpired
-	} else if req.Amount == "0.02" {
+	case "0.02":
 		status = domain.StatusFailed
+	default:
+		status = domain.StatusInitiated
 	}
 
 	p.mu.Lock()
