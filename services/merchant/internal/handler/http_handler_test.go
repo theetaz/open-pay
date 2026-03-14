@@ -112,7 +112,8 @@ func TestGetMerchantHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var resp map[string]any
-		json.NewDecoder(rec.Body).Decode(&resp)
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		require.NoError(t, err)
 		data := resp["data"].(map[string]any)
 		assert.Equal(t, "Test Shop", data["businessName"])
 	})
