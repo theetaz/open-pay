@@ -2,8 +2,8 @@
 
 > A production-grade, open-source cryptocurrency payment processing platform for Sri Lanka.
 
-[![CI](https://github.com/nipuntheekshana/open-lanka-payment/actions/workflows/ci.yml/badge.svg)](https://github.com/nipuntheekshana/open-lanka-payment/actions/workflows/ci.yml)
-[![Security](https://github.com/nipuntheekshana/open-lanka-payment/actions/workflows/security.yml/badge.svg)](https://github.com/nipuntheekshana/open-lanka-payment/actions/workflows/security.yml)
+[![CI](https://github.com/theetaz/open-pay/actions/workflows/ci.yml/badge.svg)](https://github.com/theetaz/open-pay/actions/workflows/ci.yml)
+[![Security](https://github.com/theetaz/open-pay/actions/workflows/security.yml/badge.svg)](https://github.com/theetaz/open-pay/actions/workflows/security.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/openlankapay/openlankapay)](https://goreportcard.com/report/github.com/openlankapay/openlankapay)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
