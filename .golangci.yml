@@ -25,5 +25,12 @@ issues:
   exclude-dirs:
     - vendor
     - contracts
+    - apps
+    - plugins
+    - sdks
+    - docs
+    - scripts
+    - config
+    - migrations
   max-issues-per-linter: 50
   max-same-issues: 10

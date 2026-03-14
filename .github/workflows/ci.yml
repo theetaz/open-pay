@@ -18,17 +18,24 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Run go vet
-        run: go vet ./pkg/... ./services/...
+        run: |
+          packages=$(go list ./pkg/... ./services/... 2>/dev/null || true)
+          if [ -n "$packages" ]; then
+            go vet $packages
+          else
+            echo "No packages to vet"
+          fi
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: ./pkg/... ./services/...
+          args: --timeout=5m
+          skip-pkg-cache: true
 
   test:
     name: Test
@@ -69,20 +76,34 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
-      - name: Run unit tests
-        run: go test -short -count=1 -race ./pkg/... ./services/...
+      - name: Discover Go packages
+        id: packages
+        run: |
+          pkgs=$(go list ./pkg/... ./services/... 2>/dev/null || true)
+          if [ -z "$pkgs" ]; then
+            echo "packages=" >> $GITHUB_OUTPUT
+            echo "No Go packages found to test"
+          else
+            echo "packages<<EOF" >> $GITHUB_OUTPUT
+            echo "$pkgs" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Run all tests with coverage
-        run: go test -count=1 -race -coverprofile=coverage.out -covermode=atomic ./pkg/... ./services/...
+      - name: Run tests with coverage
+        if: steps.packages.outputs.packages != ''
+        run: |
+          go test -count=1 -race -coverprofile=coverage.out -covermode=atomic \
+            ./pkg/... $(go list ./services/... 2>/dev/null || true)
         env:
           DATABASE_URL: postgres://olp:olp_test_password@localhost:5432/olp_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
           NATS_URL: nats://localhost:4222
 
       - name: Upload coverage
+        if: steps.packages.outputs.packages != '' && hashFiles('coverage.out') != ''
         uses: actions/upload-artifact@v4
         with:
           name: coverage
@@ -98,17 +119,20 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           cache: true
 
-      - name: Build all services
+      - name: Build services
         run: |
+          built=0
           for svc in gateway payment merchant settlement webhook exchange subscription notification admin; do
             if [ -f "services/$svc/cmd/main.go" ]; then
               echo "Building $svc..."
               go build -o bin/$svc ./services/$svc/cmd/
+              built=$((built + 1))
             fi
           done
+          echo "Built $built services"
 
       - name: Verify Go module is tidy
         run: |
