@@ -1,0 +1,66 @@
+# Plan directory (architecture docs, not committed)
+.plan/
+
+# Research docs
+RESEARCH.md
+GO_ARCHITECTURE_RESEARCH.md
+CEYPAY_PLUGIN_RESEARCH.md
+
+# Go
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Vendor (use go modules)
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+.next/
+.turbo/
+
+# Docker
+docker-compose.override.yml
+
+# Contracts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
+# Misc
+*.log
+tmp/
+
+
+# IDE Files (for JetBrains IDEs)
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.cursor/
+.claude/
