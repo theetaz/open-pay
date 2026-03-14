@@ -2,16 +2,6 @@ version: "2"
 
 run:
   timeout: 5m
-  exclude-dirs:
-    - vendor
-    - contracts
-    - apps
-    - plugins
-    - sdks
-    - docs
-    - scripts
-    - config
-    - migrations
 
 linters:
   enable:
@@ -30,6 +20,17 @@ linters:
         - dupBranchBody
         - dupCase
         - dupSubExpr
+  exclusions:
+    paths:
+      - vendor
+      - contracts
+      - apps
+      - plugins
+      - sdks
+      - docs
+      - scripts
+      - config
+      - migrations
 
 issues:
   max-issues-per-linter: 50
