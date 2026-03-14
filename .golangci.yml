@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
 
@@ -7,30 +9,28 @@ linters:
     - govet
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
-    - typecheck
     - bodyclose
     - misspell
     - gocritic
-
-linters-settings:
-  gocritic:
-    enabled-checks:
-      - dupBranchBody
-      - dupCase
-      - dupSubExpr
+  settings:
+    gocritic:
+      enabled-checks:
+        - dupBranchBody
+        - dupCase
+        - dupSubExpr
+  exclusions:
+    paths:
+      - vendor
+      - contracts
+      - apps
+      - plugins
+      - sdks
+      - docs
+      - scripts
+      - config
+      - migrations
 
 issues:
-  exclude-dirs:
-    - vendor
-    - contracts
-    - apps
-    - plugins
-    - sdks
-    - docs
-    - scripts
-    - config
-    - migrations
   max-issues-per-linter: 50
   max-same-issues: 10
