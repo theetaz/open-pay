@@ -211,7 +211,7 @@ func TestApproveMerchant(t *testing.T) {
 
 		// Move to under_review first
 		merchant.KYCStatus = domain.KYCUnderReview
-		repo.Update(ctx, merchant)
+		_ = repo.Update(ctx, merchant)
 
 		err := svc.Approve(ctx, merchant.ID)
 		require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestValidateAPIKey(t *testing.T) {
 		})
 
 		key, secret, _ := svc.CreateAPIKey(ctx, merchant.ID, "live", "Key")
-		svc.RevokeAPIKey(ctx, key.ID, "Test")
+		_ = svc.RevokeAPIKey(ctx, key.ID, "Test")
 
 		_, err := svc.ValidateAPIKey(ctx, key.KeyID, secret)
 		require.Error(t, err)

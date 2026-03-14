@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -64,7 +63,7 @@ func main() {
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
-		srv.Shutdown(shutdownCtx)
+		_ = srv.Shutdown(shutdownCtx)
 	}()
 
 	logger.Info().Str("port", port).Msg("merchant service started")
@@ -86,7 +85,3 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func init() {
-	// Prevent unused import warning
-	_ = fmt.Sprintf
-}

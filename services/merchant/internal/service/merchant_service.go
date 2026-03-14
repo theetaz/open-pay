@@ -86,7 +86,7 @@ func (s *MerchantService) Register(ctx context.Context, input RegisterInput) (*d
 		return nil, err
 	}
 
-	s.events.Publish(ctx, "merchant.registered", merchant)
+	_ = s.events.Publish(ctx, "merchant.registered", merchant)
 
 	return merchant, nil
 }
@@ -111,7 +111,7 @@ func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	s.events.Publish(ctx, "merchant.approved", merchant)
+	_ = s.events.Publish(ctx, "merchant.approved", merchant)
 
 	return nil
 }
@@ -133,7 +133,7 @@ func (s *MerchantService) Reject(ctx context.Context, id uuid.UUID, reason strin
 		return err
 	}
 
-	s.events.Publish(ctx, "merchant.rejected", merchant)
+	_ = s.events.Publish(ctx, "merchant.rejected", merchant)
 
 	return nil
 }
@@ -155,7 +155,7 @@ func (s *MerchantService) CreateAPIKey(ctx context.Context, merchantID uuid.UUID
 		return nil, "", fmt.Errorf("storing API key: %w", err)
 	}
 
-	s.events.Publish(ctx, "merchant.apikey.created", key)
+	_ = s.events.Publish(ctx, "merchant.apikey.created", key)
 
 	return key, plainSecret, nil
 }
