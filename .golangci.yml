@@ -14,13 +14,12 @@ linters:
     - bodyclose
     - misspell
     - gocritic
-
-linters-settings:
-  gocritic:
-    enabled-checks:
-      - dupBranchBody
-      - dupCase
-      - dupSubExpr
+  settings:
+    gocritic:
+      enabled-checks:
+        - dupBranchBody
+        - dupCase
+        - dupSubExpr
 
 issues:
   exclude-dirs:
