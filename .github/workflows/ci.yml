@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run go vet
+        run: go vet ./pkg/... ./services/...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: ./pkg/... ./services/...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: olp
+          POSTGRES_PASSWORD: olp_test_password
+          POSTGRES_DB: olp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U olp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      nats:
+        image: nats:2-alpine
+        ports:
+          - 4222:4222
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run unit tests
+        run: go test -short -count=1 -race ./pkg/... ./services/...
+
+      - name: Run all tests with coverage
+        run: go test -count=1 -race -coverprofile=coverage.out -covermode=atomic ./pkg/... ./services/...
+        env:
+          DATABASE_URL: postgres://olp:olp_test_password@localhost:5432/olp_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+          NATS_URL: nats://localhost:4222
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build all services
+        run: |
+          for svc in gateway payment merchant settlement webhook exchange subscription notification admin; do
+            if [ -f "services/$svc/cmd/main.go" ]; then
+              echo "Building $svc..."
+              go build -o bin/$svc ./services/$svc/cmd/
+            fi
+          done
+
+      - name: Verify Go module is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
