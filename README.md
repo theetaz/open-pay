@@ -1,4 +1,4 @@
-# OpenLankaPayment
+# Open Pay
 
 > A production-grade, open-source cryptocurrency payment processing platform for Sri Lanka.
 
@@ -50,33 +50,33 @@ OpenLankaPayment enables merchants to accept cryptocurrency payments and receive
 
 ### Services
 
-| Service | Port | Responsibility |
-|---------|------|----------------|
-| **Gateway** | 8080 | Public REST API, authentication, rate limiting |
-| **Payment** | 8081 | Payment creation, status tracking, QR generation |
-| **Merchant** | 8082 | Registration, KYC, API keys, branches, users |
-| **Settlement** | 8083 | Balance tracking, withdrawals, treasury |
-| **Webhook** | 8084 | ED25519-signed delivery with exponential backoff |
-| **Exchange** | 8085 | Real-time exchange rates (USDT/LKR) |
+| Service          | Port | Responsibility                                      |
+| ---------------- | ---- | --------------------------------------------------- |
+| **Gateway**      | 8080 | Public REST API, authentication, rate limiting      |
+| **Payment**      | 8081 | Payment creation, status tracking, QR generation    |
+| **Merchant**     | 8082 | Registration, KYC, API keys, branches, users        |
+| **Settlement**   | 8083 | Balance tracking, withdrawals, treasury             |
+| **Webhook**      | 8084 | ED25519-signed delivery with exponential backoff    |
+| **Exchange**     | 8085 | Real-time exchange rates (USDT/LKR)                 |
 | **Subscription** | 8086 | Recurring payments, billing cycles, smart contracts |
-| **Notification** | 8087 | Email, SMS, push notifications |
-| **Admin** | 8088 | Merchant approval, audit logs, system health |
+| **Notification** | 8087 | Email, SMS, push notifications                      |
+| **Admin**        | 8088 | Merchant approval, audit logs, system health        |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Backend** | Go 1.25 · chi · ConnectRPC · sqlc · pgx/v5 |
-| **Database** | PostgreSQL 16 (database-per-service) |
-| **Messaging** | NATS JetStream |
-| **Cache** | Redis 7 |
-| **Frontend** | TanStack Start · shadcn/ui · Tailwind CSS v4 |
-| **Blockchain** | Solidity · Hardhat · go-ethereum |
-| **Observability** | zerolog · OpenTelemetry · Prometheus · Grafana |
-| **Testing** | testify · testcontainers-go · gomock |
-| **Infrastructure** | Docker · Docker Compose |
+| Layer              | Technology                                     |
+| ------------------ | ---------------------------------------------- |
+| **Backend**        | Go 1.25 · chi · ConnectRPC · sqlc · pgx/v5     |
+| **Database**       | PostgreSQL 16 (database-per-service)           |
+| **Messaging**      | NATS JetStream                                 |
+| **Cache**          | Redis 7                                        |
+| **Frontend**       | TanStack Start · shadcn/ui · Tailwind CSS v4   |
+| **Blockchain**     | Solidity · Hardhat · go-ethereum               |
+| **Observability**  | zerolog · OpenTelemetry · Prometheus · Grafana |
+| **Testing**        | testify · testcontainers-go · gomock           |
+| **Infrastructure** | Docker · Docker Compose                        |
 
 ---
 
@@ -133,12 +133,12 @@ Security is a first-class concern in OpenLankaPayment.
 
 ### Authentication
 
-| Layer | Mechanism | Purpose |
-|-------|-----------|---------|
-| Merchant API | HMAC-SHA256 | Request signing with derived keys |
-| Webhook Delivery | ED25519 | Asymmetric payload signing |
-| Dashboard | JWT | Access + refresh token rotation |
-| Admin API | Admin Secret + JWT | Internal operations |
+| Layer            | Mechanism          | Purpose                           |
+| ---------------- | ------------------ | --------------------------------- |
+| Merchant API     | HMAC-SHA256        | Request signing with derived keys |
+| Webhook Delivery | ED25519            | Asymmetric payload signing        |
+| Dashboard        | JWT                | Access + refresh token rotation   |
+| Admin API        | Admin Secret + JWT | Internal operations               |
 
 ### Security Measures
 
@@ -216,24 +216,24 @@ feature/settlement-engine
 
 ## Implementation Phases
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 0 | Project Foundation | Done |
-| 1 | Merchant Service | Planned |
-| 2 | API Gateway | Planned |
-| 3 | Payment Service | Planned |
-| 4 | Exchange Rate Service | Planned |
-| 5 | Webhook Service | Planned |
-| 6 | Settlement Service | Planned |
-| 7 | Merchant Portal (Frontend) | Planned |
-| 8 | Admin Dashboard | Planned |
-| 9 | Checkout Experience | Planned |
-| 10 | Subscription Service | Planned |
-| 11 | Smart Contracts | Planned |
-| 12 | Notification Service | Planned |
-| 13 | WooCommerce Plugin | Planned |
-| 14 | Client SDKs | Planned |
-| 15 | Hardening & Polish | Planned |
+| Phase | Description                | Status  |
+| ----- | -------------------------- | ------- |
+| 0     | Project Foundation         | Done    |
+| 1     | Merchant Service           | Planned |
+| 2     | API Gateway                | Planned |
+| 3     | Payment Service            | Planned |
+| 4     | Exchange Rate Service      | Planned |
+| 5     | Webhook Service            | Planned |
+| 6     | Settlement Service         | Planned |
+| 7     | Merchant Portal (Frontend) | Planned |
+| 8     | Admin Dashboard            | Planned |
+| 9     | Checkout Experience        | Planned |
+| 10    | Subscription Service       | Planned |
+| 11    | Smart Contracts            | Planned |
+| 12    | Notification Service       | Planned |
+| 13    | WooCommerce Plugin         | Planned |
+| 14    | Client SDKs                | Planned |
+| 15    | Hardening & Polish         | Planned |
 
 ---
 
