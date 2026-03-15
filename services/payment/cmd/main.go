@@ -8,39 +8,71 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	pgadapter "github.com/openlankapay/openlankapay/services/payment/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/payment/internal/adapter/provider"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
+	"github.com/openlankapay/openlankapay/services/payment/internal/handler"
 	"github.com/openlankapay/openlankapay/services/payment/internal/service"
 )
 
 func main() {
 	logger := observability.NewLogger("payment", getEnv("LOG_LEVEL", "info"))
-	_ = context.Background()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Database
+	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/payment_db?sslmode=disable")
+	pool, err := database.NewPool(ctx, database.DefaultConfig(dbURL), logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+	defer pool.Close()
+
+	// JWT secret
+	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
 
 	// Providers
+	mockProv := provider.NewMockProvider()
 	providers := map[string]domain.PaymentProvider{
-		"TEST": provider.NewMockProvider(),
+		"TEST": mockProv,
 	}
 
-	// Service (repo will be wired with postgres in production)
-	_ = service.NewPaymentService(nil, providers, nil)
+	// Repository
+	paymentRepo := pgadapter.NewPaymentRepository(pool)
 
+	// Event publisher (noop for now)
+	eventPub := &noopPublisher{}
+
+	// Service
+	svc := service.NewPaymentService(paymentRepo, providers, eventPub)
+
+	// HTTP Handler
+	h := handler.NewPaymentHandler(svc, mockProv)
+	router := handler.NewRouter(h, jwtSecret)
+
+	// Server
 	port := getEnv("PORT", "8081")
 	srv := &http.Server{
 		Addr:         ":" + port,
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		logger.Info().Msg("shutting down payment service...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		cancel()
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
@@ -48,6 +80,12 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatal().Err(err).Msg("server error")
 	}
+}
+
+type noopPublisher struct{}
+
+func (p *noopPublisher) Publish(_ context.Context, _ string, _ any) error {
+	return nil
 }
 
 func getEnv(key, fallback string) string {
