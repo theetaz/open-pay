@@ -227,12 +227,12 @@ feature/settlement-engine
 | 6     | Settlement Service         | Done |
 | 7     | Merchant Portal (Frontend) | Done |
 | 8     | Admin Dashboard            | Done |
-| 9     | Checkout Experience        | Planned |
+| 9     | Checkout Experience        | Done |
 | 10    | Subscription Service       | Done |
 | 11    | Smart Contracts            | Planned |
-| 12    | Notification Service       | Planned |
+| 12    | Notification Service       | Done |
 | 13    | WooCommerce Plugin         | Planned |
-| 14    | Client SDKs                | Planned |
+| 14    | Client SDKs (Go)           | Done |
 | 15    | Hardening & Polish         | Planned |
 
 ---
