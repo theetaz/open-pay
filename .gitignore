@@ -49,7 +49,7 @@ contracts/typechain-types/
 # Misc
 *.log
 tmp/
-
+.pids/
 
 # IDE Files (for JetBrains IDEs)
 .idea/
