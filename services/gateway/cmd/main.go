@@ -18,9 +18,11 @@ func main() {
 
 	// Service proxy configuration
 	serviceProxy := proxy.NewServiceProxy(proxy.Config{
-		MerchantServiceURL: getEnv("MERCHANT_SERVICE_URL", "http://localhost:8082"),
-		PaymentServiceURL:  getEnv("PAYMENT_SERVICE_URL", "http://localhost:8081"),
-		ExchangeServiceURL: getEnv("EXCHANGE_SERVICE_URL", "http://localhost:8085"),
+		MerchantServiceURL:   getEnv("MERCHANT_SERVICE_URL", "http://localhost:8082"),
+		PaymentServiceURL:    getEnv("PAYMENT_SERVICE_URL", "http://localhost:8081"),
+		ExchangeServiceURL:   getEnv("EXCHANGE_SERVICE_URL", "http://localhost:8085"),
+		SettlementServiceURL: getEnv("SETTLEMENT_SERVICE_URL", "http://localhost:8083"),
+		WebhookServiceURL:    getEnv("WEBHOOK_SERVICE_URL", "http://localhost:8084"),
 	})
 
 	cfg := handler.GatewayConfig{

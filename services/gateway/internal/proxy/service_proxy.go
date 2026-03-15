@@ -8,24 +8,30 @@ import (
 
 // ServiceProxy holds reverse proxies to downstream services.
 type ServiceProxy struct {
-	MerchantProxy *httputil.ReverseProxy
-	PaymentProxy  *httputil.ReverseProxy
-	ExchangeProxy *httputil.ReverseProxy
+	MerchantProxy   *httputil.ReverseProxy
+	PaymentProxy    *httputil.ReverseProxy
+	ExchangeProxy   *httputil.ReverseProxy
+	SettlementProxy *httputil.ReverseProxy
+	WebhookProxy    *httputil.ReverseProxy
 }
 
 // Config holds the URLs for downstream services.
 type Config struct {
-	MerchantServiceURL string
-	PaymentServiceURL  string
-	ExchangeServiceURL string
+	MerchantServiceURL   string
+	PaymentServiceURL    string
+	ExchangeServiceURL   string
+	SettlementServiceURL string
+	WebhookServiceURL    string
 }
 
 // NewServiceProxy creates a proxy that forwards requests to downstream services.
 func NewServiceProxy(cfg Config) *ServiceProxy {
 	return &ServiceProxy{
-		MerchantProxy: newProxy(cfg.MerchantServiceURL),
-		PaymentProxy:  newProxy(cfg.PaymentServiceURL),
-		ExchangeProxy: newProxy(cfg.ExchangeServiceURL),
+		MerchantProxy:   newProxy(cfg.MerchantServiceURL),
+		PaymentProxy:    newProxy(cfg.PaymentServiceURL),
+		ExchangeProxy:   newProxy(cfg.ExchangeServiceURL),
+		SettlementProxy: newProxy(cfg.SettlementServiceURL),
+		WebhookProxy:    newProxy(cfg.WebhookServiceURL),
 	}
 }
 
@@ -66,4 +72,14 @@ func (p *ServiceProxy) ProxyToPayment(w http.ResponseWriter, r *http.Request) {
 // ProxyToExchange forwards the request to the exchange service.
 func (p *ServiceProxy) ProxyToExchange(w http.ResponseWriter, r *http.Request) {
 	p.ExchangeProxy.ServeHTTP(w, r)
+}
+
+// ProxyToSettlement forwards the request to the settlement service.
+func (p *ServiceProxy) ProxyToSettlement(w http.ResponseWriter, r *http.Request) {
+	p.SettlementProxy.ServeHTTP(w, r)
+}
+
+// ProxyToWebhook forwards the request to the webhook service.
+func (p *ServiceProxy) ProxyToWebhook(w http.ResponseWriter, r *http.Request) {
+	p.WebhookProxy.ServeHTTP(w, r)
 }
