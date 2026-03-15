@@ -9,32 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SettlementsRouteImport } from './routes/settlements'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as PaymentsRouteImport } from './routes/payments'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardRouteImport } from './routes/_dashboard'
+import { Route as DashboardIndexRouteImport } from './routes/_dashboard.index'
 import { Route as PaySlugRouteImport } from './routes/pay.$slug'
 import { Route as CheckoutPaymentIdRouteImport } from './routes/checkout.$paymentId'
+import { Route as DashboardWithdrawalRouteImport } from './routes/_dashboard.withdrawal'
+import { Route as DashboardUsersRouteImport } from './routes/_dashboard.users'
+import { Route as DashboardSettingsRouteImport } from './routes/_dashboard.settings'
+import { Route as DashboardPaymentsRouteImport } from './routes/_dashboard.payments'
+import { Route as DashboardPaymentLinksRouteImport } from './routes/_dashboard.payment-links'
+import { Route as DashboardBranchesRouteImport } from './routes/_dashboard.branches'
+import { Route as DashboardAuditLogRouteImport } from './routes/_dashboard.audit-log'
 
-const SettlementsRoute = SettlementsRouteImport.update({
-  id: '/settlements',
-  path: '/settlements',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/_dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PaymentsRoute = PaymentsRouteImport.update({
-  id: '/payments',
-  path: '/payments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
 const PaySlugRoute = PaySlugRouteImport.update({
   id: '/pay/$slug',
@@ -46,97 +40,141 @@ const CheckoutPaymentIdRoute = CheckoutPaymentIdRouteImport.update({
   path: '/checkout/$paymentId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardWithdrawalRoute = DashboardWithdrawalRouteImport.update({
+  id: '/withdrawal',
+  path: '/withdrawal',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardUsersRoute = DashboardUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardPaymentsRoute = DashboardPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardPaymentLinksRoute = DashboardPaymentLinksRouteImport.update({
+  id: '/payment-links',
+  path: '/payment-links',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardBranchesRoute = DashboardBranchesRouteImport.update({
+  id: '/branches',
+  path: '/branches',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardAuditLogRoute = DashboardAuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => DashboardRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/payments': typeof PaymentsRoute
-  '/settings': typeof SettingsRoute
-  '/settlements': typeof SettlementsRoute
+  '/': typeof DashboardIndexRoute
+  '/audit-log': typeof DashboardAuditLogRoute
+  '/branches': typeof DashboardBranchesRoute
+  '/payment-links': typeof DashboardPaymentLinksRoute
+  '/payments': typeof DashboardPaymentsRoute
+  '/settings': typeof DashboardSettingsRoute
+  '/users': typeof DashboardUsersRoute
+  '/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
   '/pay/$slug': typeof PaySlugRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/payments': typeof PaymentsRoute
-  '/settings': typeof SettingsRoute
-  '/settlements': typeof SettlementsRoute
+  '/audit-log': typeof DashboardAuditLogRoute
+  '/branches': typeof DashboardBranchesRoute
+  '/payment-links': typeof DashboardPaymentLinksRoute
+  '/payments': typeof DashboardPaymentsRoute
+  '/settings': typeof DashboardSettingsRoute
+  '/users': typeof DashboardUsersRoute
+  '/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
   '/pay/$slug': typeof PaySlugRoute
+  '/': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/payments': typeof PaymentsRoute
-  '/settings': typeof SettingsRoute
-  '/settlements': typeof SettlementsRoute
+  '/_dashboard': typeof DashboardRouteWithChildren
+  '/_dashboard/audit-log': typeof DashboardAuditLogRoute
+  '/_dashboard/branches': typeof DashboardBranchesRoute
+  '/_dashboard/payment-links': typeof DashboardPaymentLinksRoute
+  '/_dashboard/payments': typeof DashboardPaymentsRoute
+  '/_dashboard/settings': typeof DashboardSettingsRoute
+  '/_dashboard/users': typeof DashboardUsersRoute
+  '/_dashboard/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
   '/pay/$slug': typeof PaySlugRoute
+  '/_dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/audit-log'
+    | '/branches'
+    | '/payment-links'
     | '/payments'
     | '/settings'
-    | '/settlements'
+    | '/users'
+    | '/withdrawal'
     | '/checkout/$paymentId'
     | '/pay/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
+    | '/audit-log'
+    | '/branches'
+    | '/payment-links'
     | '/payments'
     | '/settings'
-    | '/settlements'
+    | '/users'
+    | '/withdrawal'
     | '/checkout/$paymentId'
     | '/pay/$slug'
+    | '/'
   id:
     | '__root__'
-    | '/'
-    | '/payments'
-    | '/settings'
-    | '/settlements'
+    | '/_dashboard'
+    | '/_dashboard/audit-log'
+    | '/_dashboard/branches'
+    | '/_dashboard/payment-links'
+    | '/_dashboard/payments'
+    | '/_dashboard/settings'
+    | '/_dashboard/users'
+    | '/_dashboard/withdrawal'
     | '/checkout/$paymentId'
     | '/pay/$slug'
+    | '/_dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  PaymentsRoute: typeof PaymentsRoute
-  SettingsRoute: typeof SettingsRoute
-  SettlementsRoute: typeof SettlementsRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
   CheckoutPaymentIdRoute: typeof CheckoutPaymentIdRoute
   PaySlugRoute: typeof PaySlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/settlements': {
-      id: '/settlements'
-      path: '/settlements'
-      fullPath: '/settlements'
-      preLoaderRoute: typeof SettlementsRouteImport
+    '/_dashboard': {
+      id: '/_dashboard'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/payments': {
-      id: '/payments'
-      path: '/payments'
-      fullPath: '/payments'
-      preLoaderRoute: typeof PaymentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_dashboard/': {
+      id: '/_dashboard/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
     }
     '/pay/$slug': {
       id: '/pay/$slug'
@@ -152,14 +190,86 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CheckoutPaymentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_dashboard/withdrawal': {
+      id: '/_dashboard/withdrawal'
+      path: '/withdrawal'
+      fullPath: '/withdrawal'
+      preLoaderRoute: typeof DashboardWithdrawalRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/users': {
+      id: '/_dashboard/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof DashboardUsersRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/settings': {
+      id: '/_dashboard/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/payments': {
+      id: '/_dashboard/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof DashboardPaymentsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/payment-links': {
+      id: '/_dashboard/payment-links'
+      path: '/payment-links'
+      fullPath: '/payment-links'
+      preLoaderRoute: typeof DashboardPaymentLinksRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/branches': {
+      id: '/_dashboard/branches'
+      path: '/branches'
+      fullPath: '/branches'
+      preLoaderRoute: typeof DashboardBranchesRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/audit-log': {
+      id: '/_dashboard/audit-log'
+      path: '/audit-log'
+      fullPath: '/audit-log'
+      preLoaderRoute: typeof DashboardAuditLogRouteImport
+      parentRoute: typeof DashboardRoute
+    }
   }
 }
 
+interface DashboardRouteChildren {
+  DashboardAuditLogRoute: typeof DashboardAuditLogRoute
+  DashboardBranchesRoute: typeof DashboardBranchesRoute
+  DashboardPaymentLinksRoute: typeof DashboardPaymentLinksRoute
+  DashboardPaymentsRoute: typeof DashboardPaymentsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardUsersRoute: typeof DashboardUsersRoute
+  DashboardWithdrawalRoute: typeof DashboardWithdrawalRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardAuditLogRoute: DashboardAuditLogRoute,
+  DashboardBranchesRoute: DashboardBranchesRoute,
+  DashboardPaymentLinksRoute: DashboardPaymentLinksRoute,
+  DashboardPaymentsRoute: DashboardPaymentsRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardUsersRoute: DashboardUsersRoute,
+  DashboardWithdrawalRoute: DashboardWithdrawalRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  PaymentsRoute: PaymentsRoute,
-  SettingsRoute: SettingsRoute,
-  SettlementsRoute: SettlementsRoute,
+  DashboardRoute: DashboardRouteWithChildren,
   CheckoutPaymentIdRoute: CheckoutPaymentIdRoute,
   PaySlugRoute: PaySlugRoute,
 }
