@@ -7,7 +7,7 @@ import { isAuthenticated } from '#/lib/auth'
 
 export const Route = createFileRoute('/_dashboard')({
   beforeLoad: () => {
-    if (!isAuthenticated()) {
+    if (typeof window !== 'undefined' && !isAuthenticated()) {
       throw redirect({ to: '/login' })
     }
   },

@@ -58,12 +58,22 @@ func (r *MerchantRepository) Create(ctx context.Context, m *domain.Merchant) err
 	return nil
 }
 
+const merchantSelectCols = `id, business_name, COALESCE(business_type,''), COALESCE(registration_no,''), COALESCE(website,''),
+	contact_email, COALESCE(contact_phone,''), COALESCE(contact_name,''),
+	COALESCE(address_line1,''), COALESCE(address_line2,''), COALESCE(city,''), COALESCE(district,''), COALESCE(postal_code,''), country,
+	kyc_status, kyc_submitted_at, kyc_reviewed_at, COALESCE(kyc_rejection_reason,''),
+	transaction_limit_usdt, daily_limit_usdt, monthly_limit_usdt,
+	COALESCE(instant_access_remaining, 0),
+	COALESCE(bank_name,''), COALESCE(bank_branch,''), COALESCE(bank_account_no,''), COALESCE(bank_account_name,''),
+	COALESCE(default_currency,'LKR'), COALESCE(default_provider,''), status,
+	created_at, updated_at, deleted_at`
+
 func (r *MerchantRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Merchant, error) {
-	return r.getOne(ctx, "SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL", id)
+	return r.getOne(ctx, "SELECT "+merchantSelectCols+" FROM merchants WHERE id = $1 AND deleted_at IS NULL", id)
 }
 
 func (r *MerchantRepository) GetByEmail(ctx context.Context, email string) (*domain.Merchant, error) {
-	return r.getOne(ctx, "SELECT * FROM merchants WHERE contact_email = $1 AND deleted_at IS NULL", email)
+	return r.getOne(ctx, "SELECT "+merchantSelectCols+" FROM merchants WHERE contact_email = $1 AND deleted_at IS NULL", email)
 }
 
 func (r *MerchantRepository) Update(ctx context.Context, m *domain.Merchant) error {
@@ -116,7 +126,7 @@ func (r *MerchantRepository) List(ctx context.Context, params service.ListParams
 	}
 
 	offset := (params.Page - 1) * params.PerPage
-	query := "SELECT * FROM merchants WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+	query := "SELECT " + merchantSelectCols + " FROM merchants WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2"
 	rows, err := r.pool.Query(ctx, query, params.PerPage, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("listing merchants: %w", err)

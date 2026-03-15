@@ -63,33 +63,23 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 	return nil
 }
 
-func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error) {
-	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
-		amount, currency, amount_usdt, exchange_rate_snapshot,
-		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
-		total_fees_usdt, net_amount_usdt,
-		provider, provider_pay_id, qr_content, checkout_link, deep_link,
-		status, customer_email, webhook_url,
-		tx_hash, block_number, wallet_address,
-		expire_time, paid_at, failed_at, idempotency_key,
-		created_at, updated_at, deleted_at
-		FROM payments WHERE id = $1 AND deleted_at IS NULL`
+const paymentSelectCols = `id, merchant_id, branch_id, payment_no, COALESCE(merchant_trade_no,''),
+	amount, currency, amount_usdt, exchange_rate_snapshot,
+	COALESCE(exchange_fee_pct,0), COALESCE(exchange_fee_usdt,0), COALESCE(platform_fee_pct,0), COALESCE(platform_fee_usdt,0),
+	COALESCE(total_fees_usdt,0), COALESCE(net_amount_usdt,0),
+	provider, COALESCE(provider_pay_id,''), COALESCE(qr_content,''), COALESCE(checkout_link,''), COALESCE(deep_link,''),
+	status, COALESCE(customer_email,''), COALESCE(webhook_url,''),
+	COALESCE(tx_hash,''), COALESCE(block_number,0), COALESCE(wallet_address,''),
+	expire_time, paid_at, failed_at, COALESCE(idempotency_key,''),
+	created_at, updated_at, deleted_at`
 
+func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error) {
+	query := `SELECT ` + paymentSelectCols + ` FROM payments WHERE id = $1 AND deleted_at IS NULL`
 	return r.scanOne(ctx, query, id)
 }
 
 func (r *PaymentRepository) GetByProviderPayID(ctx context.Context, providerPayID string) (*domain.Payment, error) {
-	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
-		amount, currency, amount_usdt, exchange_rate_snapshot,
-		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
-		total_fees_usdt, net_amount_usdt,
-		provider, provider_pay_id, qr_content, checkout_link, deep_link,
-		status, customer_email, webhook_url,
-		tx_hash, block_number, wallet_address,
-		expire_time, paid_at, failed_at, idempotency_key,
-		created_at, updated_at, deleted_at
-		FROM payments WHERE provider_pay_id = $1 AND deleted_at IS NULL`
-
+	query := `SELECT ` + paymentSelectCols + ` FROM payments WHERE provider_pay_id = $1 AND deleted_at IS NULL`
 	return r.scanOne(ctx, query, providerPayID)
 }
 
@@ -116,15 +106,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *domain.Payment) error
 }
 
 func (r *PaymentRepository) ListExpired(ctx context.Context) ([]*domain.Payment, error) {
-	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
-		amount, currency, amount_usdt, exchange_rate_snapshot,
-		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
-		total_fees_usdt, net_amount_usdt,
-		provider, provider_pay_id, qr_content, checkout_link, deep_link,
-		status, customer_email, webhook_url,
-		tx_hash, block_number, wallet_address,
-		expire_time, paid_at, failed_at, idempotency_key,
-		created_at, updated_at, deleted_at
+	query := `SELECT ` + paymentSelectCols + `
 		FROM payments
 		WHERE status IN ('INITIATED', 'USER_REVIEW')
 		AND expire_time < NOW()
@@ -178,17 +160,8 @@ func (r *PaymentRepository) List(ctx context.Context, merchantID uuid.UUID, para
 
 	// Fetch
 	offset := (params.Page - 1) * params.PerPage
-	selectQuery := fmt.Sprintf(`SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
-		amount, currency, amount_usdt, exchange_rate_snapshot,
-		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
-		total_fees_usdt, net_amount_usdt,
-		provider, provider_pay_id, qr_content, checkout_link, deep_link,
-		status, customer_email, webhook_url,
-		tx_hash, block_number, wallet_address,
-		expire_time, paid_at, failed_at, idempotency_key,
-		created_at, updated_at, deleted_at
-		FROM payments WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
-		where, argIdx, argIdx+1)
+	selectQuery := fmt.Sprintf(`SELECT %s FROM payments WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		paymentSelectCols, where, argIdx, argIdx+1)
 	args = append(args, params.PerPage, offset)
 
 	rows, err := r.pool.Query(ctx, selectQuery, args...)
