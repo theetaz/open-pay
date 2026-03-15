@@ -39,6 +39,10 @@ func (m *mockPaymentRepo) Update(_ context.Context, p *domain.Payment) error {
 	return nil
 }
 
+func (m *mockPaymentRepo) ListExpired(_ context.Context) ([]*domain.Payment, error) {
+	return nil, nil
+}
+
 func (m *mockPaymentRepo) List(_ context.Context, _ uuid.UUID, _ service.ListParams) ([]*domain.Payment, int, error) {
 	var result []*domain.Payment
 	for _, p := range m.payments {

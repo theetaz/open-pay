@@ -16,6 +16,7 @@ type PaymentRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error)
 	Update(ctx context.Context, payment *domain.Payment) error
 	List(ctx context.Context, merchantID uuid.UUID, params ListParams) ([]*domain.Payment, int, error)
+	ListExpired(ctx context.Context) ([]*domain.Payment, error)
 }
 
 // ExchangeClient defines the contract for fetching exchange rates.
@@ -130,6 +131,27 @@ func (s *PaymentService) GetPayment(ctx context.Context, id uuid.UUID) (*domain.
 // ListPayments returns paginated payments for a merchant.
 func (s *PaymentService) ListPayments(ctx context.Context, merchantID uuid.UUID, params ListParams) ([]*domain.Payment, int, error) {
 	return s.repo.List(ctx, merchantID, params)
+}
+
+// ExpireStalePayments transitions all expired payments to EXPIRED status.
+func (s *PaymentService) ExpireStalePayments(ctx context.Context) (int, error) {
+	payments, err := s.repo.ListExpired(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("listing expired payments: %w", err)
+	}
+
+	count := 0
+	for _, p := range payments {
+		if err := p.TransitionTo(domain.StatusExpired); err != nil {
+			continue
+		}
+		if err := s.repo.Update(ctx, p); err != nil {
+			continue
+		}
+		_ = s.events.Publish(ctx, "payment.expired", p)
+		count++
+	}
+	return count, nil
 }
 
 // HandleProviderCallback processes a payment status update from a provider.

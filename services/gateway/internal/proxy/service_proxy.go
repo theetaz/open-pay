@@ -15,6 +15,7 @@ type ServiceProxy struct {
 	WebhookProxy      *httputil.ReverseProxy
 	SubscriptionProxy *httputil.ReverseProxy
 	NotificationProxy *httputil.ReverseProxy
+	AdminProxy        *httputil.ReverseProxy
 }
 
 // Config holds the URLs for downstream services.
@@ -26,6 +27,7 @@ type Config struct {
 	WebhookServiceURL      string
 	SubscriptionServiceURL string
 	NotificationServiceURL string
+	AdminServiceURL        string
 }
 
 // NewServiceProxy creates a proxy that forwards requests to downstream services.
@@ -38,6 +40,7 @@ func NewServiceProxy(cfg Config) *ServiceProxy {
 		WebhookProxy:      newProxy(cfg.WebhookServiceURL),
 		SubscriptionProxy: newProxy(cfg.SubscriptionServiceURL),
 		NotificationProxy: newProxy(cfg.NotificationServiceURL),
+		AdminProxy:        newProxy(cfg.AdminServiceURL),
 	}
 }
 
@@ -98,4 +101,9 @@ func (p *ServiceProxy) ProxyToSubscription(w http.ResponseWriter, r *http.Reques
 // ProxyToNotification forwards the request to the notification service.
 func (p *ServiceProxy) ProxyToNotification(w http.ResponseWriter, r *http.Request) {
 	p.NotificationProxy.ServeHTTP(w, r)
+}
+
+// ProxyToAdmin forwards the request to the admin service.
+func (p *ServiceProxy) ProxyToAdmin(w http.ResponseWriter, r *http.Request) {
+	p.AdminProxy.ServeHTTP(w, r)
 }
