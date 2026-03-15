@@ -69,14 +69,14 @@ vet: ## Run go vet
 DB_URL_BASE=postgres://olp:olp_dev_password@localhost:5433
 
 migrate: ## Run all database migrations
-	@for db in merchant payment settlement exchange webhook subscription admin; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
 		echo "Migrating $$db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
 	done
 	@echo "All migrations complete."
 
 migrate-down: ## Rollback last migration for all databases
-	@for db in merchant payment settlement exchange webhook subscription admin; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
 		echo "Rolling back $$db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" down 1; \
 	done
