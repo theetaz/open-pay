@@ -18,6 +18,11 @@ type PaymentRepository interface {
 	List(ctx context.Context, merchantID uuid.UUID, params ListParams) ([]*domain.Payment, int, error)
 }
 
+// ExchangeClient defines the contract for fetching exchange rates.
+type ExchangeClient interface {
+	GetRate(ctx context.Context, base, quote string) (decimal.Decimal, error)
+}
+
 // EventPublisher defines the contract for publishing domain events.
 type EventPublisher interface {
 	Publish(ctx context.Context, subject string, data any) error
@@ -44,16 +49,18 @@ type CreatePaymentInput struct {
 
 // PaymentService orchestrates payment operations.
 type PaymentService struct {
-	repo      PaymentRepository
-	providers map[string]domain.PaymentProvider
-	events    EventPublisher
+	repo       PaymentRepository
+	providers  map[string]domain.PaymentProvider
+	exchange   ExchangeClient
+	events     EventPublisher
 }
 
 // NewPaymentService creates a new PaymentService.
-func NewPaymentService(repo PaymentRepository, providers map[string]domain.PaymentProvider, events EventPublisher) *PaymentService {
+func NewPaymentService(repo PaymentRepository, providers map[string]domain.PaymentProvider, exchange ExchangeClient, events EventPublisher) *PaymentService {
 	return &PaymentService{
 		repo:      repo,
 		providers: providers,
+		exchange:  exchange,
 		events:    events,
 	}
 }
@@ -77,6 +84,15 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// If payment is in LKR, fetch exchange rate and convert to USDT
+	if input.Currency == "LKR" && s.exchange != nil {
+		rate, err := s.exchange.GetRate(ctx, "USDT", "LKR")
+		if err != nil {
+			return nil, fmt.Errorf("fetching exchange rate: %w", err)
+		}
+		payment.SetExchangeRate(rate)
 	}
 
 	// Set fees (default rates)

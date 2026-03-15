@@ -65,6 +65,7 @@ func TestCreatePayment(t *testing.T) {
 		svc := service.NewPaymentService(
 			newMockPaymentRepo(),
 			map[string]domain.PaymentProvider{"TEST": mockProvider},
+			nil,
 			events,
 		)
 
@@ -86,6 +87,7 @@ func TestCreatePayment(t *testing.T) {
 		svc := service.NewPaymentService(
 			newMockPaymentRepo(),
 			map[string]domain.PaymentProvider{"TEST": provider.NewMockProvider()},
+			nil,
 			&mockEvents{},
 		)
 
@@ -102,6 +104,7 @@ func TestCreatePayment(t *testing.T) {
 		svc := service.NewPaymentService(
 			newMockPaymentRepo(),
 			map[string]domain.PaymentProvider{"TEST": provider.NewMockProvider()},
+			nil,
 			&mockEvents{},
 		)
 
@@ -121,6 +124,7 @@ func TestGetPayment(t *testing.T) {
 	svc := service.NewPaymentService(
 		newMockPaymentRepo(),
 		map[string]domain.PaymentProvider{"TEST": mockProvider},
+		nil,
 		&mockEvents{},
 	)
 
@@ -151,6 +155,7 @@ func TestHandleProviderCallback(t *testing.T) {
 	svc := service.NewPaymentService(
 		newMockPaymentRepo(),
 		map[string]domain.PaymentProvider{"TEST": mockProv},
+		nil,
 		events,
 	)
 
