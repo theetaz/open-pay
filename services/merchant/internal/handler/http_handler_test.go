@@ -16,14 +16,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testJWTSecret = "test-jwt-secret-key-at-least-32-chars"
+
 // --- Stub service for testing handlers ---
 
 type stubMerchantService struct {
 	merchants map[uuid.UUID]*domain.Merchant
+	users     map[uuid.UUID]*domain.User
 }
 
 func newStubService() *stubMerchantService {
-	return &stubMerchantService{merchants: make(map[uuid.UUID]*domain.Merchant)}
+	return &stubMerchantService{
+		merchants: make(map[uuid.UUID]*domain.Merchant),
+		users:     make(map[uuid.UUID]*domain.User),
+	}
 }
 
 func (s *stubMerchantService) Register(_ context.Context, input service.RegisterInput) (*domain.Merchant, error) {
@@ -37,6 +43,46 @@ func (s *stubMerchantService) Register(_ context.Context, input service.Register
 	return m, nil
 }
 
+func (s *stubMerchantService) RegisterWithUser(_ context.Context, input service.RegisterWithUserInput) (*service.LoginResult, error) {
+	m, err := domain.NewMerchant(input.BusinessName, input.ContactEmail)
+	if err != nil {
+		return nil, err
+	}
+	s.merchants[m.ID] = m
+
+	u, err := domain.NewUser(m.ID, input.AdminEmail, input.AdminPassword, input.AdminName, domain.RoleAdmin, nil)
+	if err != nil {
+		return nil, err
+	}
+	s.users[u.ID] = u
+
+	return &service.LoginResult{
+		User:         u,
+		Merchant:     m,
+		AccessToken:  "test-access-token",
+		RefreshToken: "test-refresh-token",
+	}, nil
+}
+
+func (s *stubMerchantService) Login(_ context.Context, email, password string) (*service.LoginResult, error) {
+	for _, u := range s.users {
+		if u.Email == email && u.VerifyPassword(password) {
+			m := s.merchants[u.MerchantID]
+			return &service.LoginResult{
+				User:         u,
+				Merchant:     m,
+				AccessToken:  "test-access-token",
+				RefreshToken: "test-refresh-token",
+			}, nil
+		}
+	}
+	return nil, service.ErrInvalidCredentials
+}
+
+func (s *stubMerchantService) RefreshToken(_ context.Context, _ string) (*service.LoginResult, error) {
+	return nil, service.ErrInvalidCredentials
+}
+
 func (s *stubMerchantService) GetByID(_ context.Context, id uuid.UUID) (*domain.Merchant, error) {
 	m, ok := s.merchants[id]
 	if !ok {
@@ -45,14 +91,33 @@ func (s *stubMerchantService) GetByID(_ context.Context, id uuid.UUID) (*domain.
 	return m, nil
 }
 
-func TestRegisterHandler(t *testing.T) {
+func (s *stubMerchantService) GetUserByID(_ context.Context, id uuid.UUID) (*domain.User, error) {
+	u, ok := s.users[id]
+	if !ok {
+		return nil, domain.ErrUserNotFound
+	}
+	return u, nil
+}
+
+func (s *stubMerchantService) UpdateMerchantProfile(_ context.Context, id uuid.UUID, input service.UpdateProfileInput) (*domain.Merchant, error) {
+	m, ok := s.merchants[id]
+	if !ok {
+		return nil, domain.ErrMerchantNotFound
+	}
+	if input.BusinessName != nil {
+		m.BusinessName = *input.BusinessName
+	}
+	return m, nil
+}
+
+func TestRegisterWithUserHandler(t *testing.T) {
 	svc := newStubService()
-	h := handler.NewMerchantHandler(svc)
+	h := handler.NewMerchantHandler(svc, testJWTSecret)
 	router := handler.NewRouter(h)
 
 	t.Run("successful registration", func(t *testing.T) {
-		body := `{"businessName":"Test Shop","contactEmail":"test@example.com","contactPhone":"+94771234567","contactName":"John"}`
-		req := httptest.NewRequest(http.MethodPost, "/v1/merchants", bytes.NewBufferString(body))
+		body := `{"businessName":"Test Shop","email":"test@example.com","password":"SecurePass1","name":"John Doe","phone":"+94771234567"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -65,14 +130,20 @@ func TestRegisterHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		data := resp["data"].(map[string]any)
-		assert.Equal(t, "Test Shop", data["businessName"])
-		assert.Equal(t, "PENDING", data["kycStatus"])
-		assert.NotEmpty(t, data["id"])
+		assert.NotEmpty(t, data["accessToken"])
+		assert.NotEmpty(t, data["refreshToken"])
+
+		merchant := data["merchant"].(map[string]any)
+		assert.Equal(t, "Test Shop", merchant["businessName"])
+
+		user := data["user"].(map[string]any)
+		assert.Equal(t, "test@example.com", user["email"])
+		assert.Equal(t, "ADMIN", user["role"])
 	})
 
-	t.Run("invalid request body", func(t *testing.T) {
-		body := `{"businessName":"","contactEmail":"bad"}`
-		req := httptest.NewRequest(http.MethodPost, "/v1/merchants", bytes.NewBufferString(body))
+	t.Run("weak password", func(t *testing.T) {
+		body := `{"businessName":"Shop","email":"weak@example.com","password":"weak","name":"John"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -82,7 +153,7 @@ func TestRegisterHandler(t *testing.T) {
 	})
 
 	t.Run("malformed JSON", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/v1/merchants", bytes.NewBufferString(`{invalid`))
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewBufferString(`{invalid`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -92,19 +163,23 @@ func TestRegisterHandler(t *testing.T) {
 	})
 }
 
-func TestGetMerchantHandler(t *testing.T) {
+func TestLoginHandler(t *testing.T) {
 	svc := newStubService()
-	h := handler.NewMerchantHandler(svc)
+	h := handler.NewMerchantHandler(svc, testJWTSecret)
 	router := handler.NewRouter(h)
 
-	// Register a merchant first
-	m, _ := svc.Register(context.Background(), service.RegisterInput{
-		BusinessName: "Test Shop",
-		ContactEmail: "get@example.com",
-	})
+	// Register a user first
+	regBody := `{"businessName":"Login Shop","email":"login@example.com","password":"SecurePass1","name":"John"}`
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewBufferString(regBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regRec := httptest.NewRecorder()
+	router.ServeHTTP(regRec, regReq)
+	require.Equal(t, http.StatusCreated, regRec.Code)
 
-	t.Run("get existing merchant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/merchants/"+m.ID.String(), nil)
+	t.Run("successful login", func(t *testing.T) {
+		body := `{"email":"login@example.com","password":"SecurePass1"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
@@ -115,24 +190,28 @@ func TestGetMerchantHandler(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&resp)
 		require.NoError(t, err)
 		data := resp["data"].(map[string]any)
-		assert.Equal(t, "Test Shop", data["businessName"])
+		assert.NotEmpty(t, data["accessToken"])
 	})
 
-	t.Run("get nonexistent merchant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/merchants/"+uuid.New().String(), nil)
+	t.Run("wrong password", func(t *testing.T) {
+		body := `{"email":"login@example.com","password":"WrongPass1"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 
-	t.Run("invalid UUID", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/merchants/not-a-uuid", nil)
+	t.Run("nonexistent email", func(t *testing.T) {
+		body := `{"email":"nobody@example.com","password":"Password1"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
 		router.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 }

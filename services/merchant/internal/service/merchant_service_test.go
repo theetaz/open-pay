@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testJWTSecret = "test-jwt-secret-key-at-least-32-chars"
+
 // --- Mock implementations ---
 
 type mockMerchantRepo struct {
@@ -126,6 +128,69 @@ func (m *mockAPIKeyRepo) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+type mockUserRepo struct {
+	users   map[uuid.UUID]*domain.User
+	byEmail map[string]*domain.User
+}
+
+func newMockUserRepo() *mockUserRepo {
+	return &mockUserRepo{
+		users:   make(map[uuid.UUID]*domain.User),
+		byEmail: make(map[string]*domain.User),
+	}
+}
+
+func (m *mockUserRepo) Create(_ context.Context, user *domain.User) error {
+	key := user.MerchantID.String() + ":" + user.Email
+	if _, exists := m.byEmail[key]; exists {
+		return domain.ErrDuplicateEmail
+	}
+	m.users[user.ID] = user
+	m.byEmail[key] = user
+	m.byEmail["global:"+user.Email] = user
+	return nil
+}
+
+func (m *mockUserRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.User, error) {
+	user, ok := m.users[id]
+	if !ok {
+		return nil, domain.ErrUserNotFound
+	}
+	return user, nil
+}
+
+func (m *mockUserRepo) GetByEmail(_ context.Context, merchantID uuid.UUID, email string) (*domain.User, error) {
+	key := merchantID.String() + ":" + email
+	user, ok := m.byEmail[key]
+	if !ok {
+		return nil, domain.ErrUserNotFound
+	}
+	return user, nil
+}
+
+func (m *mockUserRepo) GetByEmailGlobal(_ context.Context, email string) (*domain.User, error) {
+	user, ok := m.byEmail["global:"+email]
+	if !ok {
+		return nil, domain.ErrUserNotFound
+	}
+	return user, nil
+}
+
+func (m *mockUserRepo) ListByMerchant(_ context.Context, merchantID uuid.UUID) ([]*domain.User, error) {
+	var result []*domain.User
+	for _, u := range m.users {
+		if u.MerchantID == merchantID {
+			result = append(result, u)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockUserRepo) Update(_ context.Context, user *domain.User) error {
+	m.users[user.ID] = user
+	return nil
+}
+
 type mockEventPublisher struct {
 	published []publishedEvent
 }
@@ -140,17 +205,23 @@ func (m *mockEventPublisher) Publish(_ context.Context, subject string, data any
 	return nil
 }
 
+func newTestService() *service.MerchantService {
+	return service.NewMerchantService(
+		newMockMerchantRepo(),
+		newMockAPIKeyRepo(),
+		newMockUserRepo(),
+		&mockEventPublisher{},
+		testJWTSecret,
+	)
+}
+
 // --- Tests ---
 
 func TestRegisterMerchant(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successful registration", func(t *testing.T) {
-		svc := service.NewMerchantService(
-			newMockMerchantRepo(),
-			newMockAPIKeyRepo(),
-			&mockEventPublisher{},
-		)
+		svc := newTestService()
 
 		merchant, err := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -165,8 +236,7 @@ func TestRegisterMerchant(t *testing.T) {
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
-		repo := newMockMerchantRepo()
-		svc := service.NewMerchantService(repo, newMockAPIKeyRepo(), &mockEventPublisher{})
+		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), &mockEventPublisher{}, testJWTSecret)
 
 		_, err := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Shop 1",
@@ -184,7 +254,7 @@ func TestRegisterMerchant(t *testing.T) {
 
 	t.Run("publishes event", func(t *testing.T) {
 		pub := &mockEventPublisher{}
-		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), pub)
+		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret)
 
 		_, err := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -196,13 +266,123 @@ func TestRegisterMerchant(t *testing.T) {
 	})
 }
 
+func TestRegisterWithUser(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful registration with user", func(t *testing.T) {
+		svc := newTestService()
+
+		result, err := svc.RegisterWithUser(ctx, service.RegisterWithUserInput{
+			BusinessName: "New Shop",
+			ContactEmail: "newshop@example.com",
+			AdminEmail:   "admin@newshop.com",
+			AdminPassword: "SecurePass1",
+			AdminName:    "Admin User",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "New Shop", result.Merchant.BusinessName)
+		assert.Equal(t, "admin@newshop.com", result.User.Email)
+		assert.Equal(t, domain.RoleAdmin, result.User.Role)
+		assert.NotEmpty(t, result.AccessToken)
+		assert.NotEmpty(t, result.RefreshToken)
+	})
+
+	t.Run("weak password fails", func(t *testing.T) {
+		svc := newTestService()
+
+		_, err := svc.RegisterWithUser(ctx, service.RegisterWithUserInput{
+			BusinessName: "Shop",
+			ContactEmail: "shop2@example.com",
+			AdminEmail:   "admin@shop2.com",
+			AdminPassword: "weak",
+			AdminName:    "Admin",
+		})
+		require.Error(t, err)
+	})
+}
+
+func TestLogin(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful login", func(t *testing.T) {
+		svc := newTestService()
+
+		_, err := svc.RegisterWithUser(ctx, service.RegisterWithUserInput{
+			BusinessName: "Login Shop",
+			ContactEmail: "login@example.com",
+			AdminEmail:   "admin@login.com",
+			AdminPassword: "SecurePass1",
+			AdminName:    "Admin",
+		})
+		require.NoError(t, err)
+
+		result, err := svc.Login(ctx, "admin@login.com", "SecurePass1")
+		require.NoError(t, err)
+		assert.Equal(t, "admin@login.com", result.User.Email)
+		assert.NotEmpty(t, result.AccessToken)
+		assert.NotNil(t, result.User.LastLoginAt)
+	})
+
+	t.Run("wrong password", func(t *testing.T) {
+		svc := newTestService()
+
+		_, _ = svc.RegisterWithUser(ctx, service.RegisterWithUserInput{
+			BusinessName: "Wrong Pass Shop",
+			ContactEmail: "wp@example.com",
+			AdminEmail:   "admin@wp.com",
+			AdminPassword: "SecurePass1",
+			AdminName:    "Admin",
+		})
+
+		_, err := svc.Login(ctx, "admin@wp.com", "WrongPass1")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrInvalidCredentials)
+	})
+
+	t.Run("nonexistent email", func(t *testing.T) {
+		svc := newTestService()
+
+		_, err := svc.Login(ctx, "nobody@example.com", "Password1")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, service.ErrInvalidCredentials)
+	})
+}
+
+func TestRefreshToken(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("valid refresh token", func(t *testing.T) {
+		svc := newTestService()
+
+		reg, _ := svc.RegisterWithUser(ctx, service.RegisterWithUserInput{
+			BusinessName: "Refresh Shop",
+			ContactEmail: "refresh@example.com",
+			AdminEmail:   "admin@refresh.com",
+			AdminPassword: "SecurePass1",
+			AdminName:    "Admin",
+		})
+
+		result, err := svc.RefreshToken(ctx, reg.RefreshToken)
+		require.NoError(t, err)
+		assert.NotEmpty(t, result.AccessToken)
+		assert.NotEmpty(t, result.RefreshToken)
+	})
+
+	t.Run("invalid refresh token", func(t *testing.T) {
+		svc := newTestService()
+
+		_, err := svc.RefreshToken(ctx, "invalid-token")
+		require.Error(t, err)
+	})
+}
+
 func TestApproveMerchant(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("approve under review merchant", func(t *testing.T) {
 		repo := newMockMerchantRepo()
 		pub := &mockEventPublisher{}
-		svc := service.NewMerchantService(repo, newMockAPIKeyRepo(), pub)
+		svc := service.NewMerchantService(repo, newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret)
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -221,7 +401,7 @@ func TestApproveMerchant(t *testing.T) {
 	})
 
 	t.Run("cannot approve pending merchant", func(t *testing.T) {
-		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), &mockEventPublisher{})
+		svc := newTestService()
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -237,9 +417,7 @@ func TestCreateAPIKey(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("create live key", func(t *testing.T) {
-		repo := newMockMerchantRepo()
-		keyRepo := newMockAPIKeyRepo()
-		svc := service.NewMerchantService(repo, keyRepo, &mockEventPublisher{})
+		svc := newTestService()
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -253,7 +431,7 @@ func TestCreateAPIKey(t *testing.T) {
 	})
 
 	t.Run("create key for nonexistent merchant", func(t *testing.T) {
-		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), &mockEventPublisher{})
+		svc := newTestService()
 
 		_, _, err := svc.CreateAPIKey(ctx, uuid.New(), "live", "Key")
 		require.Error(t, err)
@@ -265,9 +443,7 @@ func TestValidateAPIKey(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("valid key returns merchant", func(t *testing.T) {
-		repo := newMockMerchantRepo()
-		keyRepo := newMockAPIKeyRepo()
-		svc := service.NewMerchantService(repo, keyRepo, &mockEventPublisher{})
+		svc := newTestService()
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -282,9 +458,7 @@ func TestValidateAPIKey(t *testing.T) {
 	})
 
 	t.Run("wrong secret fails", func(t *testing.T) {
-		repo := newMockMerchantRepo()
-		keyRepo := newMockAPIKeyRepo()
-		svc := service.NewMerchantService(repo, keyRepo, &mockEventPublisher{})
+		svc := newTestService()
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -298,9 +472,7 @@ func TestValidateAPIKey(t *testing.T) {
 	})
 
 	t.Run("revoked key fails", func(t *testing.T) {
-		repo := newMockMerchantRepo()
-		keyRepo := newMockAPIKeyRepo()
-		svc := service.NewMerchantService(repo, keyRepo, &mockEventPublisher{})
+		svc := newTestService()
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",

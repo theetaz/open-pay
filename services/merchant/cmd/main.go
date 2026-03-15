@@ -29,18 +29,22 @@ func main() {
 	}
 	defer pool.Close()
 
+	// JWT secret
+	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
+
 	// Repositories
 	merchantRepo := pgadapter.NewMerchantRepository(pool)
 	apiKeyRepo := pgadapter.NewAPIKeyRepository(pool)
+	userRepo := pgadapter.NewUserRepository(pool)
 
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
 	// Service
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, eventPub)
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret)
 
 	// HTTP Handler
-	h := handler.NewMerchantHandler(svc)
+	h := handler.NewMerchantHandler(svc, jwtSecret)
 	router := handler.NewRouter(h)
 
 	// Server
@@ -84,4 +88,3 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
-
