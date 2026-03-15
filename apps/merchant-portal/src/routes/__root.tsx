@@ -27,7 +27,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background font-sans antialiased" suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-mono antialiased" suppressHydrationWarning>
         {children}
         <Scripts />
       </body>
