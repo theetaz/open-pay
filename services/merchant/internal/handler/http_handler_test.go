@@ -110,6 +110,31 @@ func (s *stubMerchantService) UpdateMerchantProfile(_ context.Context, id uuid.U
 	return m, nil
 }
 
+func (s *stubMerchantService) Approve(_ context.Context, id uuid.UUID) error {
+	m, ok := s.merchants[id]
+	if !ok {
+		return domain.ErrMerchantNotFound
+	}
+	_ = m.TransitionKYC(domain.KYCApproved)
+	return nil
+}
+
+func (s *stubMerchantService) Reject(_ context.Context, id uuid.UUID, reason string) error {
+	_, ok := s.merchants[id]
+	if !ok {
+		return domain.ErrMerchantNotFound
+	}
+	return nil
+}
+
+func (s *stubMerchantService) List(_ context.Context, _ service.ListParams) ([]*domain.Merchant, int, error) {
+	var result []*domain.Merchant
+	for _, m := range s.merchants {
+		result = append(result, m)
+	}
+	return result, len(result), nil
+}
+
 func TestRegisterWithUserHandler(t *testing.T) {
 	svc := newStubService()
 	h := handler.NewMerchantHandler(svc, testJWTSecret)

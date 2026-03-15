@@ -42,8 +42,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Merchant routes → merchant service (auth handled by merchant service)
 	r.Get("/v1/auth/me", p.ProxyToMerchant)
+	r.Get("/v1/merchants", p.ProxyToMerchant)
 	r.Put("/v1/merchants/{id}", p.ProxyToMerchant)
 	r.Get("/v1/merchants/{id}", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/approve", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/reject", p.ProxyToMerchant)
 
 	// Branch routes → merchant service
 	r.Post("/v1/branches", p.ProxyToMerchant)

@@ -363,6 +363,11 @@ func (s *MerchantService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Me
 	return s.merchants.GetByID(ctx, id)
 }
 
+// List returns paginated merchants.
+func (s *MerchantService) List(ctx context.Context, params ListParams) ([]*domain.Merchant, int, error) {
+	return s.merchants.List(ctx, params)
+}
+
 // Approve transitions a merchant's KYC status to APPROVED.
 func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID) error {
 	merchant, err := s.merchants.GetByID(ctx, id)
