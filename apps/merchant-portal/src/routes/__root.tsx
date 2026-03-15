@@ -1,7 +1,9 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import appCss from '../styles.css?url'
 
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark')?stored:'light';document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(mode);document.documentElement.style.colorScheme=mode;}catch(e){}})();`
+// Inline script to prevent FOUC (flash of unstyled content) on page load.
+// Runs before React hydration to apply the correct theme class immediately.
+const THEME_INIT_SCRIPT = `(function(){try{var stored=localStorage.getItem('theme');var prefersDark=window.matchMedia('(prefers-color-scheme:dark)').matches;var resolved=stored==='dark'?'dark':stored==='light'?'light':prefersDark?'dark':'light';document.documentElement.classList.add(resolved);document.documentElement.style.colorScheme=resolved;}catch(e){}})();`
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,9 +15,6 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
-      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
-      { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap' },
     ],
   }),
   shellComponent: RootDocument,
