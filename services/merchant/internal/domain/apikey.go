@@ -80,6 +80,10 @@ func (k *APIKey) Revoke(reason string) error {
 }
 
 func randomHex(n int) (string, error) {
+	if n <= 0 || n > 64 {
+		return "", fmt.Errorf("randomHex: n must be between 1 and 64, got %d", n)
+	}
+	//nolint:gosec // G115: n is validated above (1-64), so n*8 fits in uint
 	max := new(big.Int).Lsh(big.NewInt(1), uint(n*8))
 	val, err := rand.Int(rand.Reader, max)
 	if err != nil {
