@@ -10,6 +10,7 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	exchangeclient "github.com/openlankapay/openlankapay/services/payment/internal/adapter/exchange"
 	pgadapter "github.com/openlankapay/openlankapay/services/payment/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/payment/internal/adapter/provider"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
@@ -43,11 +44,15 @@ func main() {
 	// Repository
 	paymentRepo := pgadapter.NewPaymentRepository(pool)
 
+	// Exchange client
+	exchangeURL := getEnv("EXCHANGE_SERVICE_URL", "http://localhost:8085")
+	exchClient := exchangeclient.NewClient(exchangeURL)
+
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
 	// Service
-	svc := service.NewPaymentService(paymentRepo, providers, eventPub)
+	svc := service.NewPaymentService(paymentRepo, providers, exchClient, eventPub)
 
 	// HTTP Handler
 	h := handler.NewPaymentHandler(svc, mockProv)
