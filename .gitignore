@@ -66,3 +66,4 @@ tmp/
 .claude/
 .agents/
 skills-lock.json
+.mcp.json
