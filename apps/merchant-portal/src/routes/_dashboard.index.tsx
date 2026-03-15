@@ -5,6 +5,7 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
+import { CreatePaymentDialog } from '#/components/dashboard/create-payment-dialog'
 
 export const Route = createFileRoute('/_dashboard/')({
   component: DashboardIndex,
@@ -83,12 +84,16 @@ function DashboardIndex() {
             <CardDescription>Common tasks</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
+            <CreatePaymentDialog />
             <Link to="/payments">
               <Button variant="outline" className="w-full justify-start">View All Payments</Button>
             </Link>
-            <Button variant="outline" className="w-full justify-start">Create Payment Link</Button>
-            <Button variant="outline" className="w-full justify-start">Generate API Key</Button>
-            <Button variant="outline" className="w-full justify-start">Configure Webhook</Button>
+            <Link to="/subscriptions">
+              <Button variant="outline" className="w-full justify-start">Manage Subscriptions</Button>
+            </Link>
+            <Link to="/withdrawal">
+              <Button variant="outline" className="w-full justify-start">Request Withdrawal</Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

@@ -16,6 +16,7 @@ import { Route as PaySlugRouteImport } from './routes/pay.$slug'
 import { Route as CheckoutPaymentIdRouteImport } from './routes/checkout.$paymentId'
 import { Route as DashboardWithdrawalRouteImport } from './routes/_dashboard.withdrawal'
 import { Route as DashboardUsersRouteImport } from './routes/_dashboard.users'
+import { Route as DashboardSubscriptionsRouteImport } from './routes/_dashboard.subscriptions'
 import { Route as DashboardSettingsRouteImport } from './routes/_dashboard.settings'
 import { Route as DashboardPaymentsRouteImport } from './routes/_dashboard.payments'
 import { Route as DashboardPaymentLinksRouteImport } from './routes/_dashboard.payment-links'
@@ -57,6 +58,11 @@ const DashboardWithdrawalRoute = DashboardWithdrawalRouteImport.update({
 const DashboardUsersRoute = DashboardUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardSubscriptionsRoute = DashboardSubscriptionsRouteImport.update({
+  id: '/subscriptions',
+  path: '/subscriptions',
   getParentRoute: () => DashboardRoute,
 } as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/payment-links': typeof DashboardPaymentLinksRoute
   '/payments': typeof DashboardPaymentsRoute
   '/settings': typeof DashboardSettingsRoute
+  '/subscriptions': typeof DashboardSubscriptionsRoute
   '/users': typeof DashboardUsersRoute
   '/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/payment-links': typeof DashboardPaymentLinksRoute
   '/payments': typeof DashboardPaymentsRoute
   '/settings': typeof DashboardSettingsRoute
+  '/subscriptions': typeof DashboardSubscriptionsRoute
   '/users': typeof DashboardUsersRoute
   '/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/_dashboard/payment-links': typeof DashboardPaymentLinksRoute
   '/_dashboard/payments': typeof DashboardPaymentsRoute
   '/_dashboard/settings': typeof DashboardSettingsRoute
+  '/_dashboard/subscriptions': typeof DashboardSubscriptionsRoute
   '/_dashboard/users': typeof DashboardUsersRoute
   '/_dashboard/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/payment-links'
     | '/payments'
     | '/settings'
+    | '/subscriptions'
     | '/users'
     | '/withdrawal'
     | '/checkout/$paymentId'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/payment-links'
     | '/payments'
     | '/settings'
+    | '/subscriptions'
     | '/users'
     | '/withdrawal'
     | '/checkout/$paymentId'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/_dashboard/payment-links'
     | '/_dashboard/payments'
     | '/_dashboard/settings'
+    | '/_dashboard/subscriptions'
     | '/_dashboard/users'
     | '/_dashboard/withdrawal'
     | '/checkout/$paymentId'
@@ -265,6 +277,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof DashboardUsersRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/subscriptions': {
+      id: '/_dashboard/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/subscriptions'
+      preLoaderRoute: typeof DashboardSubscriptionsRouteImport
       parentRoute: typeof DashboardRoute
     }
     '/_dashboard/settings': {
@@ -353,6 +372,7 @@ interface DashboardRouteChildren {
   DashboardPaymentLinksRoute: typeof DashboardPaymentLinksRoute
   DashboardPaymentsRoute: typeof DashboardPaymentsRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardSubscriptionsRoute: typeof DashboardSubscriptionsRoute
   DashboardUsersRoute: typeof DashboardUsersRoute
   DashboardWithdrawalRoute: typeof DashboardWithdrawalRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -366,6 +386,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardPaymentLinksRoute: DashboardPaymentLinksRoute,
   DashboardPaymentsRoute: DashboardPaymentsRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardSubscriptionsRoute: DashboardSubscriptionsRoute,
   DashboardUsersRoute: DashboardUsersRoute,
   DashboardWithdrawalRoute: DashboardWithdrawalRoute,
   DashboardIndexRoute: DashboardIndexRoute,
