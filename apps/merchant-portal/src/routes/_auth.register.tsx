@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { User, Building2, Mail, Lock } from 'lucide-react'
+import { User, Building2, Mail, Lock, Loader2 } from 'lucide-react'
 import {
   Card,
   CardHeader,
@@ -18,6 +18,7 @@ import {
   FieldDescription,
   FieldSeparator,
 } from '#/components/ui/field'
+import { useRegister } from '#/hooks/use-auth'
 
 export const Route = createFileRoute('/_auth/register')({
   component: RegisterPage,
@@ -30,15 +31,12 @@ function RegisterPage() {
   const [password, setPassword] = React.useState('')
   const [confirmPassword, setConfirmPassword] = React.useState('')
 
+  const register = useRegister()
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    console.log('Register submitted:', {
-      fullName,
-      businessName,
-      email,
-      password,
-      confirmPassword,
-    })
+    if (password !== confirmPassword) return
+    register.mutate({ businessName, email, password, name: fullName })
   }
 
   return (
@@ -52,6 +50,12 @@ function RegisterPage() {
       <CardContent>
         <form onSubmit={handleSubmit}>
           <FieldGroup>
+            {register.isError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {register.error.message}
+              </div>
+            )}
+
             <Field>
               <FieldLabel htmlFor="fullName">Full Name</FieldLabel>
               <div className="relative">
@@ -63,6 +67,7 @@ function RegisterPage() {
                   className="pl-9"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  required
                 />
               </div>
             </Field>
@@ -78,6 +83,7 @@ function RegisterPage() {
                   className="pl-9"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
+                  required
                 />
               </div>
             </Field>
@@ -93,6 +99,7 @@ function RegisterPage() {
                   className="pl-9"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
                 />
               </div>
             </Field>
@@ -108,10 +115,11 @@ function RegisterPage() {
                   className="pl-9"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
               </div>
               <FieldDescription>
-                Must be at least 8 characters with a number and special character
+                Must be at least 8 characters with 1 uppercase and 1 number
               </FieldDescription>
             </Field>
 
@@ -126,12 +134,16 @@ function RegisterPage() {
                   className="pl-9"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
                 />
               </div>
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-sm text-destructive">Passwords do not match</p>
+              )}
             </Field>
 
             <div className="flex items-center gap-2">
-              <Checkbox id="terms" />
+              <Checkbox id="terms" required />
               <FieldLabel htmlFor="terms" className="font-normal">
                 I agree to the{' '}
                 <Link to="." className="text-primary hover:underline">
@@ -144,8 +156,15 @@ function RegisterPage() {
               </FieldLabel>
             </div>
 
-            <Button type="submit" size="lg" className="w-full">
-              Create Account
+            <Button type="submit" size="lg" className="w-full" disabled={register.isPending || password !== confirmPassword}>
+              {register.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                'Create Account'
+              )}
             </Button>
 
             <FieldSeparator />
