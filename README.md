@@ -218,13 +218,13 @@ feature/settlement-engine
 
 | Phase | Description                | Status  |
 | ----- | -------------------------- | ------- |
-| 0     | Project Foundation         | Done    |
-| 1     | Merchant Service           | Planned |
-| 2     | API Gateway                | Planned |
-| 3     | Payment Service            | Planned |
-| 4     | Exchange Rate Service      | Planned |
-| 5     | Webhook Service            | Planned |
-| 6     | Settlement Service         | Planned |
+| 0     | Project Foundation         | Done |
+| 1     | Merchant Service           | Done |
+| 2     | API Gateway                | Done |
+| 3     | Payment Service            | Done |
+| 4     | Exchange Rate Service      | Done |
+| 5     | Webhook Service            | Done |
+| 6     | Settlement Service         | Done |
 | 7     | Merchant Portal (Frontend) | Planned |
 | 8     | Admin Dashboard            | Planned |
 | 9     | Checkout Experience        | Planned |
