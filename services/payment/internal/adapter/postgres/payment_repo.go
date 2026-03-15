@@ -1,0 +1,221 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
+	"github.com/openlankapay/openlankapay/services/payment/internal/service"
+)
+
+// PaymentRepository is the PostgreSQL implementation for payment persistence.
+type PaymentRepository struct {
+	pool *pgxpool.Pool
+}
+
+// NewPaymentRepository creates a new PostgreSQL-backed PaymentRepository.
+func NewPaymentRepository(pool *pgxpool.Pool) *PaymentRepository {
+	return &PaymentRepository{pool: pool}
+}
+
+func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error {
+	query := `
+		INSERT INTO payments (
+			id, merchant_id, branch_id, payment_no, merchant_trade_no,
+			amount, currency, amount_usdt, exchange_rate_snapshot,
+			exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
+			total_fees_usdt, net_amount_usdt,
+			provider, provider_pay_id, qr_content, checkout_link, deep_link,
+			status, customer_email, webhook_url,
+			tx_hash, block_number, wallet_address,
+			expire_time, paid_at, failed_at, idempotency_key,
+			created_at, updated_at
+		) VALUES (
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9,
+			$10, $11, $12, $13,
+			$14, $15,
+			$16, $17, $18, $19, $20,
+			$21, $22, $23,
+			$24, $25, $26,
+			$27, $28, $29, $30,
+			$31, $32
+		)`
+
+	_, err := r.pool.Exec(ctx, query,
+		p.ID, p.MerchantID, p.BranchID, p.PaymentNo, p.MerchantTradeNo,
+		p.Amount, p.Currency, p.AmountUSDT, p.ExchangeRateSnapshot,
+		p.ExchangeFeePct, p.ExchangeFeeUSDT, p.PlatformFeePct, p.PlatformFeeUSDT,
+		p.TotalFeesUSDT, p.NetAmountUSDT,
+		p.Provider, p.ProviderPayID, p.QRContent, p.CheckoutLink, p.DeepLink,
+		string(p.Status), p.CustomerEmail, p.WebhookURL,
+		p.TxHash, p.BlockNumber, p.WalletAddress,
+		p.ExpireTime, p.PaidAt, p.FailedAt, nilIfEmpty(p.IdempotencyKey),
+		p.CreatedAt, p.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting payment: %w", err)
+	}
+	return nil
+}
+
+func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error) {
+	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
+		amount, currency, amount_usdt, exchange_rate_snapshot,
+		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
+		total_fees_usdt, net_amount_usdt,
+		provider, provider_pay_id, qr_content, checkout_link, deep_link,
+		status, customer_email, webhook_url,
+		tx_hash, block_number, wallet_address,
+		expire_time, paid_at, failed_at, idempotency_key,
+		created_at, updated_at, deleted_at
+		FROM payments WHERE id = $1 AND deleted_at IS NULL`
+
+	return r.scanOne(ctx, query, id)
+}
+
+func (r *PaymentRepository) GetByProviderPayID(ctx context.Context, providerPayID string) (*domain.Payment, error) {
+	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
+		amount, currency, amount_usdt, exchange_rate_snapshot,
+		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
+		total_fees_usdt, net_amount_usdt,
+		provider, provider_pay_id, qr_content, checkout_link, deep_link,
+		status, customer_email, webhook_url,
+		tx_hash, block_number, wallet_address,
+		expire_time, paid_at, failed_at, idempotency_key,
+		created_at, updated_at, deleted_at
+		FROM payments WHERE provider_pay_id = $1 AND deleted_at IS NULL`
+
+	return r.scanOne(ctx, query, providerPayID)
+}
+
+func (r *PaymentRepository) Update(ctx context.Context, p *domain.Payment) error {
+	query := `
+		UPDATE payments SET
+			status = $2, provider_pay_id = $3, qr_content = $4, checkout_link = $5, deep_link = $6,
+			tx_hash = $7, block_number = $8, wallet_address = $9,
+			paid_at = $10, failed_at = $11, updated_at = $12
+		WHERE id = $1 AND deleted_at IS NULL`
+
+	result, err := r.pool.Exec(ctx, query,
+		p.ID, string(p.Status), p.ProviderPayID, p.QRContent, p.CheckoutLink, p.DeepLink,
+		p.TxHash, p.BlockNumber, p.WalletAddress,
+		p.PaidAt, p.FailedAt, p.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("updating payment: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrPaymentNotFound
+	}
+	return nil
+}
+
+func (r *PaymentRepository) List(ctx context.Context, merchantID uuid.UUID, params service.ListParams) ([]*domain.Payment, int, error) {
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PerPage < 1 || params.PerPage > 100 {
+		params.PerPage = 20
+	}
+
+	// Build WHERE clause
+	conditions := []string{"merchant_id = $1", "deleted_at IS NULL"}
+	args := []any{merchantID}
+	argIdx := 2
+
+	if params.Status != nil {
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, string(*params.Status))
+		argIdx++
+	}
+
+	where := strings.Join(conditions, " AND ")
+
+	// Count
+	countQuery := "SELECT COUNT(*) FROM payments WHERE " + where
+	var total int
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting payments: %w", err)
+	}
+
+	// Fetch
+	offset := (params.Page - 1) * params.PerPage
+	selectQuery := fmt.Sprintf(`SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
+		amount, currency, amount_usdt, exchange_rate_snapshot,
+		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
+		total_fees_usdt, net_amount_usdt,
+		provider, provider_pay_id, qr_content, checkout_link, deep_link,
+		status, customer_email, webhook_url,
+		tx_hash, block_number, wallet_address,
+		expire_time, paid_at, failed_at, idempotency_key,
+		created_at, updated_at, deleted_at
+		FROM payments WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, argIdx, argIdx+1)
+	args = append(args, params.PerPage, offset)
+
+	rows, err := r.pool.Query(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing payments: %w", err)
+	}
+	defer rows.Close()
+
+	var payments []*domain.Payment
+	for rows.Next() {
+		p, err := scanPayment(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		payments = append(payments, p)
+	}
+
+	return payments, total, nil
+}
+
+func (r *PaymentRepository) scanOne(ctx context.Context, query string, args ...any) (*domain.Payment, error) {
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying payment: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, domain.ErrPaymentNotFound
+	}
+
+	return scanPayment(rows)
+}
+
+func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
+	var p domain.Payment
+	var status string
+
+	err := rows.Scan(
+		&p.ID, &p.MerchantID, &p.BranchID, &p.PaymentNo, &p.MerchantTradeNo,
+		&p.Amount, &p.Currency, &p.AmountUSDT, &p.ExchangeRateSnapshot,
+		&p.ExchangeFeePct, &p.ExchangeFeeUSDT, &p.PlatformFeePct, &p.PlatformFeeUSDT,
+		&p.TotalFeesUSDT, &p.NetAmountUSDT,
+		&p.Provider, &p.ProviderPayID, &p.QRContent, &p.CheckoutLink, &p.DeepLink,
+		&status, &p.CustomerEmail, &p.WebhookURL,
+		&p.TxHash, &p.BlockNumber, &p.WalletAddress,
+		&p.ExpireTime, &p.PaidAt, &p.FailedAt, &p.IdempotencyKey,
+		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scanning payment: %w", err)
+	}
+
+	p.Status = domain.PaymentStatus(status)
+	return &p, nil
+}
+
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
