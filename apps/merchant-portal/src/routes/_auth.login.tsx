@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import {
   Card,
   CardHeader,
@@ -18,6 +18,7 @@ import {
   FieldDescription,
   FieldSeparator,
 } from '#/components/ui/field'
+import { useLogin } from '#/hooks/use-auth'
 
 export const Route = createFileRoute('/_auth/login')({
   component: LoginPage,
@@ -28,9 +29,11 @@ function LoginPage() {
   const [password, setPassword] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
 
+  const login = useLogin()
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    console.log('Login submitted:', { email, password })
+    login.mutate({ email, password })
   }
 
   return (
@@ -42,6 +45,12 @@ function LoginPage() {
       <CardContent>
         <form onSubmit={handleSubmit}>
           <FieldGroup>
+            {login.isError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {login.error.message}
+              </div>
+            )}
+
             <Field>
               <FieldLabel htmlFor="email">Email</FieldLabel>
               <div className="relative">
@@ -53,6 +62,7 @@ function LoginPage() {
                   className="pl-9"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
                 />
               </div>
             </Field>
@@ -68,6 +78,7 @@ function LoginPage() {
                   className="pl-9 pr-9"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
                 <button
                   type="button"
@@ -95,8 +106,15 @@ function LoginPage() {
               </Link>
             </div>
 
-            <Button type="submit" size="lg" className="w-full">
-              Sign In
+            <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
+              {login.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
 
             <FieldSeparator>Or</FieldSeparator>
