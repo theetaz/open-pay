@@ -38,7 +38,7 @@ func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string) *Merchan
 }
 
 // NewRouter creates a chi router with merchant routes.
-func NewRouter(h *MerchantHandler) http.Handler {
+func NewRouter(h *MerchantHandler, branchRepo branchRepo) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -56,6 +56,11 @@ func NewRouter(h *MerchantHandler) http.Handler {
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
 	})
+
+	// Branch routes
+	if branchRepo != nil {
+		RegisterBranchRoutes(r, branchRepo, h.jwtSecret)
+	}
 
 	return r
 }

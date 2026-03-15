@@ -113,7 +113,7 @@ func (s *stubMerchantService) UpdateMerchantProfile(_ context.Context, id uuid.U
 func TestRegisterWithUserHandler(t *testing.T) {
 	svc := newStubService()
 	h := handler.NewMerchantHandler(svc, testJWTSecret)
-	router := handler.NewRouter(h)
+	router := handler.NewRouter(h, nil)
 
 	t.Run("successful registration", func(t *testing.T) {
 		body := `{"businessName":"Test Shop","email":"test@example.com","password":"SecurePass1","name":"John Doe","phone":"+94771234567"}`
@@ -166,7 +166,7 @@ func TestRegisterWithUserHandler(t *testing.T) {
 func TestLoginHandler(t *testing.T) {
 	svc := newStubService()
 	h := handler.NewMerchantHandler(svc, testJWTSecret)
-	router := handler.NewRouter(h)
+	router := handler.NewRouter(h, nil)
 
 	// Register a user first
 	regBody := `{"businessName":"Login Shop","email":"login@example.com","password":"SecurePass1","name":"John"}`
