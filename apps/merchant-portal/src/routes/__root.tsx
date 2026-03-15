@@ -1,4 +1,4 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import appCss from '../styles.css?url'
 
 // Inline script to prevent FOUC (flash of unstyled content) on page load.
@@ -27,8 +27,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background font-sans antialiased">
-        <Outlet />
+      <body className="min-h-screen bg-background font-sans antialiased" suppressHydrationWarning>
+        {children}
         <Scripts />
       </body>
     </html>

@@ -11,13 +11,22 @@ export const Route = createFileRoute('/_dashboard')({
 function DashboardLayout() {
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar />
+      <SidebarProvider
+        style={
+          {
+            '--sidebar-width': 'calc(var(--spacing) * 72)',
+            '--header-height': 'calc(var(--spacing) * 12)',
+          } as React.CSSProperties
+        }
+      >
+        <AppSidebar variant="inset" />
         <SidebarInset>
           <SiteHeader />
-          <main className="flex-1 p-6">
-            <Outlet />
-          </main>
+          <div className="flex flex-1 flex-col">
+            <main className="flex-1 p-6">
+              <Outlet />
+            </main>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

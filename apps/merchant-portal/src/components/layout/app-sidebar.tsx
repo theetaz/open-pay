@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import {
   CreditCard,
   Link2,
@@ -10,6 +10,7 @@ import {
   FileText,
   HelpCircle,
   ExternalLink,
+  ShieldCheck,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -17,8 +18,10 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -35,39 +38,63 @@ const navItems = [
 ]
 
 const bottomLinks = [
-  { title: 'Documentation', href: '/docs', icon: FileText, external: true },
-  { title: 'Support', href: '/support', icon: HelpCircle, external: true },
+  { title: 'Documentation', href: '/docs', icon: FileText },
+  { title: 'Support', href: '/support', icon: HelpCircle },
 ]
 
-export function AppSidebar() {
+export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const routerState = useRouterState()
+  const currentPath = routerState.location.pathname
+
   return (
-    <Sidebar>
+    <Sidebar {...props}>
       <SidebarHeader className="p-4">
         <Link to="/" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
             OP
           </div>
-          <span className="text-lg font-bold">Open Pay</span>
+          <span className="text-lg font-semibold tracking-tight">Open Pay</span>
         </Link>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Platform</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <Link
-                      to={item.href}
-                      activeProps={{ className: 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' }}
-                    >
-                      <item.icon className="size-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={currentPath.startsWith(item.href)}
+                    render={<Link to={item.href} />}
+                  >
+                    <item.icon className="size-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Account</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Activate"
+                  isActive={currentPath.startsWith('/activate')}
+                  render={<Link to="/activate" />}
+                >
+                  <ShieldCheck className="size-4" />
+                  <span>Activate</span>
+                </SidebarMenuButton>
+                <SidebarMenuBadge className="bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  KYC
+                </SidebarMenuBadge>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -77,14 +104,15 @@ export function AppSidebar() {
         <SidebarMenu>
           {bottomLinks.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild>
-                <a href={item.href} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <item.icon className="size-4" />
-                    <span>{item.title}</span>
-                  </span>
-                  <ExternalLink className="size-3 text-muted-foreground" />
-                </a>
+              <SidebarMenuButton
+                tooltip={item.title}
+                render={
+                  <a href={item.href} target="_blank" rel="noopener noreferrer" />
+                }
+              >
+                <item.icon className="size-4" />
+                <span>{item.title}</span>
+                <ExternalLink className="ml-auto size-3 text-muted-foreground" />
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

@@ -18,10 +18,8 @@ export function CopyButton({ value }: CopyButtonProps) {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-6" onClick={handleCopy}>
-          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-        </Button>
+      <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={handleCopy} />}>
+        {copied ? <Check /> : <Copy />}
       </TooltipTrigger>
       <TooltipContent>
         {copied ? 'Copied!' : 'Copy to clipboard'}
