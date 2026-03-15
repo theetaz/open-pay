@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const isBrowser = typeof window !== 'undefined'
+
+const API_BASE_URL = (isBrowser && import.meta.env.VITE_API_URL) || 'http://localhost:8080'
 
 interface ApiError {
   code: string
@@ -17,7 +19,7 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('access_token')
+  const token = isBrowser ? localStorage.getItem('access_token') : null
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -37,7 +39,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const error = body.error as ApiError | undefined
-    if (res.status === 401) {
+    if (res.status === 401 && isBrowser) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       window.location.href = '/login'

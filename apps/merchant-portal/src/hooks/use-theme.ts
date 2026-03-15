@@ -13,6 +13,7 @@ function getStoredTheme(): Theme {
 }
 
 function applyTheme(theme: Theme) {
+  if (typeof document === 'undefined') return
   const resolved = theme === 'system' ? getSystemTheme() : theme
   const root = document.documentElement
   root.classList.remove('light', 'dark')
@@ -40,7 +41,9 @@ export function useTheme() {
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme)
-    localStorage.setItem('theme', newTheme)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme', newTheme)
+    }
     applyTheme(newTheme)
   }, [])
 
