@@ -37,14 +37,13 @@ func (r *WithdrawalRepository) Create(ctx context.Context, w *domain.Withdrawal)
 	return nil
 }
 
-func (r *WithdrawalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Withdrawal, error) {
-	query := `SELECT id, merchant_id, amount_usdt, exchange_rate, amount_lkr,
-		bank_name, bank_account_no, bank_account_name, status,
-		approved_by, approved_at, rejected_reason, bank_reference, completed_at,
-		created_at, updated_at
-		FROM withdrawals WHERE id = $1`
+const withdrawalSelectCols = `id, merchant_id, amount_usdt, exchange_rate, amount_lkr,
+	bank_name, bank_account_no, bank_account_name, status,
+	approved_by, approved_at, COALESCE(rejected_reason,''), COALESCE(bank_reference,''), completed_at,
+	created_at, updated_at`
 
-	return scanWithdrawal(r.pool.QueryRow(ctx, query, id))
+func (r *WithdrawalRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Withdrawal, error) {
+	return scanWithdrawal(r.pool.QueryRow(ctx, "SELECT "+withdrawalSelectCols+" FROM withdrawals WHERE id = $1", id))
 }
 
 func (r *WithdrawalRepository) Update(ctx context.Context, w *domain.Withdrawal) error {
@@ -74,11 +73,8 @@ func (r *WithdrawalRepository) ListByMerchant(ctx context.Context, merchantID uu
 		args = append(args, string(*status))
 	}
 
-	query := fmt.Sprintf(`SELECT id, merchant_id, amount_usdt, exchange_rate, amount_lkr,
-		bank_name, bank_account_no, bank_account_name, status,
-		approved_by, approved_at, rejected_reason, bank_reference, completed_at,
-		created_at, updated_at
-		FROM withdrawals WHERE %s ORDER BY created_at DESC`, strings.Join(conditions, " AND "))
+	query := fmt.Sprintf(`SELECT %s FROM withdrawals WHERE %s ORDER BY created_at DESC`,
+		withdrawalSelectCols, strings.Join(conditions, " AND "))
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
