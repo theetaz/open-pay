@@ -31,8 +31,12 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
 
 	auditRepo := pgadapter.NewAuditRepository(pool)
-	svc := service.NewAuditService(auditRepo)
-	h := handler.NewAdminHandler(svc)
+	adminUserRepo := pgadapter.NewAdminUserRepository(pool)
+
+	auditSvc := service.NewAuditService(auditRepo)
+	authSvc := service.NewAdminAuthService(adminUserRepo, jwtSecret)
+
+	h := handler.NewAdminHandler(auditSvc, authSvc)
 	router := handler.NewRouter(h, jwtSecret)
 
 	port := getEnv("PORT", "8088")

@@ -10,7 +10,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { CheckCircle2, XCircle, BanknoteIcon, Clock, ArrowDownToLine } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/withdrawals')({ component: WithdrawalsPage })
+export const Route = createFileRoute('/_dashboard/withdrawals')({ component: WithdrawalsPage })
 
 function WithdrawalsPage() {
   const queryClient = useQueryClient()

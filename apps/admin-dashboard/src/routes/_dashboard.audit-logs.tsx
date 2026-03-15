@@ -6,7 +6,7 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Search } from 'lucide-react'
 
-export const Route = createFileRoute('/audit-logs')({ component: AuditLogsPage })
+export const Route = createFileRoute('/_dashboard/audit-logs')({ component: AuditLogsPage })
 
 function AuditLogsPage() {
   return (
