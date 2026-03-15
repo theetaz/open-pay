@@ -1,11 +1,6 @@
 # Plan directory (architecture docs, not committed)
 .plan/
 
-# Research docs
-RESEARCH.md
-GO_ARCHITECTURE_RESEARCH.md
-CEYPAY_PLUGIN_RESEARCH.md
-
 # Go
 bin/
 *.exe
