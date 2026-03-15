@@ -10,12 +10,22 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/handler"
+	"github.com/openlankapay/openlankapay/services/gateway/internal/proxy"
 )
 
 func main() {
 	logger := observability.NewLogger("gateway", getEnv("LOG_LEVEL", "info"))
 
+	// Service proxy configuration
+	serviceProxy := proxy.NewServiceProxy(proxy.Config{
+		MerchantServiceURL: getEnv("MERCHANT_SERVICE_URL", "http://localhost:8082"),
+		PaymentServiceURL:  getEnv("PAYMENT_SERVICE_URL", "http://localhost:8081"),
+		ExchangeServiceURL: getEnv("EXCHANGE_SERVICE_URL", "http://localhost:8085"),
+	})
+
 	cfg := handler.GatewayConfig{
+		JWTSecret:          getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars"),
+		ServiceProxy:       serviceProxy,
 		RateLimitPerMinute: 100,
 	}
 
