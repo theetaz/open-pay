@@ -45,7 +45,7 @@ func (c *Client) GetRate(ctx context.Context, base, quote string) (decimal.Decim
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("fetching exchange rate: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return decimal.Zero, fmt.Errorf("exchange service returned status %d", resp.StatusCode)
