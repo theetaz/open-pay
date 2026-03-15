@@ -13,6 +13,8 @@ import { Route as SettlementsRouteImport } from './routes/settlements'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PaySlugRouteImport } from './routes/pay.$slug'
+import { Route as CheckoutPaymentIdRouteImport } from './routes/checkout.$paymentId'
 
 const SettlementsRoute = SettlementsRouteImport.update({
   id: '/settlements',
@@ -34,18 +36,32 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PaySlugRoute = PaySlugRouteImport.update({
+  id: '/pay/$slug',
+  path: '/pay/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutPaymentIdRoute = CheckoutPaymentIdRouteImport.update({
+  id: '/checkout/$paymentId',
+  path: '/checkout/$paymentId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/payments': typeof PaymentsRoute
   '/settings': typeof SettingsRoute
   '/settlements': typeof SettlementsRoute
+  '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
+  '/pay/$slug': typeof PaySlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/payments': typeof PaymentsRoute
   '/settings': typeof SettingsRoute
   '/settlements': typeof SettlementsRoute
+  '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
+  '/pay/$slug': typeof PaySlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +69,34 @@ export interface FileRoutesById {
   '/payments': typeof PaymentsRoute
   '/settings': typeof SettingsRoute
   '/settlements': typeof SettlementsRoute
+  '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
+  '/pay/$slug': typeof PaySlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/payments' | '/settings' | '/settlements'
+  fullPaths:
+    | '/'
+    | '/payments'
+    | '/settings'
+    | '/settlements'
+    | '/checkout/$paymentId'
+    | '/pay/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/payments' | '/settings' | '/settlements'
-  id: '__root__' | '/' | '/payments' | '/settings' | '/settlements'
+  to:
+    | '/'
+    | '/payments'
+    | '/settings'
+    | '/settlements'
+    | '/checkout/$paymentId'
+    | '/pay/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/payments'
+    | '/settings'
+    | '/settlements'
+    | '/checkout/$paymentId'
+    | '/pay/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +104,8 @@ export interface RootRouteChildren {
   PaymentsRoute: typeof PaymentsRoute
   SettingsRoute: typeof SettingsRoute
   SettlementsRoute: typeof SettlementsRoute
+  CheckoutPaymentIdRoute: typeof CheckoutPaymentIdRoute
+  PaySlugRoute: typeof PaySlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +138,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pay/$slug': {
+      id: '/pay/$slug'
+      path: '/pay/$slug'
+      fullPath: '/pay/$slug'
+      preLoaderRoute: typeof PaySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/$paymentId': {
+      id: '/checkout/$paymentId'
+      path: '/checkout/$paymentId'
+      fullPath: '/checkout/$paymentId'
+      preLoaderRoute: typeof CheckoutPaymentIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +160,8 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentsRoute: PaymentsRoute,
   SettingsRoute: SettingsRoute,
   SettlementsRoute: SettlementsRoute,
+  CheckoutPaymentIdRoute: CheckoutPaymentIdRoute,
+  PaySlugRoute: PaySlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
