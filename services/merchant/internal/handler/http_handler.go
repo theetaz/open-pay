@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,6 +25,9 @@ type MerchantServiceInterface interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Merchant, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateMerchantProfile(ctx context.Context, id uuid.UUID, input service.UpdateProfileInput) (*domain.Merchant, error)
+	Approve(ctx context.Context, id uuid.UUID) error
+	Reject(ctx context.Context, id uuid.UUID, reason string) error
+	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
@@ -53,8 +57,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo) http.Handler {
 		r.Use(auth.JWTMiddleware(h.jwtSecret))
 
 		r.Get("/v1/auth/me", h.GetMe)
+		r.Get("/v1/merchants", h.ListMerchants)
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
+		r.Post("/v1/merchants/{id}/approve", h.ApproveMerchant)
+		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
 	})
 
 	// Branch routes
@@ -243,6 +250,94 @@ func (h *MerchantHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": merchantResponse(merchant)})
+}
+
+// ListMerchants handles GET /v1/merchants.
+func (h *MerchantHandler) ListMerchants(w http.ResponseWriter, r *http.Request) {
+	params := service.ListParams{
+		Page:    intQuery(r, "page", 1),
+		PerPage: intQuery(r, "perPage", 20),
+	}
+
+	merchants, total, err := h.svc.List(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list merchants")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(merchants))
+	for _, m := range merchants {
+		items = append(items, merchantResponse(m))
+	}
+
+	writeJSON(w, http.StatusOK, envelope{
+		"data": items,
+		"meta": map[string]any{"total": total, "page": params.Page, "perPage": params.PerPage},
+	})
+}
+
+// ApproveMerchant handles POST /v1/merchants/{id}/approve.
+func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if err := h.svc.Approve(r.Context(), id); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidKYCTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to approve merchant")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "approved"}})
+}
+
+// RejectMerchant handles POST /v1/merchants/{id}/reject.
+func (h *MerchantHandler) RejectMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Reason == "" {
+		req.Reason = "Rejected by admin"
+	}
+
+	if err := h.svc.Reject(r.Context(), id, req.Reason); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to reject merchant")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "rejected"}})
+}
+
+func intQuery(r *http.Request, key string, defaultVal int) int {
+	s := r.URL.Query().Get(key)
+	if s == "" {
+		return defaultVal
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v < 1 {
+		return defaultVal
+	}
+	return v
 }
 
 // --- Request types ---
