@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/admin/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/admin/internal/domain"
+	"github.com/openlankapay/openlankapay/services/admin/internal/service"
 )
 
 type AuditServiceInterface interface {
@@ -22,12 +24,19 @@ type AuditServiceInterface interface {
 	List(ctx context.Context, params postgres.ListParams) ([]*domain.AuditLog, int, error)
 }
 
-type AdminHandler struct {
-	svc AuditServiceInterface
+type AdminAuthServiceInterface interface {
+	Login(ctx context.Context, email, password string) (*service.AdminLoginResult, error)
+	GetCurrentUser(ctx context.Context, userID uuid.UUID) (*domain.AdminUser, error)
+	RefreshToken(ctx context.Context, refreshToken string) (*service.AdminLoginResult, error)
 }
 
-func NewAdminHandler(svc AuditServiceInterface) *AdminHandler {
-	return &AdminHandler{svc: svc}
+type AdminHandler struct {
+	auditSvc AuditServiceInterface
+	authSvc  AdminAuthServiceInterface
+}
+
+func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface) *AdminHandler {
+	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc}
 }
 
 func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
@@ -35,8 +44,16 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// Public admin auth routes
+	r.Post("/v1/admin/auth/login", h.AdminLogin)
+	r.Post("/v1/admin/auth/refresh", h.AdminRefreshToken)
+
+	// Protected admin routes (JWT + platform admin role)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(jwtSecret))
+		r.Use(auth.RequirePlatformAdmin())
+
+		r.Get("/v1/admin/auth/me", h.AdminMe)
 		r.Get("/v1/audit-logs", h.ListAuditLogs)
 		r.Get("/v1/audit-logs/{id}", h.GetAuditLog)
 	})
@@ -47,6 +64,71 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 	return r
 }
 
+// --- Admin Auth Handlers ---
+
+func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	result, err := h.authSvc.Login(r.Context(), req.Email, req.Password)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
+			return
+		}
+		if errors.Is(err, domain.ErrAdminAccountInactive) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_INACTIVE", "account is inactive")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": adminAuthResponse(result)})
+}
+
+func (h *AdminHandler) AdminRefreshToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	result, err := h.authSvc.RefreshToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "INVALID_TOKEN", "invalid or expired refresh token")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": adminAuthResponse(result)})
+}
+
+func (h *AdminHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	user, err := h.authSvc.GetCurrentUser(r.Context(), claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "admin user not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": adminUserResponse(user)})
+}
+
+// --- Audit Handlers ---
+
 func (h *AdminHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	params := postgres.ListParams{
 		Page:         intQuery(r, "page", 1),
@@ -56,7 +138,7 @@ func (h *AdminHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		ResourceType: r.URL.Query().Get("resourceType"),
 	}
 
-	logs, total, err := h.svc.List(r.Context(), params)
+	logs, total, err := h.auditSvc.List(r.Context(), params)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list audit logs")
 		return
@@ -80,7 +162,7 @@ func (h *AdminHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log, err := h.svc.GetByID(r.Context(), id)
+	log, err := h.auditSvc.GetByID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "audit log not found")
 		return
@@ -108,7 +190,7 @@ func (h *AdminHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		resourceID = &id
 	}
 
-	log, err := h.svc.CreateLog(r.Context(), domain.AuditInput{
+	log, err := h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 		ActorID:      actorID,
 		ActorType:    req.ActorType,
 		MerchantID:   merchantID,
@@ -126,6 +208,8 @@ func (h *AdminHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, envelope{"data": auditResponse(log)})
 }
 
+// --- Request/Response types ---
+
 type createAuditRequest struct {
 	ActorID      string `json:"actorId"`
 	ActorType    string `json:"actorType"`
@@ -138,6 +222,30 @@ type createAuditRequest struct {
 }
 
 type envelope map[string]any
+
+func adminAuthResponse(r *service.AdminLoginResult) map[string]any {
+	return map[string]any{
+		"accessToken":  r.AccessToken,
+		"refreshToken": r.RefreshToken,
+		"user":         adminUserResponse(r.User),
+	}
+}
+
+func adminUserResponse(u *domain.AdminUser) map[string]any {
+	resp := map[string]any{
+		"id":       u.ID.String(),
+		"email":    u.Email,
+		"name":     u.Name,
+		"isActive": u.IsActive,
+	}
+	if u.Role != nil {
+		resp["role"] = map[string]any{
+			"name":        u.Role.Name,
+			"permissions": u.Role.Permissions,
+		}
+	}
+	return resp
+}
 
 func auditResponse(l *domain.AuditLog) map[string]any {
 	resp := map[string]any{

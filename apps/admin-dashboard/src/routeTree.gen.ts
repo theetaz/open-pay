@@ -9,128 +9,178 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WithdrawalsRouteImport } from './routes/withdrawals'
-import { Route as TreasuryRouteImport } from './routes/treasury'
-import { Route as MerchantsRouteImport } from './routes/merchants'
-import { Route as AuditLogsRouteImport } from './routes/audit-logs'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as DashboardRouteImport } from './routes/_dashboard'
+import { Route as DashboardWithdrawalsRouteImport } from './routes/_dashboard.withdrawals'
+import { Route as DashboardTreasuryRouteImport } from './routes/_dashboard.treasury'
+import { Route as DashboardMerchantsRouteImport } from './routes/_dashboard.merchants'
+import { Route as DashboardAuditLogsRouteImport } from './routes/_dashboard.audit-logs'
+import { Route as DashboardIndexRouteImport } from './routes/_dashboard.index'
 
-const WithdrawalsRoute = WithdrawalsRouteImport.update({
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/_dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+
+const DashboardWithdrawalsRoute = DashboardWithdrawalsRouteImport.update({
   id: '/withdrawals',
   path: '/withdrawals',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const TreasuryRoute = TreasuryRouteImport.update({
+
+const DashboardTreasuryRoute = DashboardTreasuryRouteImport.update({
   id: '/treasury',
   path: '/treasury',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const MerchantsRoute = MerchantsRouteImport.update({
+
+const DashboardMerchantsRoute = DashboardMerchantsRouteImport.update({
   id: '/merchants',
   path: '/merchants',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const AuditLogsRoute = AuditLogsRouteImport.update({
+
+const DashboardAuditLogsRoute = DashboardAuditLogsRouteImport.update({
   id: '/audit-logs',
   path: '/audit-logs',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/audit-logs': typeof AuditLogsRoute
-  '/merchants': typeof MerchantsRoute
-  '/treasury': typeof TreasuryRoute
-  '/withdrawals': typeof WithdrawalsRoute
+  '/': typeof DashboardIndexRoute
+  '/login': typeof LoginRoute
+  '/audit-logs': typeof DashboardAuditLogsRoute
+  '/merchants': typeof DashboardMerchantsRoute
+  '/treasury': typeof DashboardTreasuryRoute
+  '/withdrawals': typeof DashboardWithdrawalsRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/audit-logs': typeof AuditLogsRoute
-  '/merchants': typeof MerchantsRoute
-  '/treasury': typeof TreasuryRoute
-  '/withdrawals': typeof WithdrawalsRoute
+  '/': typeof DashboardIndexRoute
+  '/login': typeof LoginRoute
+  '/audit-logs': typeof DashboardAuditLogsRoute
+  '/merchants': typeof DashboardMerchantsRoute
+  '/treasury': typeof DashboardTreasuryRoute
+  '/withdrawals': typeof DashboardWithdrawalsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/audit-logs': typeof AuditLogsRoute
-  '/merchants': typeof MerchantsRoute
-  '/treasury': typeof TreasuryRoute
-  '/withdrawals': typeof WithdrawalsRoute
+  '/_dashboard': typeof DashboardRoute
+  '/login': typeof LoginRoute
+  '/_dashboard/': typeof DashboardIndexRoute
+  '/_dashboard/audit-logs': typeof DashboardAuditLogsRoute
+  '/_dashboard/merchants': typeof DashboardMerchantsRoute
+  '/_dashboard/treasury': typeof DashboardTreasuryRoute
+  '/_dashboard/withdrawals': typeof DashboardWithdrawalsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/audit-logs' | '/merchants' | '/treasury' | '/withdrawals'
+  fullPaths: '/' | '/login' | '/audit-logs' | '/merchants' | '/treasury' | '/withdrawals'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/audit-logs' | '/merchants' | '/treasury' | '/withdrawals'
+  to: '/' | '/login' | '/audit-logs' | '/merchants' | '/treasury' | '/withdrawals'
   id:
     | '__root__'
-    | '/'
-    | '/audit-logs'
-    | '/merchants'
-    | '/treasury'
-    | '/withdrawals'
+    | '/_dashboard'
+    | '/login'
+    | '/_dashboard/'
+    | '/_dashboard/audit-logs'
+    | '/_dashboard/merchants'
+    | '/_dashboard/treasury'
+    | '/_dashboard/withdrawals'
   fileRoutesById: FileRoutesById
 }
+
+export interface DashboardRouteChildren {
+  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardAuditLogsRoute: typeof DashboardAuditLogsRoute
+  DashboardMerchantsRoute: typeof DashboardMerchantsRoute
+  DashboardTreasuryRoute: typeof DashboardTreasuryRoute
+  DashboardWithdrawalsRoute: typeof DashboardWithdrawalsRoute
+}
+
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AuditLogsRoute: typeof AuditLogsRoute
-  MerchantsRoute: typeof MerchantsRoute
-  TreasuryRoute: typeof TreasuryRoute
-  WithdrawalsRoute: typeof WithdrawalsRoute
+  LoginRoute: typeof LoginRoute
+  DashboardRoute: typeof DashboardRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/withdrawals': {
-      id: '/withdrawals'
-      path: '/withdrawals'
-      fullPath: '/withdrawals'
-      preLoaderRoute: typeof WithdrawalsRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/treasury': {
-      id: '/treasury'
-      path: '/treasury'
-      fullPath: '/treasury'
-      preLoaderRoute: typeof TreasuryRouteImport
+    '/_dashboard': {
+      id: '/_dashboard'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/merchants': {
-      id: '/merchants'
-      path: '/merchants'
-      fullPath: '/merchants'
-      preLoaderRoute: typeof MerchantsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/audit-logs': {
-      id: '/audit-logs'
-      path: '/audit-logs'
-      fullPath: '/audit-logs'
-      preLoaderRoute: typeof AuditLogsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_dashboard/': {
+      id: '/_dashboard/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRouteImport
+    }
+    '/_dashboard/audit-logs': {
+      id: '/_dashboard/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/audit-logs'
+      preLoaderRoute: typeof DashboardAuditLogsRouteImport
+      parentRoute: typeof DashboardRouteImport
+    }
+    '/_dashboard/merchants': {
+      id: '/_dashboard/merchants'
+      path: '/merchants'
+      fullPath: '/merchants'
+      preLoaderRoute: typeof DashboardMerchantsRouteImport
+      parentRoute: typeof DashboardRouteImport
+    }
+    '/_dashboard/treasury': {
+      id: '/_dashboard/treasury'
+      path: '/treasury'
+      fullPath: '/treasury'
+      preLoaderRoute: typeof DashboardTreasuryRouteImport
+      parentRoute: typeof DashboardRouteImport
+    }
+    '/_dashboard/withdrawals': {
+      id: '/_dashboard/withdrawals'
+      path: '/withdrawals'
+      fullPath: '/withdrawals'
+      preLoaderRoute: typeof DashboardWithdrawalsRouteImport
+      parentRoute: typeof DashboardRouteImport
     }
   }
 }
 
+const dashboardRouteChildren: DashboardRouteChildren = {
+  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardAuditLogsRoute: DashboardAuditLogsRoute,
+  DashboardMerchantsRoute: DashboardMerchantsRoute,
+  DashboardTreasuryRoute: DashboardTreasuryRoute,
+  DashboardWithdrawalsRoute: DashboardWithdrawalsRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(dashboardRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AuditLogsRoute: AuditLogsRoute,
-  MerchantsRoute: MerchantsRoute,
-  TreasuryRoute: TreasuryRoute,
-  WithdrawalsRoute: WithdrawalsRoute,
+  LoginRoute: LoginRoute,
+  DashboardRoute: DashboardRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

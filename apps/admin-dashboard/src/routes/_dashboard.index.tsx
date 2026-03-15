@@ -6,7 +6,7 @@ import { StatusBadge } from '#/components/dashboard/status-badge'
 import { Building2, ArrowDownToLine, CreditCard, TrendingUp } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/')({ component: AdminDashboard })
+export const Route = createFileRoute('/_dashboard/')({ component: AdminDashboard })
 
 function AdminDashboard() {
   const { data: merchantsData } = useQuery({

@@ -1,9 +1,5 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { SidebarProvider, SidebarInset } from '#/components/ui/sidebar'
-import { TooltipProvider } from '#/components/ui/tooltip'
-import { AppSidebar } from '#/components/layout/app-sidebar'
-import { SiteHeader } from '#/components/layout/site-header'
 import { queryClient } from '#/lib/query'
 import appCss from '../styles.css?url'
 
@@ -33,27 +29,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-mono antialiased" suppressHydrationWarning>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <SidebarProvider
-              style={
-                {
-                  '--sidebar-width': 'calc(var(--spacing) * 72)',
-                  '--header-height': 'calc(var(--spacing) * 12)',
-                } as React.CSSProperties
-              }
-            >
-              <AppSidebar variant="inset" />
-              <SidebarInset>
-                <SiteHeader />
-                <div className="flex flex-1 flex-col">
-                  <main className="flex-1 p-6">
-                    {children}
-                    <Outlet />
-                  </main>
-                </div>
-              </SidebarInset>
-            </SidebarProvider>
-          </TooltipProvider>
+          {children}
+          <Outlet />
         </QueryClientProvider>
         <Scripts />
       </body>

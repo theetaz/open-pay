@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog'
 
-export const Route = createFileRoute('/merchants')({ component: MerchantsPage })
+export const Route = createFileRoute('/_dashboard/merchants')({ component: MerchantsPage })
 
 function MerchantsPage() {
   const queryClient = useQueryClient()

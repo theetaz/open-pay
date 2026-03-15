@@ -8,7 +8,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Landmark, TrendingUp, ArrowDownToLine, Banknote } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/treasury')({ component: TreasuryPage })
+export const Route = createFileRoute('/_dashboard/treasury')({ component: TreasuryPage })
 
 function TreasuryPage() {
   const { data: rateData } = useQuery({
