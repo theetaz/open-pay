@@ -1,48 +1,76 @@
+import * as React from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
+import { Input } from '#/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
-import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { EmptyState } from '#/components/dashboard/empty-state'
-import { Plus } from 'lucide-react'
+import { Plus, Loader2, DollarSign, Clock, ArrowDownToLine } from 'lucide-react'
+import { useBalance, useWithdrawals, useRequestWithdrawal } from '#/hooks/use-settlements'
+import { useMe } from '#/hooks/use-auth'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '#/components/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 
 export const Route = createFileRoute('/_dashboard/withdrawal')({
   component: WithdrawalPage,
 })
 
 function WithdrawalPage() {
+  const { data: balanceData } = useBalance()
+  const { data: withdrawalsData } = useWithdrawals()
+  const { data: meData } = useMe()
+
+  const balance = balanceData?.data
+  const withdrawals = withdrawalsData?.data || []
+  const merchant = meData?.data?.merchant
+
+  const pending = withdrawals.filter((w) => w.status === 'REQUESTED')
+  const completed = withdrawals.filter((w) => w.status === 'COMPLETED')
+  const totalWithdrawn = completed.reduce((sum, w) => sum + parseFloat(w.amountLkr), 0)
+
   return (
     <>
-      <PageHeader
-        title="Withdrawal Requests"
-        description="View and manage withdrawal requests for settlements"
-        action={
-          <Button>
-            <Plus className="mr-2 size-4" /> Create Request
-          </Button>
-        }
-      />
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Withdrawals</h1>
+          <p className="text-sm text-muted-foreground">Manage your balance and request withdrawals</p>
+        </div>
+        <WithdrawDialog
+          availableUsdt={balance?.availableUsdt || '0'}
+          bankName={merchant?.bankName as string || ''}
+          bankAccountNo={merchant?.bankAccountNo as string || ''}
+          bankAccountName={merchant?.bankAccountName as string || ''}
+        />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard title="Total Requests" value="0" />
-        <StatCard title="Total Amount" value="₹. 0.00" />
-        <StatCard title="To Be Claimed" value="₹. 0.00" />
+        <StatCard title="Available Balance" value={`${balance?.availableUsdt || '0'} USDT`} icon={DollarSign} />
+        <StatCard title="Pending Withdrawal" value={`${balance?.pendingUsdt || '0'} USDT`} icon={Clock} valueClassName="text-amber-500" />
+        <StatCard title="Total Earned" value={`${balance?.totalEarnedUsdt || '0'} USDT`} icon={ArrowDownToLine} />
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground mb-2">Status Overview</p>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
-                <span>Approved:</span>
-                <span className="font-medium text-green-500">0</span>
+                <span>Completed:</span>
+                <span className="font-medium text-green-500">{completed.length}</span>
               </div>
               <div className="flex justify-between">
                 <span>Pending:</span>
-                <span className="font-medium text-amber-500">0</span>
+                <span className="font-medium text-amber-500">{pending.length}</span>
               </div>
               <div className="flex justify-between">
-                <span>Rejected:</span>
-                <span className="font-medium text-red-500">0</span>
+                <span>Total Withdrawn:</span>
+                <span className="font-medium">{totalWithdrawn.toFixed(2)} LKR</span>
               </div>
             </div>
           </CardContent>
@@ -54,25 +82,154 @@ function WithdrawalPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Settlement Date</TableHead>
-                <TableHead>Requested By</TableHead>
-                <TableHead>Requested At</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Amount (USDT)</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Amount (LKR)</TableHead>
+                <TableHead>Bank</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Payments</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Reviewed By</TableHead>
+                <TableHead>Reference</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <EmptyState message="No withdrawal requests found." />
-                </TableCell>
-              </TableRow>
+              {withdrawals.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <EmptyState message="No withdrawal requests yet." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                withdrawals.map((w) => (
+                  <TableRow key={w.id}>
+                    <TableCell className="text-sm">{new Date(w.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">{w.amountUsdt}</TableCell>
+                    <TableCell>{w.exchangeRate}</TableCell>
+                    <TableCell>{w.amountLkr}</TableCell>
+                    <TableCell className="text-sm">{w.bankName}</TableCell>
+                    <TableCell>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        w.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        w.status === 'REJECTED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        w.status === 'APPROVED' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      }`}>
+                        {w.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm font-mono">{w.bankReference || '-'}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </>
+  )
+}
+
+function WithdrawDialog({ availableUsdt, bankName, bankAccountNo, bankAccountName }: {
+  availableUsdt: string
+  bankName: string
+  bankAccountNo: string
+  bankAccountName: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [amount, setAmount] = React.useState('')
+  const requestWithdrawal = useRequestWithdrawal()
+
+  const exchangeRate = '325'
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    requestWithdrawal.mutate({
+      amountUsdt: amount,
+      exchangeRate,
+      bankName: bankName || 'Commercial Bank',
+      bankAccountNo: bankAccountNo || '0000000000',
+      bankAccountName: bankAccountName || 'Account Holder',
+    }, {
+      onSuccess: () => {
+        setOpen(false)
+        setAmount('')
+      },
+    })
+  }
+
+  const lkrAmount = (parseFloat(amount || '0') * parseFloat(exchangeRate)).toFixed(2)
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 cursor-pointer"
+      >
+        <Plus className="size-4" /> Request Withdrawal
+      </DialogTrigger>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogDescription>
+              Available balance: {availableUsdt} USDT
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <FieldGroup>
+              {requestWithdrawal.isError && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {requestWithdrawal.error.message}
+                </div>
+              )}
+
+              <Field>
+                <FieldLabel>Amount (USDT)</FieldLabel>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Enter amount"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              </Field>
+
+              <div className="rounded-md bg-muted/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Exchange Rate</span>
+                  <span>1 USDT = {exchangeRate} LKR</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>You receive</span>
+                  <span>{lkrAmount} LKR</span>
+                </div>
+              </div>
+
+              <div className="rounded-md bg-muted/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Bank</span>
+                  <span>{bankName || 'Not configured'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Account</span>
+                  <span>{bankAccountNo || 'Not configured'}</span>
+                </div>
+              </div>
+            </FieldGroup>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={requestWithdrawal.isPending || !amount}>
+              {requestWithdrawal.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+              ) : (
+                'Confirm Withdrawal'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
