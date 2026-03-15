@@ -74,6 +74,19 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)
 
+	// Subscription routes → subscription service
+	r.Post("/v1/subscription-plans", p.ProxyToSubscription)
+	r.Get("/v1/subscription-plans", p.ProxyToSubscription)
+	r.Get("/v1/subscription-plans/{id}", p.ProxyToSubscription)
+	r.Post("/v1/subscription-plans/{id}/archive", p.ProxyToSubscription)
+	r.Post("/v1/subscription-plans/{id}/subscribe", p.ProxyToSubscription)
+	r.Get("/v1/subscriptions", p.ProxyToSubscription)
+	r.Get("/v1/subscriptions/{id}", p.ProxyToSubscription)
+	r.Post("/v1/subscriptions/{id}/cancel", p.ProxyToSubscription)
+
+	// Notification routes → notification service
+	r.Get("/v1/notifications", p.ProxyToNotification)
+
 	return r
 }
 

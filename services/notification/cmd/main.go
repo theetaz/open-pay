@@ -8,15 +8,38 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	pgadapter "github.com/openlankapay/openlankapay/services/notification/internal/adapter/postgres"
+	"github.com/openlankapay/openlankapay/services/notification/internal/handler"
+	"github.com/openlankapay/openlankapay/services/notification/internal/service"
 )
 
 func main() {
 	logger := observability.NewLogger("notification", getEnv("LOG_LEVEL", "info"))
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/notification_db?sslmode=disable")
+	pool, err := database.NewPool(ctx, database.DefaultConfig(dbURL), logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+	defer pool.Close()
+
+	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
+
+	notifRepo := pgadapter.NewNotificationRepository(pool)
+	svc := service.NewNotificationService(notifRepo)
+
+	h := handler.NewNotificationHandler(svc)
+	router := handler.NewRouter(h, jwtSecret)
+
 	port := getEnv("PORT", "8087")
 	srv := &http.Server{
 		Addr:         ":" + port,
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -27,8 +50,9 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		logger.Info().Msg("shutting down notification service...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 

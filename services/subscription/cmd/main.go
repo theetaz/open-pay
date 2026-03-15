@@ -8,15 +8,39 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	pgadapter "github.com/openlankapay/openlankapay/services/subscription/internal/adapter/postgres"
+	"github.com/openlankapay/openlankapay/services/subscription/internal/handler"
+	"github.com/openlankapay/openlankapay/services/subscription/internal/service"
 )
 
 func main() {
 	logger := observability.NewLogger("subscription", getEnv("LOG_LEVEL", "info"))
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/subscription_db?sslmode=disable")
+	pool, err := database.NewPool(ctx, database.DefaultConfig(dbURL), logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+	defer pool.Close()
+
+	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
+
+	planRepo := pgadapter.NewPlanRepository(pool)
+	subRepo := pgadapter.NewSubscriptionRepository(pool)
+	svc := service.NewSubscriptionService(planRepo, subRepo)
+
+	h := handler.NewSubscriptionHandler(svc)
+	router := handler.NewRouter(h, jwtSecret)
+
 	port := getEnv("PORT", "8086")
 	srv := &http.Server{
 		Addr:         ":" + port,
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -27,8 +51,9 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		logger.Info().Msg("shutting down subscription service...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 

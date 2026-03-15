@@ -22,11 +22,13 @@ func testConfig() handler.GatewayConfig {
 	return handler.GatewayConfig{
 		JWTSecret: "test-secret-at-least-32-chars-long",
 		ServiceProxy: proxy.NewServiceProxy(proxy.Config{
-			MerchantServiceURL:   backend.URL,
-			PaymentServiceURL:    backend.URL,
-			ExchangeServiceURL:   backend.URL,
-			SettlementServiceURL: backend.URL,
-			WebhookServiceURL:    backend.URL,
+			MerchantServiceURL:     backend.URL,
+			PaymentServiceURL:      backend.URL,
+			ExchangeServiceURL:     backend.URL,
+			SettlementServiceURL:   backend.URL,
+			WebhookServiceURL:      backend.URL,
+			SubscriptionServiceURL: backend.URL,
+			NotificationServiceURL: backend.URL,
 		}),
 	}
 }
