@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { QRCodeSVG } from 'qrcode.react'
 import { useCheckout } from '#/hooks/use-payments'
 import { CheckCircle2, XCircle, Clock } from 'lucide-react'
 
@@ -91,12 +92,14 @@ function CheckoutPage() {
           </div>
 
           <div className="rounded-lg border border-border bg-muted/50 p-6 flex flex-col items-center">
-            <div className="w-48 h-48 bg-muted rounded-lg flex items-center justify-center mb-3 break-all p-2">
-              <span className="text-muted-foreground text-xs text-center font-mono">
-                {payment.qrContent || 'QR Code'}
-              </span>
+            <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center mb-3 p-2">
+              {payment.qrContent ? (
+                <QRCodeSVG value={payment.qrContent} size={176} level="M" />
+              ) : (
+                <span className="text-muted-foreground text-xs">No QR data</span>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">Scan with your wallet app or copy the payment URI</p>
+            <p className="text-xs text-muted-foreground">Scan with your wallet app to pay</p>
           </div>
 
           <div className="mt-4 flex items-center justify-center gap-2">

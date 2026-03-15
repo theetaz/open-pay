@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'sonner'
 import { queryClient } from '#/lib/query'
 import appCss from '../styles.css?url'
 
@@ -32,6 +33,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="min-h-screen bg-background font-mono antialiased" suppressHydrationWarning>
         <QueryClientProvider client={queryClient}>
           {children}
+          <Toaster richColors position="top-right" />
         </QueryClientProvider>
         <Scripts />
       </body>

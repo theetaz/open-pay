@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { api } from '#/lib/api'
 import { setTokens, clearTokens, isAuthenticated } from '#/lib/auth'
 
@@ -43,7 +44,11 @@ export function useLogin() {
     onSuccess: (res) => {
       setTokens(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
+      toast.success('Welcome back!')
       navigate({ to: '/' })
+    },
+    onError: (err) => {
+      toast.error(err.message)
     },
   })
 }
@@ -58,7 +63,11 @@ export function useRegister() {
     onSuccess: (res) => {
       setTokens(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
+      toast.success('Account created! Complete your KYC to start accepting payments.')
       navigate({ to: '/activate' })
+    },
+    onError: (err) => {
+      toast.error(err.message)
     },
   })
 }

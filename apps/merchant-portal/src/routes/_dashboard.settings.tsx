@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useMe } from '#/hooks/use-auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -59,7 +60,9 @@ function SettingsPage() {
 }
 
 function GeneralTab() {
-  const merchantId = '00000000-0000-0000-0000-000000000000'
+  const { data: meData } = useMe()
+  const merchant = meData?.data?.merchant
+  const merchantId = merchant?.id || '-'
 
   return (
     <>
@@ -72,7 +75,7 @@ function GeneralTab() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-xs text-muted-foreground">Business Name</p>
-              <p className="font-medium">-</p>
+              <p className="font-medium">{merchant?.businessName || '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Merchant ID</p>
@@ -83,22 +86,22 @@ function GeneralTab() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Email</p>
-              <p className="font-medium">-</p>
+              <p className="font-medium">{merchant?.contactEmail || '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Phone</p>
-              <p className="font-medium">-</p>
+              <p className="font-medium">{(merchant?.contactPhone as string) || '-'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Status</p>
               <div className="flex gap-2 mt-1">
-                <StatusBadge status="PENDING" />
-                <StatusBadge status="ACTIVE" />
+                <StatusBadge status={merchant?.kycStatus || 'PENDING'} />
+                <StatusBadge status={merchant?.status || 'ACTIVE'} />
               </div>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Created At</p>
-              <p className="font-medium">-</p>
+              <p className="font-medium">{merchant?.createdAt ? new Date(merchant.createdAt as string).toLocaleDateString() : '-'}</p>
             </div>
           </div>
         </CardContent>

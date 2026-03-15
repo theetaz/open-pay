@@ -1,7 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useNavigate } from '@tanstack/react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '#/components/ui/card'
+import { api } from '#/lib/api'
+import { useMe } from '#/hooks/use-auth'
 import { KycStepSidebar } from '#/components/kyc/kyc-step-sidebar'
 import { KycStepFooter } from '#/components/kyc/kyc-step-footer'
 import { PersonalDetails } from '#/components/kyc/steps/personal-details'
@@ -87,6 +91,39 @@ export function KycWizard() {
     mode: 'onTouched',
   })
 
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { data: meData } = useMe()
+  const merchantId = meData?.data?.merchant?.id
+
+  const kycMutation = useMutation({
+    mutationFn: (values: KycFormData) => {
+      if (!merchantId) throw new Error('Merchant not found')
+      return api.put(`/v1/merchants/${merchantId}`, {
+        businessName: values.registeredBusinessName || undefined,
+        businessType: values.businessNature || undefined,
+        registrationNo: values.registrationNo || undefined,
+        contactName: `${values.firstName} ${values.lastName}`,
+        contactPhone: values.mobileNo || undefined,
+        addressLine1: values.addressLine1 || undefined,
+        addressLine2: values.addressLine2 || undefined,
+        city: values.city || values.businessCity || undefined,
+        postalCode: values.postalCode || values.businessPostalCode || undefined,
+        bankName: values.bank || undefined,
+        bankBranch: values.branch || undefined,
+        bankAccountNo: values.accountNumber || undefined,
+        bankAccountName: values.accountName || undefined,
+        submitKyc: true,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
+      navigate({ to: '/' })
+    },
+  })
+
+  const submitKyc = (values: KycFormData) => kycMutation.mutate(values)
+
   const validateCurrentStep = useCallback(async () => {
     const schema = stepSchemas[currentStep as keyof typeof stepSchemas]
     const fields = stepFieldMap[currentStep]
@@ -113,7 +150,7 @@ export function KycWizard() {
       setCurrentStep((prev) => prev + 1)
     } else {
       const allValues = form.getValues()
-      console.log('Submit application:', allValues)
+      submitKyc(allValues)
     }
   }, [currentStep, form, validateCurrentStep])
 
@@ -148,13 +185,13 @@ export function KycWizard() {
       for (const field of fields) {
         values[field] = form.getValues(field)
       }
-      console.log(`Save step ${currentStep}:`, values)
+      // Step saved locally, will be submitted with full form
     }
   }, [currentStep, form, validateCurrentStep])
 
   const handleSkipToDashboard = useCallback(() => {
-    console.log('Skip to dashboard')
-  }, [])
+    navigate({ to: '/' })
+  }, [navigate])
 
   const handleStepClick = useCallback((step: number) => {
     setCurrentStep(step)
