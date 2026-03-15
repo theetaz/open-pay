@@ -1,4 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { Button } from '#/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 
 export const Route = createFileRoute('/payments')({ component: PaymentsPage })
 
@@ -7,31 +10,34 @@ function PaymentsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Payments</h2>
-        <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-          Create Payment
-        </button>
+        <Button>Create Payment</Button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Payment No</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Amount</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Provider</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Status</th>
-              <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                No payments found. Create your first payment to get started.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>All Payments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Payment No</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  No payments found. Create your first payment to get started.
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   )
 }
