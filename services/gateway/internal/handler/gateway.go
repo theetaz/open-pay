@@ -60,6 +60,20 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Exchange rate routes → exchange service (no auth)
 	r.Get("/v1/exchange-rates/active", p.ProxyToExchange)
 
+	// Settlement routes → settlement service (auth handled by settlement service)
+	r.Get("/v1/settlements/balance", p.ProxyToSettlement)
+	r.Post("/v1/settlements/credit", p.ProxyToSettlement)
+	r.Post("/v1/withdrawals", p.ProxyToSettlement)
+	r.Get("/v1/withdrawals", p.ProxyToSettlement)
+	r.Get("/v1/withdrawals/{id}", p.ProxyToSettlement)
+	r.Post("/v1/withdrawals/{id}/approve", p.ProxyToSettlement)
+	r.Post("/v1/withdrawals/{id}/reject", p.ProxyToSettlement)
+	r.Post("/v1/withdrawals/{id}/complete", p.ProxyToSettlement)
+
+	// Webhook routes → webhook service (auth handled by webhook service)
+	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
+	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)
+
 	return r
 }
 

@@ -8,27 +8,61 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	pgadapter "github.com/openlankapay/openlankapay/services/settlement/internal/adapter/postgres"
+	"github.com/openlankapay/openlankapay/services/settlement/internal/handler"
+	"github.com/openlankapay/openlankapay/services/settlement/internal/service"
 )
 
 func main() {
 	logger := observability.NewLogger("settlement", getEnv("LOG_LEVEL", "info"))
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Database
+	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/settlement_db?sslmode=disable")
+	pool, err := database.NewPool(ctx, database.DefaultConfig(dbURL), logger)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+	defer pool.Close()
+
+	// JWT secret
+	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
+
+	// Repositories
+	balanceRepo := pgadapter.NewBalanceRepository(pool)
+	withdrawalRepo := pgadapter.NewWithdrawalRepository(pool)
+
+	// Service
+	svc := service.NewSettlementService(balanceRepo, withdrawalRepo)
+
+	// HTTP Handler
+	h := handler.NewSettlementHandler(svc)
+	router := handler.NewRouter(h, jwtSecret)
+
+	// Server
 	port := getEnv("PORT", "8083")
 	srv := &http.Server{
 		Addr:         ":" + port,
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		logger.Info().Msg("shutting down settlement service...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		cancel()
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
