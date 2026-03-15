@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/_dashboard'
+import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as DashboardIndexRouteImport } from './routes/_dashboard.index'
 import { Route as PaySlugRouteImport } from './routes/pay.$slug'
 import { Route as CheckoutPaymentIdRouteImport } from './routes/checkout.$paymentId'
@@ -20,9 +21,16 @@ import { Route as DashboardPaymentsRouteImport } from './routes/_dashboard.payme
 import { Route as DashboardPaymentLinksRouteImport } from './routes/_dashboard.payment-links'
 import { Route as DashboardBranchesRouteImport } from './routes/_dashboard.branches'
 import { Route as DashboardAuditLogRouteImport } from './routes/_dashboard.audit-log'
+import { Route as DashboardActivateRouteImport } from './routes/_dashboard.activate'
+import { Route as AuthRegisterRouteImport } from './routes/_auth.register'
+import { Route as AuthLoginRouteImport } from './routes/_auth.login'
 
 const DashboardRoute = DashboardRouteImport.update({
   id: '/_dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/_auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -75,9 +83,27 @@ const DashboardAuditLogRoute = DashboardAuditLogRouteImport.update({
   path: '/audit-log',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardActivateRoute = DashboardActivateRouteImport.update({
+  id: '/activate',
+  path: '/activate',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const AuthRegisterRoute = AuthRegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AuthRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof DashboardIndexRoute
+  '/login': typeof AuthLoginRoute
+  '/register': typeof AuthRegisterRoute
+  '/activate': typeof DashboardActivateRoute
   '/audit-log': typeof DashboardAuditLogRoute
   '/branches': typeof DashboardBranchesRoute
   '/payment-links': typeof DashboardPaymentLinksRoute
@@ -89,6 +115,10 @@ export interface FileRoutesByFullPath {
   '/pay/$slug': typeof PaySlugRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof DashboardIndexRoute
+  '/login': typeof AuthLoginRoute
+  '/register': typeof AuthRegisterRoute
+  '/activate': typeof DashboardActivateRoute
   '/audit-log': typeof DashboardAuditLogRoute
   '/branches': typeof DashboardBranchesRoute
   '/payment-links': typeof DashboardPaymentLinksRoute
@@ -98,11 +128,14 @@ export interface FileRoutesByTo {
   '/withdrawal': typeof DashboardWithdrawalRoute
   '/checkout/$paymentId': typeof CheckoutPaymentIdRoute
   '/pay/$slug': typeof PaySlugRoute
-  '/': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_auth': typeof AuthRouteWithChildren
   '/_dashboard': typeof DashboardRouteWithChildren
+  '/_auth/login': typeof AuthLoginRoute
+  '/_auth/register': typeof AuthRegisterRoute
+  '/_dashboard/activate': typeof DashboardActivateRoute
   '/_dashboard/audit-log': typeof DashboardAuditLogRoute
   '/_dashboard/branches': typeof DashboardBranchesRoute
   '/_dashboard/payment-links': typeof DashboardPaymentLinksRoute
@@ -118,6 +151,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
+    | '/register'
+    | '/activate'
     | '/audit-log'
     | '/branches'
     | '/payment-links'
@@ -129,6 +165,10 @@ export interface FileRouteTypes {
     | '/pay/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/activate'
     | '/audit-log'
     | '/branches'
     | '/payment-links'
@@ -138,10 +178,13 @@ export interface FileRouteTypes {
     | '/withdrawal'
     | '/checkout/$paymentId'
     | '/pay/$slug'
-    | '/'
   id:
     | '__root__'
+    | '/_auth'
     | '/_dashboard'
+    | '/_auth/login'
+    | '/_auth/register'
+    | '/_dashboard/activate'
     | '/_dashboard/audit-log'
     | '/_dashboard/branches'
     | '/_dashboard/payment-links'
@@ -155,6 +198,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  AuthRoute: typeof AuthRouteWithChildren
   DashboardRoute: typeof DashboardRouteWithChildren
   CheckoutPaymentIdRoute: typeof CheckoutPaymentIdRoute
   PaySlugRoute: typeof PaySlugRoute
@@ -167,6 +211,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_auth': {
+      id: '/_auth'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_dashboard/': {
@@ -239,10 +290,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAuditLogRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/activate': {
+      id: '/_dashboard/activate'
+      path: '/activate'
+      fullPath: '/activate'
+      preLoaderRoute: typeof DashboardActivateRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_auth/register': {
+      id: '/_auth/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof AuthRegisterRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/login': {
+      id: '/_auth/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
+interface AuthRouteChildren {
+  AuthLoginRoute: typeof AuthLoginRoute
+  AuthRegisterRoute: typeof AuthRegisterRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthLoginRoute: AuthLoginRoute,
+  AuthRegisterRoute: AuthRegisterRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 interface DashboardRouteChildren {
+  DashboardActivateRoute: typeof DashboardActivateRoute
   DashboardAuditLogRoute: typeof DashboardAuditLogRoute
   DashboardBranchesRoute: typeof DashboardBranchesRoute
   DashboardPaymentLinksRoute: typeof DashboardPaymentLinksRoute
@@ -254,6 +339,7 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardActivateRoute: DashboardActivateRoute,
   DashboardAuditLogRoute: DashboardAuditLogRoute,
   DashboardBranchesRoute: DashboardBranchesRoute,
   DashboardPaymentLinksRoute: DashboardPaymentLinksRoute,
@@ -269,6 +355,7 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
+  AuthRoute: AuthRouteWithChildren,
   DashboardRoute: DashboardRouteWithChildren,
   CheckoutPaymentIdRoute: CheckoutPaymentIdRoute,
   PaySlugRoute: PaySlugRoute,
