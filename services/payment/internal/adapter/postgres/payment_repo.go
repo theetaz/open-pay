@@ -115,6 +115,39 @@ func (r *PaymentRepository) Update(ctx context.Context, p *domain.Payment) error
 	return nil
 }
 
+func (r *PaymentRepository) ListExpired(ctx context.Context) ([]*domain.Payment, error) {
+	query := `SELECT id, merchant_id, branch_id, payment_no, merchant_trade_no,
+		amount, currency, amount_usdt, exchange_rate_snapshot,
+		exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
+		total_fees_usdt, net_amount_usdt,
+		provider, provider_pay_id, qr_content, checkout_link, deep_link,
+		status, customer_email, webhook_url,
+		tx_hash, block_number, wallet_address,
+		expire_time, paid_at, failed_at, idempotency_key,
+		created_at, updated_at, deleted_at
+		FROM payments
+		WHERE status IN ('INITIATED', 'USER_REVIEW')
+		AND expire_time < NOW()
+		AND deleted_at IS NULL
+		LIMIT 100`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("listing expired payments: %w", err)
+	}
+	defer rows.Close()
+
+	var payments []*domain.Payment
+	for rows.Next() {
+		p, err := scanPayment(rows)
+		if err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	return payments, nil
+}
+
 func (r *PaymentRepository) List(ctx context.Context, merchantID uuid.UUID, params service.ListParams) ([]*domain.Payment, int, error) {
 	if params.Page < 1 {
 		params.Page = 1

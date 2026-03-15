@@ -29,6 +29,7 @@ func testConfig() handler.GatewayConfig {
 			WebhookServiceURL:      backend.URL,
 			SubscriptionServiceURL: backend.URL,
 			NotificationServiceURL: backend.URL,
+			AdminServiceURL:        backend.URL,
 		}),
 	}
 }

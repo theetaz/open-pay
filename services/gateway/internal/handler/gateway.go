@@ -87,6 +87,10 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Notification routes → notification service
 	r.Get("/v1/notifications", p.ProxyToNotification)
 
+	// Admin/Audit routes → admin service
+	r.Get("/v1/audit-logs", p.ProxyToAdmin)
+	r.Get("/v1/audit-logs/{id}", p.ProxyToAdmin)
+
 	return r
 }
 

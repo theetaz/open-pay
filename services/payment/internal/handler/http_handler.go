@@ -25,6 +25,7 @@ type PaymentServiceInterface interface {
 	GetPayment(ctx context.Context, id uuid.UUID) (*domain.Payment, error)
 	ListPayments(ctx context.Context, merchantID uuid.UUID, params service.ListParams) ([]*domain.Payment, int, error)
 	HandleProviderCallback(ctx context.Context, paymentID uuid.UUID) error
+	ExpireStalePayments(ctx context.Context) (int, error)
 }
 
 // PaymentHandler handles HTTP requests for payment operations.
@@ -56,6 +57,9 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 	// Public routes
 	r.Get("/v1/payments/{id}/checkout", h.GetCheckout)
 	r.Post("/v1/payments/{id}/callback", h.HandleCallback)
+
+	// Internal routes
+	r.Post("/internal/payments/expire-stale", h.ExpireStalePayments)
 
 	// Test/sandbox routes
 	if h.mockProvider != nil {
@@ -226,6 +230,17 @@ func (h *PaymentHandler) HandleCallback(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "processed"}})
+}
+
+// ExpireStalePayments handles POST /internal/payments/expire-stale.
+func (h *PaymentHandler) ExpireStalePayments(w http.ResponseWriter, r *http.Request) {
+	count, err := h.svc.ExpireStalePayments(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to expire payments")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{"expired": count}})
 }
 
 // SimulatePayment handles POST /test/simulate/{providerPayID} (sandbox only).

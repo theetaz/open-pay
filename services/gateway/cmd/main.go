@@ -25,6 +25,7 @@ func main() {
 		WebhookServiceURL:      getEnv("WEBHOOK_SERVICE_URL", "http://localhost:8084"),
 		SubscriptionServiceURL: getEnv("SUBSCRIPTION_SERVICE_URL", "http://localhost:8086"),
 		NotificationServiceURL: getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087"),
+		AdminServiceURL:        getEnv("ADMIN_SERVICE_URL", "http://localhost:8088"),
 	})
 
 	cfg := handler.GatewayConfig{

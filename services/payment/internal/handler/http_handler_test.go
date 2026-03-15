@@ -91,6 +91,10 @@ func (s *stubPaymentService) ListPayments(_ context.Context, merchantID uuid.UUI
 	return result, len(result), nil
 }
 
+func (s *stubPaymentService) ExpireStalePayments(_ context.Context) (int, error) {
+	return 0, nil
+}
+
 func (s *stubPaymentService) HandleProviderCallback(_ context.Context, paymentID uuid.UUID) error {
 	p, ok := s.payments[paymentID]
 	if !ok {
