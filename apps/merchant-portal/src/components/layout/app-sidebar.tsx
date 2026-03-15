@@ -11,6 +11,7 @@ import {
   HelpCircle,
   ExternalLink,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -30,6 +31,7 @@ import {
 const navItems = [
   { title: 'Payments', href: '/payments', icon: CreditCard },
   { title: 'Payment Links', href: '/payment-links', icon: Link2 },
+  { title: 'Subscriptions', href: '/subscriptions', icon: RefreshCw },
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },

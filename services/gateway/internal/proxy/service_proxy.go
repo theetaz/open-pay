@@ -8,30 +8,36 @@ import (
 
 // ServiceProxy holds reverse proxies to downstream services.
 type ServiceProxy struct {
-	MerchantProxy   *httputil.ReverseProxy
-	PaymentProxy    *httputil.ReverseProxy
-	ExchangeProxy   *httputil.ReverseProxy
-	SettlementProxy *httputil.ReverseProxy
-	WebhookProxy    *httputil.ReverseProxy
+	MerchantProxy     *httputil.ReverseProxy
+	PaymentProxy      *httputil.ReverseProxy
+	ExchangeProxy     *httputil.ReverseProxy
+	SettlementProxy   *httputil.ReverseProxy
+	WebhookProxy      *httputil.ReverseProxy
+	SubscriptionProxy *httputil.ReverseProxy
+	NotificationProxy *httputil.ReverseProxy
 }
 
 // Config holds the URLs for downstream services.
 type Config struct {
-	MerchantServiceURL   string
-	PaymentServiceURL    string
-	ExchangeServiceURL   string
-	SettlementServiceURL string
-	WebhookServiceURL    string
+	MerchantServiceURL     string
+	PaymentServiceURL      string
+	ExchangeServiceURL     string
+	SettlementServiceURL   string
+	WebhookServiceURL      string
+	SubscriptionServiceURL string
+	NotificationServiceURL string
 }
 
 // NewServiceProxy creates a proxy that forwards requests to downstream services.
 func NewServiceProxy(cfg Config) *ServiceProxy {
 	return &ServiceProxy{
-		MerchantProxy:   newProxy(cfg.MerchantServiceURL),
-		PaymentProxy:    newProxy(cfg.PaymentServiceURL),
-		ExchangeProxy:   newProxy(cfg.ExchangeServiceURL),
-		SettlementProxy: newProxy(cfg.SettlementServiceURL),
-		WebhookProxy:    newProxy(cfg.WebhookServiceURL),
+		MerchantProxy:     newProxy(cfg.MerchantServiceURL),
+		PaymentProxy:      newProxy(cfg.PaymentServiceURL),
+		ExchangeProxy:     newProxy(cfg.ExchangeServiceURL),
+		SettlementProxy:   newProxy(cfg.SettlementServiceURL),
+		WebhookProxy:      newProxy(cfg.WebhookServiceURL),
+		SubscriptionProxy: newProxy(cfg.SubscriptionServiceURL),
+		NotificationProxy: newProxy(cfg.NotificationServiceURL),
 	}
 }
 
@@ -82,4 +88,14 @@ func (p *ServiceProxy) ProxyToSettlement(w http.ResponseWriter, r *http.Request)
 // ProxyToWebhook forwards the request to the webhook service.
 func (p *ServiceProxy) ProxyToWebhook(w http.ResponseWriter, r *http.Request) {
 	p.WebhookProxy.ServeHTTP(w, r)
+}
+
+// ProxyToSubscription forwards the request to the subscription service.
+func (p *ServiceProxy) ProxyToSubscription(w http.ResponseWriter, r *http.Request) {
+	p.SubscriptionProxy.ServeHTTP(w, r)
+}
+
+// ProxyToNotification forwards the request to the notification service.
+func (p *ServiceProxy) ProxyToNotification(w http.ResponseWriter, r *http.Request) {
+	p.NotificationProxy.ServeHTTP(w, r)
 }
