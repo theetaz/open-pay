@@ -225,10 +225,10 @@ feature/settlement-engine
 | 4     | Exchange Rate Service      | Done |
 | 5     | Webhook Service            | Done |
 | 6     | Settlement Service         | Done |
-| 7     | Merchant Portal (Frontend) | Planned |
-| 8     | Admin Dashboard            | Planned |
+| 7     | Merchant Portal (Frontend) | Done |
+| 8     | Admin Dashboard            | Done |
 | 9     | Checkout Experience        | Planned |
-| 10    | Subscription Service       | Planned |
+| 10    | Subscription Service       | Done |
 | 11    | Smart Contracts            | Planned |
 | 12    | Notification Service       | Planned |
 | 13    | WooCommerce Plugin         | Planned |
