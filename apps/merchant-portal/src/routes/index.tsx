@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/com
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { Separator } from '#/components/ui/separator'
+import { ThemeToggle } from '#/components/theme-toggle'
 
 export const Route = createFileRoute('/')({ component: DashboardPage })
 
@@ -13,7 +14,10 @@ function DashboardPage() {
       <div className="flex-1">
         <header className="border-b border-border bg-card px-6 py-4 flex items-center justify-between">
           <h1 className="text-lg font-semibold">Dashboard</h1>
-          <Badge variant="outline">Live</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Live</Badge>
+            <ThemeToggle />
+          </div>
         </header>
         <main className="p-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
