@@ -64,3 +64,5 @@ tmp/
 *~
 .cursor/
 .claude/
+.agents/
+skills-lock.json
