@@ -19,6 +19,7 @@ import { Route as DashboardUsersRouteImport } from './routes/_dashboard.users'
 import { Route as DashboardSettingsRouteImport } from './routes/_dashboard.settings'
 import { Route as DashboardPaymentsRouteImport } from './routes/_dashboard.payments'
 import { Route as DashboardPaymentLinksRouteImport } from './routes/_dashboard.payment-links'
+import { Route as DashboardExampleRouteImport } from './routes/_dashboard.example'
 import { Route as DashboardBranchesRouteImport } from './routes/_dashboard.branches'
 import { Route as DashboardAuditLogRouteImport } from './routes/_dashboard.audit-log'
 import { Route as DashboardActivateRouteImport } from './routes/_dashboard.activate'
@@ -73,6 +74,11 @@ const DashboardPaymentLinksRoute = DashboardPaymentLinksRouteImport.update({
   path: '/payment-links',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardExampleRoute = DashboardExampleRouteImport.update({
+  id: '/example',
+  path: '/example',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardBranchesRoute = DashboardBranchesRouteImport.update({
   id: '/branches',
   path: '/branches',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/activate': typeof DashboardActivateRoute
   '/audit-log': typeof DashboardAuditLogRoute
   '/branches': typeof DashboardBranchesRoute
+  '/example': typeof DashboardExampleRoute
   '/payment-links': typeof DashboardPaymentLinksRoute
   '/payments': typeof DashboardPaymentsRoute
   '/settings': typeof DashboardSettingsRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/activate': typeof DashboardActivateRoute
   '/audit-log': typeof DashboardAuditLogRoute
   '/branches': typeof DashboardBranchesRoute
+  '/example': typeof DashboardExampleRoute
   '/payment-links': typeof DashboardPaymentLinksRoute
   '/payments': typeof DashboardPaymentsRoute
   '/settings': typeof DashboardSettingsRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/_dashboard/activate': typeof DashboardActivateRoute
   '/_dashboard/audit-log': typeof DashboardAuditLogRoute
   '/_dashboard/branches': typeof DashboardBranchesRoute
+  '/_dashboard/example': typeof DashboardExampleRoute
   '/_dashboard/payment-links': typeof DashboardPaymentLinksRoute
   '/_dashboard/payments': typeof DashboardPaymentsRoute
   '/_dashboard/settings': typeof DashboardSettingsRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/activate'
     | '/audit-log'
     | '/branches'
+    | '/example'
     | '/payment-links'
     | '/payments'
     | '/settings'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/activate'
     | '/audit-log'
     | '/branches'
+    | '/example'
     | '/payment-links'
     | '/payments'
     | '/settings'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/_dashboard/activate'
     | '/_dashboard/audit-log'
     | '/_dashboard/branches'
+    | '/_dashboard/example'
     | '/_dashboard/payment-links'
     | '/_dashboard/payments'
     | '/_dashboard/settings'
@@ -276,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPaymentLinksRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/example': {
+      id: '/_dashboard/example'
+      path: '/example'
+      fullPath: '/example'
+      preLoaderRoute: typeof DashboardExampleRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/_dashboard/branches': {
       id: '/_dashboard/branches'
       path: '/branches'
@@ -330,6 +349,7 @@ interface DashboardRouteChildren {
   DashboardActivateRoute: typeof DashboardActivateRoute
   DashboardAuditLogRoute: typeof DashboardAuditLogRoute
   DashboardBranchesRoute: typeof DashboardBranchesRoute
+  DashboardExampleRoute: typeof DashboardExampleRoute
   DashboardPaymentLinksRoute: typeof DashboardPaymentLinksRoute
   DashboardPaymentsRoute: typeof DashboardPaymentsRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
@@ -342,6 +362,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardActivateRoute: DashboardActivateRoute,
   DashboardAuditLogRoute: DashboardAuditLogRoute,
   DashboardBranchesRoute: DashboardBranchesRoute,
+  DashboardExampleRoute: DashboardExampleRoute,
   DashboardPaymentLinksRoute: DashboardPaymentLinksRoute,
   DashboardPaymentsRoute: DashboardPaymentsRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
