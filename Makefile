@@ -1,4 +1,4 @@
-.PHONY: help dev up down build test test-v test-coverage lint fmt generate migrate clean
+.PHONY: help dev up down build test test-v test-coverage lint fmt generate migrate migrate-down migrate-create clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -8,7 +8,7 @@ help: ## Show this help
 dev: up ## Start dev environment (infra only)
 	@echo ""
 	@echo "Infrastructure ready:"
-	@echo "  PostgreSQL:  localhost:5432"
+	@echo "  PostgreSQL:  localhost:5433"
 	@echo "  Redis:       localhost:6379"
 	@echo "  NATS:        localhost:4222"
 	@echo "  NATS Monitor:localhost:8222"
@@ -66,6 +66,21 @@ vet: ## Run go vet
 	go vet ./pkg/... ./services/...
 
 # ─── Database ───
+DB_URL_BASE=postgres://olp:olp_dev_password@localhost:5433
+
+migrate: ## Run all database migrations
+	@for db in merchant payment settlement exchange webhook subscription admin; do \
+		echo "Migrating $$db..."; \
+		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
+	done
+	@echo "All migrations complete."
+
+migrate-down: ## Rollback last migration for all databases
+	@for db in merchant payment settlement exchange webhook subscription admin; do \
+		echo "Rolling back $$db..."; \
+		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" down 1; \
+	done
+
 migrate-create: ## Create migration (usage: make migrate-create svc=payment name=create_payments)
 	@mkdir -p migrations/$(svc)
 	migrate create -ext sql -dir migrations/$(svc) -seq $(name)

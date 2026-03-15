@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: olp_default
       POSTGRES_MULTIPLE_DATABASES: payment_db,merchant_db,settlement_db,subscription_db,exchange_db,webhook_db,admin_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
