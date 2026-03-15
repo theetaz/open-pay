@@ -116,7 +116,7 @@ func (s *WebhookService) Deliver(ctx context.Context, merchantID uuid.UUID, even
 		_ = s.deliveries.Update(ctx, delivery)
 		return delivery, nil // Return delivery without error (retry scheduled)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 
