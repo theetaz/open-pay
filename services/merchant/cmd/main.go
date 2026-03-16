@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/merchant/internal/adapter/postgres"
@@ -44,9 +45,33 @@ func main() {
 	// Service
 	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret)
 
+	// File upload handler (MinIO)
+	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
+	minioAccessKey := getEnv("MINIO_ACCESS_KEY", "minioadmin")
+	minioSecretKey := getEnv("MINIO_SECRET_KEY", "minioadmin123")
+	minioBucket := getEnv("MINIO_BUCKET", "kyc-documents")
+	var uploadHandler *handler.FileUploadHandler
+	uploadHandler, err = handler.NewFileUploadHandler(handler.FileUploadConfig{
+		Endpoint:  minioEndpoint,
+		AccessKey: minioAccessKey,
+		SecretKey: minioSecretKey,
+		Bucket:    minioBucket,
+		UseSSL:    false,
+	})
+	if err != nil {
+		logger.Warn().Err(err).Msg("MinIO not available, file uploads disabled")
+		uploadHandler = nil
+	} else {
+		logger.Info().Msg("file upload handler initialized with MinIO")
+	}
+
+	// Audit log client
+	adminServiceURL := getEnv("ADMIN_SERVICE_URL", "http://localhost:8088")
+	auditClient := audit.NewClient(adminServiceURL)
+
 	// HTTP Handler
-	h := handler.NewMerchantHandler(svc, jwtSecret)
-	router := handler.NewRouter(h, branchRepo)
+	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient)
+	router := handler.NewRouter(h, branchRepo, uploadHandler)
 
 	// Server
 	port := getEnv("PORT", "8082")

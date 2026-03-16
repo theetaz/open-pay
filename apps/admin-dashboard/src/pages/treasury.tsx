@@ -7,6 +7,18 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Landmark, TrendingUp, ArrowDownToLine, Banknote } from 'lucide-react'
 import { api } from '#/lib/api'
 
+interface BalanceData {
+  data: {
+    availableUsdt?: string
+    pendingUsdt?: string
+    totalEarnedUsdt?: string
+    totalWithdrawnUsdt?: string
+    totalFeesUsdt?: string
+    totalEarnedLkr?: string
+    totalWithdrawnLkr?: string
+  }
+}
+
 export function TreasuryPage() {
   const { data: rateData } = useQuery({
     queryKey: ['admin', 'exchange-rate'],
@@ -14,7 +26,29 @@ export function TreasuryPage() {
     retry: false,
   })
 
+  const { data: balanceData } = useQuery({
+    queryKey: ['admin', 'settlements-balance'],
+    queryFn: () => api.get<BalanceData>('/v1/settlements/balance'),
+    retry: false,
+  })
+
+  const { data: configData } = useQuery({
+    queryKey: ['platform', 'config'],
+    queryFn: () => api.get<{ data: { platformFeePct: string; exchangeFeePct: string } }>('/v1/platform/config'),
+    retry: false,
+  })
+
   const rate = rateData?.data
+  const balance = balanceData?.data
+  const feeConfig = configData?.data
+
+  const availableUsdt = balance?.availableUsdt ?? '0.00'
+  const totalFeesUsdt = balance?.totalFeesUsdt ?? '0.00'
+  const totalWithdrawnLkr = balance?.totalWithdrawnLkr ?? '0.00'
+  const pendingUsdt = balance?.pendingUsdt ?? '0.00'
+
+  const rateValue = rate?.rate ? parseFloat(rate.rate) : null
+  const lkrFor100Usdt = rateValue ? (100 * rateValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null
 
   return (
     <>
@@ -24,10 +58,10 @@ export function TreasuryPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard title="Crypto Holdings" value="0.00 USDT" description="Platform balance" icon={Landmark} />
-        <StatCard title="Fees Earned" value="0.00 USDT" description="Platform + exchange fees" icon={TrendingUp} />
-        <StatCard title="Total Settled" value="0.00 LKR" description="Bank transfers completed" icon={ArrowDownToLine} />
-        <StatCard title="Simulated Bank" value="10,000,000 LKR" description="Available for settlements" icon={Banknote} />
+        <StatCard title="Crypto Holdings" value={`${availableUsdt} USDT`} description="Platform balance" icon={Landmark} />
+        <StatCard title="Fees Earned" value={`${totalFeesUsdt} USDT`} description="Platform + exchange fees" icon={TrendingUp} />
+        <StatCard title="Total Settled" value={`${totalWithdrawnLkr} LKR`} description="Bank transfers completed" icon={ArrowDownToLine} />
+        <StatCard title="Pending Settlement" value={`${pendingUsdt} USDT`} description="Awaiting settlement" icon={Banknote} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2 mb-6">
@@ -40,6 +74,9 @@ export function TreasuryPage() {
             {rate ? (
               <div className="space-y-2">
                 <p className="text-3xl font-bold">1 USDT = {rate.rate} LKR</p>
+                {lkrFor100Usdt && (
+                  <p className="text-lg text-muted-foreground">100 USDT = {lkrFor100Usdt} LKR</p>
+                )}
                 <div className="text-sm text-muted-foreground space-y-1">
                   <p>Source: {rate.source}</p>
                   <p>Last updated: {new Date(rate.fetchedAt).toLocaleString()}</p>
@@ -57,20 +94,24 @@ export function TreasuryPage() {
             <CardDescription>Current platform fee configuration</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Platform Fee</span>
-                <span className="font-medium">1.5%</span>
+            {feeConfig ? (
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Platform Fee</span>
+                  <span className="font-medium">{feeConfig.platformFeePct}%</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Exchange Fee</span>
+                  <span className="font-medium">{feeConfig.exchangeFeePct}%</span>
+                </div>
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span className="text-muted-foreground">Total Fee</span>
+                  <span className="font-bold">{(parseFloat(feeConfig.platformFeePct) + parseFloat(feeConfig.exchangeFeePct)).toFixed(1)}%</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Exchange Fee</span>
-                <span className="font-medium">0.5%</span>
-              </div>
-              <div className="flex justify-between text-sm border-t pt-2">
-                <span className="text-muted-foreground">Total Fee</span>
-                <span className="font-bold">2.0%</span>
-              </div>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading fee configuration...</p>
+            )}
           </CardContent>
         </Card>
       </div>

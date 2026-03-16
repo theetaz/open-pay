@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import type { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { Upload, X, FileText } from "lucide-react"
+import { Upload, X, FileText, Loader2 } from "lucide-react"
 
 import { Button } from "#/components/ui/button"
 import { Input } from "#/components/ui/input"
@@ -14,10 +14,18 @@ import {
 } from "#/components/ui/select"
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSeparator } from "#/components/ui/field"
 import type { KycFormData } from "#/lib/schemas/kyc"
+import { api } from "#/lib/api"
+import { toast } from "sonner"
 
 interface BankAccountDetailsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<KycFormData, any, any>
+}
+
+interface UploadedFile {
+  name: string
+  url: string
+  key: string
 }
 
 const CURRENCY_OPTIONS = [
@@ -39,17 +47,27 @@ const BANK_OPTIONS = [
 
 export function BankAccountDetails({ form }: BankAccountDetailsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null)
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFileName(file.name)
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      const result = await api.upload<{ data: { url: string; key: string; filename: string } }>(file, 'bank-statement')
+      setUploadedFile({ name: result.data.filename, url: result.data.url, key: result.data.key })
+      toast.success(`${file.name} uploaded successfully`)
+    } catch {
+      toast.error(`Failed to upload ${file.name}`)
+    } finally {
+      setIsUploading(false)
     }
   }
 
   const handleRemoveFile = () => {
-    setSelectedFileName(null)
+    setUploadedFile(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -155,10 +173,10 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
               <span className="text-destructive"> *</span>
             </FieldLabel>
 
-            {selectedFileName ? (
+            {uploadedFile ? (
               <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                 <FileText className="size-5 text-muted-foreground" />
-                <span className="flex-1 text-sm truncate">{selectedFileName}</span>
+                <span className="flex-1 text-sm truncate">{uploadedFile.name}</span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -171,17 +189,25 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
             ) : (
               <div
                 className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center gap-3 hover:border-primary/50 transition-colors cursor-pointer min-h-[200px]"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isUploading && fileInputRef.current?.click()}
               >
-                <Upload className="size-8 text-muted-foreground" />
-                <p className="text-sm font-medium">Drop your file here</p>
+                {isUploading ? (
+                  <Loader2 className="size-8 text-primary animate-spin" />
+                ) : (
+                  <Upload className="size-8 text-muted-foreground" />
+                )}
+                <p className="text-sm font-medium">
+                  {isUploading ? 'Uploading...' : 'Drop your file here'}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   PNG, JPG, or PDF (max. 32MB)
                 </p>
-                <Button type="button" variant="outline" size="sm">
-                  <Upload data-icon="inline-start" />
-                  Select File
-                </Button>
+                {!isUploading && (
+                  <Button type="button" variant="outline" size="sm">
+                    <Upload data-icon="inline-start" />
+                    Select File
+                  </Button>
+                )}
               </div>
             )}
 

@@ -410,6 +410,25 @@ func (s *MerchantService) Reject(ctx context.Context, id uuid.UUID, reason strin
 	return nil
 }
 
+// Deactivate sets a merchant's status to INACTIVE (soft deactivation).
+func (s *MerchantService) Deactivate(ctx context.Context, id uuid.UUID) error {
+	merchant, err := s.merchants.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	merchant.Status = domain.MerchantInactive
+	merchant.UpdatedAt = time.Now().UTC()
+
+	if err := s.merchants.Update(ctx, merchant); err != nil {
+		return err
+	}
+
+	_ = s.events.Publish(ctx, "merchant.deactivated", merchant)
+
+	return nil
+}
+
 // CreateAPIKey generates a new API key for a merchant.
 func (s *MerchantService) CreateAPIKey(ctx context.Context, merchantID uuid.UUID, env, name string) (*domain.APIKey, string, error) {
 	_, err := s.merchants.GetByID(ctx, merchantID)

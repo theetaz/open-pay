@@ -16,6 +16,9 @@ type GatewayConfig struct {
 	JWTSecret          string
 	ServiceProxy       *proxy.ServiceProxy
 	RateLimitPerMinute int
+	GatewayPort        string
+	PlatformFeePct     string
+	ExchangeFeePct     string
 }
 
 // NewGatewayRouter creates the main API gateway router that proxies to downstream services.
@@ -32,6 +35,8 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Health endpoints
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz)
+	r.Get("/v1/system/health", systemHealth(cfg))
+	r.Get("/v1/platform/config", platformConfig(cfg))
 
 	p := cfg.ServiceProxy
 
@@ -47,6 +52,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/merchants/{id}", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/approve", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/reject", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/deactivate", p.ProxyToMerchant)
+
+	// File upload routes → merchant service
+	r.Post("/v1/uploads", p.ProxyToMerchant)
+	r.Delete("/v1/uploads", p.ProxyToMerchant)
 
 	// Branch routes → merchant service
 	r.Post("/v1/branches", p.ProxyToMerchant)
@@ -116,6 +126,75 @@ func healthz(w http.ResponseWriter, _ *http.Request) {
 func readyz(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// platformConfig returns platform fee configuration.
+func platformConfig(cfg GatewayConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"platformFeePct": cfg.PlatformFeePct,
+				"exchangeFeePct": cfg.ExchangeFeePct,
+			},
+		})
+	}
+}
+
+// serviceHealthCheck checks a downstream service's health by making a TCP connection.
+func serviceHealthCheck(serviceURL string) map[string]any {
+	start := time.Now()
+	client := &http.Client{Timeout: 3 * time.Second}
+	// Use HEAD to a known base path — even a 404 means the service is up and responding
+	resp, err := client.Head(serviceURL + "/")
+	elapsed := time.Since(start).Milliseconds()
+
+	if err != nil {
+		return map[string]any{"status": "unhealthy", "responseTime": elapsed}
+	}
+	defer resp.Body.Close()
+
+	// Any HTTP response means the service is running
+	return map[string]any{"status": "healthy", "responseTime": elapsed}
+}
+
+// systemHealth checks all downstream services and returns their status.
+func systemHealth(cfg GatewayConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		services := map[string]string{
+			"gateway":    "http://localhost:" + cfg.GatewayPort,
+			"payment":    cfg.ServiceProxy.PaymentURL,
+			"merchant":   cfg.ServiceProxy.MerchantURL,
+			"settlement": cfg.ServiceProxy.SettlementURL,
+			"webhook":    cfg.ServiceProxy.WebhookURL,
+			"exchange":   cfg.ServiceProxy.ExchangeURL,
+		}
+
+		results := make(map[string]any, len(services))
+		type result struct {
+			name string
+			data map[string]any
+		}
+		ch := make(chan result, len(services))
+
+		for name, url := range services {
+			go func(n, u string) {
+				if n == "gateway" {
+					ch <- result{n, map[string]any{"status": "healthy", "responseTime": int64(0)}}
+					return
+				}
+				ch <- result{n, serviceHealthCheck(u)}
+			}(name, url)
+		}
+
+		for range services {
+			r := <-ch
+			results[r.name] = r.data
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": results})
+	}
 }
 
 // requestID adds or preserves X-Request-ID header.

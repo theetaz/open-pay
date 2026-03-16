@@ -1,7 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { UseFormReturn } from 'react-hook-form'
 import { Controller } from 'react-hook-form'
-import { Building2, Upload, Mail, MapPin } from 'lucide-react'
+import { Building2, Upload, Mail, MapPin, FileText, X, Loader2 } from 'lucide-react'
 import { CardHeader, CardTitle } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
@@ -14,17 +14,53 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 import { Field, FieldGroup, FieldLabel, FieldError, FieldSeparator } from '#/components/ui/field'
+import { DatePicker } from '#/components/ui/date-picker'
 import type { KycFormData } from '#/lib/schemas/kyc'
+import { api } from '#/lib/api'
+import { toast } from 'sonner'
 
 interface BusinessDetailsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<KycFormData, any, any>
 }
 
+interface UploadedFile {
+  name: string
+  url: string
+  key: string
+}
+
 export function BusinessDetails({ form }: BusinessDetailsProps) {
   const { register, control, formState: { errors } } = form
   const brCopyRef = useRef<HTMLInputElement>(null)
   const formDocRef = useRef<HTMLInputElement>(null)
+  const [brCopyFile, setBrCopyFile] = useState<UploadedFile | null>(null)
+  const [formDocFile, setFormDocFile] = useState<UploadedFile | null>(null)
+  const [brCopyUploading, setBrCopyUploading] = useState(false)
+  const [formDocUploading, setFormDocUploading] = useState(false)
+
+  const handleFileUpload = async (
+    file: File,
+    category: string,
+    setFile: (f: UploadedFile | null) => void,
+    setUploading: (b: boolean) => void,
+  ) => {
+    setUploading(true)
+    try {
+      const result = await api.upload<{ data: { url: string; key: string; filename: string } }>(file, category)
+      setFile({ name: result.data.filename, url: result.data.url, key: result.data.key })
+      toast.success(`${file.name} uploaded successfully`)
+    } catch {
+      toast.error(`Failed to upload ${file.name}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleRemoveFile = (setFile: (f: UploadedFile | null) => void, ref: React.RefObject<HTMLInputElement | null>) => {
+    setFile(null)
+    if (ref.current) ref.current.value = ''
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,11 +222,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.registrationNo?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel htmlFor="registeredDate">Registered Date</FieldLabel>
-              <Input
-                id="registeredDate"
-                type="date"
-                {...register('registeredDate')}
+              <FieldLabel>Registered Date</FieldLabel>
+              <Controller
+                name="registeredDate"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    value={field.value ? new Date(field.value) : undefined}
+                    onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                    placeholder="Select date"
+                  />
+                )}
               />
               <FieldError>{errors.registeredDate?.message}</FieldError>
             </Field>
@@ -208,46 +250,96 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
               <FieldLabel>Upload BR Copy</FieldLabel>
-              <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
-                onClick={() => brCopyRef.current?.click()}
-              >
-                <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop or click to upload
-                </p>
-                <Button type="button" variant="outline" size="sm">
-                  Select File
-                </Button>
-                <input
-                  ref={brCopyRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                />
-              </div>
+              {brCopyFile ? (
+                <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+                  <FileText className="size-5 text-muted-foreground" />
+                  <span className="flex-1 text-sm truncate">{brCopyFile.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveFile(setBrCopyFile, brCopyRef)}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                  onClick={() => !brCopyUploading && brCopyRef.current?.click()}
+                >
+                  {brCopyUploading ? (
+                    <Loader2 className="size-8 mx-auto text-primary animate-spin mb-2" />
+                  ) : (
+                    <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
+                  )}
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {brCopyUploading ? 'Uploading...' : 'Drag and drop or click to upload'}
+                  </p>
+                  {!brCopyUploading && (
+                    <Button type="button" variant="outline" size="sm">
+                      Select File
+                    </Button>
+                  )}
+                </div>
+              )}
+              <input
+                ref={brCopyRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileUpload(file, 'br-copy', setBrCopyFile, setBrCopyUploading)
+                }}
+              />
             </Field>
 
             <Field>
               <FieldLabel>Upload Form 01/20/40</FieldLabel>
-              <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
-                onClick={() => formDocRef.current?.click()}
-              >
-                <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop or click to upload
-                </p>
-                <Button type="button" variant="outline" size="sm">
-                  Select File
-                </Button>
-                <input
-                  ref={formDocRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                />
-              </div>
+              {formDocFile ? (
+                <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+                  <FileText className="size-5 text-muted-foreground" />
+                  <span className="flex-1 text-sm truncate">{formDocFile.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveFile(setFormDocFile, formDocRef)}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                  onClick={() => !formDocUploading && formDocRef.current?.click()}
+                >
+                  {formDocUploading ? (
+                    <Loader2 className="size-8 mx-auto text-primary animate-spin mb-2" />
+                  ) : (
+                    <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
+                  )}
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {formDocUploading ? 'Uploading...' : 'Drag and drop or click to upload'}
+                  </p>
+                  {!formDocUploading && (
+                    <Button type="button" variant="outline" size="sm">
+                      Select File
+                    </Button>
+                  )}
+                </div>
+              )}
+              <input
+                ref={formDocRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileUpload(file, 'form-doc', setFormDocFile, setFormDocUploading)
+                }}
+              />
             </Field>
           </div>
         </FieldGroup>

@@ -21,13 +21,42 @@ export function DashboardIndex() {
 
   return (
     <>
-      {merchant && merchant.kycStatus === 'PENDING' && (
-        <div className="mb-4 rounded-md bg-amber-500/10 border border-amber-500/20 p-4">
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            Complete your KYC verification to unlock full payment processing.{' '}
-            <Link to="/activate" className="underline font-medium">
-              Complete KYC
-            </Link>
+      {merchant && (merchant.kycStatus === 'PENDING' || merchant.kycStatus === 'REJECTED') && (
+        <div className={`mb-4 rounded-lg border p-4 flex items-center justify-between ${
+          merchant.kycStatus === 'REJECTED'
+            ? 'bg-red-600/10 border-red-500/30'
+            : 'bg-red-500/10 border-red-500/20'
+        }`}>
+          <div className="flex items-center gap-3">
+            <AlertTriangle className={`size-5 flex-shrink-0 ${
+              merchant.kycStatus === 'REJECTED' ? 'text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400'
+            }`} />
+            <div>
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                {merchant.kycStatus === 'REJECTED'
+                  ? 'Your KYC verification was rejected.'
+                  : 'Your account is not verified yet.'}
+              </p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">
+                {merchant.kycStatus === 'REJECTED'
+                  ? 'Please update your documents and resubmit for verification.'
+                  : 'Complete KYC verification to unlock full payment processing features.'}
+              </p>
+            </div>
+          </div>
+          <Link to="/activate">
+            <Button size="sm" variant="destructive">
+              {merchant.kycStatus === 'REJECTED' ? 'Resubmit KYC' : 'Verify Now'}
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {merchant && merchant.kycStatus === 'UNDER_REVIEW' && (
+        <div className="mb-4 rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 flex items-center gap-3">
+          <Clock className="size-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            Your KYC verification is under review. We'll notify you once it's approved.
           </p>
         </div>
       )}

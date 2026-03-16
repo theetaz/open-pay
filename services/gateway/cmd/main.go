@@ -28,15 +28,18 @@ func main() {
 		AdminServiceURL:        getEnv("ADMIN_SERVICE_URL", "http://localhost:8088"),
 	})
 
+	port := getEnv("PORT", "8080")
+
 	cfg := handler.GatewayConfig{
 		JWTSecret:          getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars"),
 		ServiceProxy:       serviceProxy,
 		RateLimitPerMinute: 100,
+		GatewayPort:        port,
+		PlatformFeePct:     getEnv("PLATFORM_FEE_PCT", "1.5"),
+		ExchangeFeePct:     getEnv("EXCHANGE_FEE_PCT", "0.5"),
 	}
 
 	router := handler.NewGatewayRouter(cfg)
-
-	port := getEnv("PORT", "8080")
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,

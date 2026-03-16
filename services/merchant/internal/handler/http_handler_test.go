@@ -127,6 +127,15 @@ func (s *stubMerchantService) Reject(_ context.Context, id uuid.UUID, reason str
 	return nil
 }
 
+func (s *stubMerchantService) Deactivate(_ context.Context, id uuid.UUID) error {
+	m, ok := s.merchants[id]
+	if !ok {
+		return domain.ErrMerchantNotFound
+	}
+	m.Status = domain.MerchantInactive
+	return nil
+}
+
 func (s *stubMerchantService) List(_ context.Context, _ service.ListParams) ([]*domain.Merchant, int, error) {
 	var result []*domain.Merchant
 	for _, m := range s.merchants {

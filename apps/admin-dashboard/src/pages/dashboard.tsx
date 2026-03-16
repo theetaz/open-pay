@@ -5,12 +5,54 @@ import { StatusBadge } from '#/components/dashboard/status-badge'
 import { Building2, ArrowDownToLine, CreditCard, TrendingUp } from 'lucide-react'
 import { api } from '#/lib/api'
 
+const SERVICE_NAMES = ['gateway', 'payment', 'merchant', 'settlement', 'webhook', 'exchange'] as const
+
+interface ServiceHealth {
+  status: 'healthy' | 'unhealthy'
+  responseTime?: number
+  error?: string
+}
+
+type HealthData = Record<string, ServiceHealth>
+
+function ServiceStatus({ name, health }: { name: string; health?: ServiceHealth }) {
+  const status = health?.status ?? 'checking'
+
+  const dotColor =
+    status === 'healthy'
+      ? 'bg-green-500'
+      : status === 'unhealthy'
+        ? 'bg-red-500'
+        : 'bg-yellow-500 animate-pulse'
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+      <span className={`h-2 w-2 rounded-full ${dotColor}`} />
+      <span className="text-sm font-medium capitalize">{name}</span>
+      <span className="text-xs text-muted-foreground ml-auto">
+        {status === 'healthy' && health?.responseTime != null
+          ? `${health.responseTime}ms`
+          : status === 'unhealthy' ? 'down' : '...'}
+      </span>
+    </div>
+  )
+}
+
 export function DashboardIndex() {
   const { data: merchantsData } = useQuery({
-    queryKey: ['admin', 'merchants', { perPage: 5 }],
+    queryKey: ['admin', 'merchants', 'dashboard'],
     queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/merchants?perPage=5'),
     retry: false,
   })
+
+  const { data: healthData } = useQuery({
+    queryKey: ['system', 'health'],
+    queryFn: () => api.get<{ data: HealthData }>('/v1/system/health'),
+    refetchInterval: 30000,
+    retry: false,
+  })
+
+  const health = healthData?.data || {}
 
   const { data: withdrawalsData } = useQuery({
     queryKey: ['admin', 'withdrawals'],
@@ -87,32 +129,19 @@ export function DashboardIndex() {
         </Card>
       </div>
 
-      <Card className="mt-6">
+      <Card id="system-health" className="mt-6">
         <CardHeader>
           <CardTitle>System Health</CardTitle>
           <CardDescription>Service status overview</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
-            <ServiceStatus name="Gateway" port="8080" />
-            <ServiceStatus name="Payment" port="8081" />
-            <ServiceStatus name="Merchant" port="8082" />
-            <ServiceStatus name="Settlement" port="8083" />
-            <ServiceStatus name="Webhook" port="8084" />
-            <ServiceStatus name="Exchange" port="8085" />
+            {SERVICE_NAMES.map((name) => (
+              <ServiceStatus key={name} name={name} health={health[name]} />
+            ))}
           </div>
         </CardContent>
       </Card>
     </>
-  )
-}
-
-function ServiceStatus({ name, port }: { name: string; port: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
-      <span className="h-2 w-2 rounded-full bg-green-500" />
-      <span className="text-sm font-medium">{name}</span>
-      <span className="text-xs text-muted-foreground ml-auto">:{port}</span>
-    </div>
   )
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/service"
@@ -28,21 +30,27 @@ type MerchantServiceInterface interface {
 	Approve(ctx context.Context, id uuid.UUID) error
 	Reject(ctx context.Context, id uuid.UUID, reason string) error
 	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
+	Deactivate(ctx context.Context, id uuid.UUID) error
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
 type MerchantHandler struct {
 	svc       MerchantServiceInterface
 	jwtSecret string
+	auditLog  *audit.Client
 }
 
 // NewMerchantHandler creates a new MerchantHandler.
-func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string) *MerchantHandler {
-	return &MerchantHandler{svc: svc, jwtSecret: jwtSecret}
+func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient ...*audit.Client) *MerchantHandler {
+	h := &MerchantHandler{svc: svc, jwtSecret: jwtSecret}
+	if len(auditClient) > 0 {
+		h.auditLog = auditClient[0]
+	}
+	return h
 }
 
 // NewRouter creates a chi router with merchant routes.
-func NewRouter(h *MerchantHandler, branchRepo branchRepo) http.Handler {
+func NewRouter(h *MerchantHandler, branchRepo branchRepo, uploadHandler ...*FileUploadHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -62,11 +70,17 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo) http.Handler {
 		r.Get("/v1/merchants/{id}", h.GetByID)
 		r.Post("/v1/merchants/{id}/approve", h.ApproveMerchant)
 		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
+		r.Post("/v1/merchants/{id}/deactivate", h.DeactivateMerchant)
 	})
 
 	// Branch routes
 	if branchRepo != nil {
 		RegisterBranchRoutes(r, branchRepo, h.jwtSecret)
+	}
+
+	// Upload routes
+	if len(uploadHandler) > 0 && uploadHandler[0] != nil {
+		RegisterUploadRoutes(r, uploadHandler[0], h.jwtSecret)
 	}
 
 	return r
@@ -297,6 +311,17 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if h.auditLog != nil {
+		var actorID uuid.UUID
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			actorID = claims.UserID
+		}
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: actorID, ActorType: "ADMIN", Action: "merchant.approved",
+			ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "approved"}})
 }
 
@@ -325,7 +350,56 @@ func (h *MerchantHandler) RejectMerchant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if h.auditLog != nil {
+		var actorID uuid.UUID
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			actorID = claims.UserID
+		}
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: actorID, ActorType: "ADMIN", Action: "merchant.rejected",
+			ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "rejected"}})
+}
+
+// DeactivateMerchant handles POST /v1/merchants/{id}/deactivate.
+func (h *MerchantHandler) DeactivateMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if err := h.svc.Deactivate(r.Context(), id); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to deactivate merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		var actorID uuid.UUID
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			actorID = claims.UserID
+		}
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: actorID, ActorType: "ADMIN", Action: "merchant.deactivated",
+			ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deactivated"}})
+}
+
+func stripPort(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }
 
 func intQuery(r *http.Request, key string, defaultVal int) int {

@@ -1,0 +1,160 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/openlankapay/openlankapay/pkg/auth"
+)
+
+// FileUploadHandler handles file upload operations.
+type FileUploadHandler struct {
+	minioClient *minio.Client
+	bucketName  string
+	endpoint    string
+}
+
+// FileUploadConfig holds MinIO configuration.
+type FileUploadConfig struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	UseSSL    bool
+}
+
+// NewFileUploadHandler creates a new FileUploadHandler with MinIO client.
+func NewFileUploadHandler(cfg FileUploadConfig) (*FileUploadHandler, error) {
+	client, err := minio.New(cfg.Endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure: cfg.UseSSL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating minio client: %w", err)
+	}
+
+	// Ensure bucket exists
+	ctx := context.Background()
+	exists, err := client.BucketExists(ctx, cfg.Bucket)
+	if err != nil {
+		return nil, fmt.Errorf("checking bucket: %w", err)
+	}
+	if !exists {
+		if err := client.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{}); err != nil {
+			return nil, fmt.Errorf("creating bucket: %w", err)
+		}
+	}
+
+	return &FileUploadHandler{
+		minioClient: client,
+		bucketName:  cfg.Bucket,
+		endpoint:    cfg.Endpoint,
+	}, nil
+}
+
+// RegisterUploadRoutes adds upload routes to the router.
+func RegisterUploadRoutes(r chi.Router, h *FileUploadHandler, jwtSecret string) {
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware(jwtSecret))
+		r.Post("/v1/uploads", h.UploadFile)
+		r.Delete("/v1/uploads", h.DeleteFile)
+	})
+}
+
+// UploadFile handles POST /v1/uploads - multipart file upload.
+func (h *FileUploadHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	// 32 MB max
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "file too large or invalid multipart form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "MISSING_FILE", "file field is required")
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowedExts := map[string]string{
+		".pdf":  "application/pdf",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+	}
+	contentType, allowed := allowedExts[ext]
+	if !allowed {
+		writeError(w, http.StatusBadRequest, "INVALID_FILE_TYPE", "only PDF, PNG, JPG files are allowed")
+		return
+	}
+
+	// Get document category from form
+	category := r.FormValue("category")
+	if category == "" {
+		category = "general"
+	}
+
+	// Generate unique object key
+	objectKey := fmt.Sprintf("%s/%s/%s%s", claims.MerchantID.String(), category, uuid.New().String(), ext)
+
+	// Upload to MinIO
+	_, err = h.minioClient.PutObject(r.Context(), h.bucketName, objectKey, file, header.Size, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "UPLOAD_FAILED", "failed to upload file")
+		return
+	}
+
+	// Return the file URL
+	fileURL := fmt.Sprintf("http://%s/%s/%s", h.endpoint, h.bucketName, objectKey)
+
+	writeJSON(w, http.StatusOK, envelope{
+		"data": map[string]string{
+			"url":      fileURL,
+			"key":      objectKey,
+			"filename": header.Filename,
+			"category": category,
+		},
+	})
+}
+
+// DeleteFile handles DELETE /v1/uploads - remove a file.
+func (h *FileUploadHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
+	_, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var body struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Key == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "key is required")
+		return
+	}
+
+	if err := h.minioClient.RemoveObject(r.Context(), h.bucketName, body.Key, minio.RemoveObjectOptions{}); err != nil {
+		writeError(w, http.StatusInternalServerError, "DELETE_FAILED", "failed to delete file")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deleted"}})
+}

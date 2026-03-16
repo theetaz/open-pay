@@ -64,8 +64,8 @@ export function useRegister() {
     onSuccess: (res) => {
       useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
-      toast.success('Account created! Complete your KYC to start accepting payments.')
-      navigate('/activate')
+      toast.success('Account created! You can explore the portal and complete KYC when ready.')
+      navigate('/')
     },
     onError: (err) => {
       toast.error(err.message)

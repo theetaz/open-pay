@@ -15,6 +15,7 @@ import (
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/exchange/internal/adapter/postgres"
+	"github.com/openlankapay/openlankapay/services/exchange/internal/fetcher"
 	"github.com/openlankapay/openlankapay/services/exchange/internal/handler"
 	"github.com/openlankapay/openlankapay/services/exchange/internal/service"
 )
@@ -42,8 +43,13 @@ func main() {
 	// Service
 	svc := service.NewExchangeService(rateRepo, eventPub)
 
-	// Seed default USDT/LKR rate if none exists
+	// Seed default USDT/LKR rate if none exists (fallback for when CoinGecko is unreachable)
 	seedDefaultRate(ctx, svc)
+
+	// Start background rate fetcher (fetches from CoinGecko every 5 minutes)
+	fetchInterval := 5 * time.Minute
+	rateFetcher := fetcher.NewCoinGeckoFetcher(svc, logger.With().Str("component", "rate-fetcher").Logger(), fetchInterval)
+	go rateFetcher.Start(ctx)
 
 	// HTTP Handler
 	h := handler.NewExchangeHandler(svc)
@@ -85,10 +91,9 @@ func main() {
 func seedDefaultRate(ctx context.Context, svc *service.ExchangeService) {
 	_, err := svc.GetActiveRate(ctx, "USDT", "LKR")
 	if err != nil {
-		// No active rate — seed one
+		// No active rate — seed one as fallback
 		rate := decimal.NewFromInt(325)
 		if err := svc.UpdateRate(ctx, "USDT", "LKR", rate, "SEED"); err != nil {
-			// Log but don't fail — rate might already exist from concurrent start
 			return
 		}
 	}

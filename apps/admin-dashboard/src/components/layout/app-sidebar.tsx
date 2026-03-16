@@ -78,7 +78,10 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="System Health">
+                <SidebarMenuButton
+                  tooltip="System Health"
+                  render={<Link to="/" onClick={() => setTimeout(() => document.getElementById('system-health')?.scrollIntoView({ behavior: 'smooth' }), 100)} />}
+                >
                   <Activity className="size-4" />
                   <span>System Health</span>
                 </SidebarMenuButton>

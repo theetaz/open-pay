@@ -16,6 +16,13 @@ type ServiceProxy struct {
 	SubscriptionProxy *httputil.ReverseProxy
 	NotificationProxy *httputil.ReverseProxy
 	AdminProxy        *httputil.ReverseProxy
+
+	// URLs for health checks
+	MerchantURL     string
+	PaymentURL      string
+	ExchangeURL     string
+	SettlementURL   string
+	WebhookURL      string
 }
 
 // Config holds the URLs for downstream services.
@@ -41,6 +48,11 @@ func NewServiceProxy(cfg Config) *ServiceProxy {
 		SubscriptionProxy: newProxy(cfg.SubscriptionServiceURL),
 		NotificationProxy: newProxy(cfg.NotificationServiceURL),
 		AdminProxy:        newProxy(cfg.AdminServiceURL),
+		MerchantURL:       cfg.MerchantServiceURL,
+		PaymentURL:        cfg.PaymentServiceURL,
+		ExchangeURL:       cfg.ExchangeServiceURL,
+		SettlementURL:     cfg.SettlementServiceURL,
+		WebhookURL:        cfg.WebhookServiceURL,
 	}
 }
 

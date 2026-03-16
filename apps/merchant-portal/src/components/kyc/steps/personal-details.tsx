@@ -1,9 +1,11 @@
 import type { UseFormReturn } from 'react-hook-form'
+import { Controller } from 'react-hook-form'
 import { User, MapPin, CreditCard, Phone, CalendarDays } from 'lucide-react'
 import { CardHeader, CardTitle } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '#/components/ui/radio-group'
 import { Field, FieldGroup, FieldLabel, FieldError } from '#/components/ui/field'
+import { DatePicker } from '#/components/ui/date-picker'
 import type { KycFormData } from '#/lib/schemas/kyc'
 
 interface PersonalDetailsProps {
@@ -12,7 +14,7 @@ interface PersonalDetailsProps {
 }
 
 export function PersonalDetails({ form }: PersonalDetailsProps) {
-  const { register, formState: { errors }, watch, setValue } = form
+  const { register, formState: { errors }, watch, setValue, control } = form
   const idType = watch('idType')
 
   return (
@@ -117,8 +119,19 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
       <FieldGroup>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel htmlFor="dateOfBirth">Date of Birth</FieldLabel>
-            <Input id="dateOfBirth" type="date" {...register('dateOfBirth')} />
+            <FieldLabel>Date of Birth</FieldLabel>
+            <Controller
+              name="dateOfBirth"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  value={field.value ? new Date(field.value) : undefined}
+                  onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                  placeholder="Select date of birth"
+                  toYear={new Date().getFullYear() - 18}
+                />
+              )}
+            />
             <FieldError>{errors.dateOfBirth?.message}</FieldError>
           </Field>
           <Field>
