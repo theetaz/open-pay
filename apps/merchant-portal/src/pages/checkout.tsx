@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCheckout } from '#/hooks/use-payments'
-import { CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Zap } from 'lucide-react'
 
 export function CheckoutPage() {
   const { paymentId } = useParams<{ paymentId: string }>()
@@ -70,6 +70,12 @@ export function CheckoutPage() {
     )
   }
 
+  // Check if this is a sandbox/test payment by looking at QR content
+  const isSandbox = payment.qrContent?.startsWith('mock-qr://')
+  const providerPayId = isSandbox
+    ? payment.qrContent.replace('mock-qr://', '').split('?')[0]
+    : null
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -105,6 +111,11 @@ export function CheckoutPage() {
             <span className="text-sm text-muted-foreground">Waiting for payment...</span>
           </div>
 
+          {/* Sandbox simulate button */}
+          {isSandbox && providerPayId && (
+            <SandboxSimulateButton paymentId={paymentId!} providerPayId={providerPayId} />
+          )}
+
           <div className="mt-4 rounded-md bg-muted/50 p-3 space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Payment No</span>
@@ -127,6 +138,48 @@ export function CheckoutPage() {
       </div>
     </div>
   )
+}
+
+function SandboxSimulateButton({ paymentId, providerPayId }: { paymentId: string; providerPayId: string }) {
+  const [simulating, setSimulating] = React.useState(false)
+  const [error, setError] = React.useState('')
+
+  const handleSimulate = async () => {
+    setSimulating(true)
+    setError('')
+    try {
+      // Step 1: Simulate payment in mock provider
+      await fetch(`${getApiBase()}/test/simulate/${providerPayId}`, { method: 'POST' })
+      // Step 2: Trigger callback to update payment status
+      await fetch(`${getApiBase()}/v1/payments/${paymentId}/callback`, { method: 'POST' })
+      // The polling (every 3s) will pick up the status change automatically
+    } catch {
+      setError('Simulation failed. Try again.')
+    } finally {
+      setSimulating(false)
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={handleSimulate}
+        disabled={simulating}
+        className="w-full rounded-md border border-green-500/30 bg-green-500/10 py-2.5 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        <Zap className="size-4" />
+        {simulating ? 'Simulating...' : 'Simulate Payment (Sandbox)'}
+      </button>
+      {error && <p className="text-xs text-destructive mt-1 text-center">{error}</p>}
+      <p className="text-xs text-muted-foreground mt-1 text-center">
+        This button is only visible in sandbox/test mode
+      </p>
+    </div>
+  )
+}
+
+function getApiBase() {
+  return (typeof window !== 'undefined' && import.meta.env.VITE_API_URL) || 'http://localhost:8080'
 }
 
 function CountdownTimer({ expireTime }: { expireTime: string }) {
