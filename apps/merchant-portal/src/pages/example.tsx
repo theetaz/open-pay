@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -21,11 +20,7 @@ import {
 import { Checkbox } from '#/components/ui/checkbox'
 import { Copy, Plus, Send, Trash2 } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/example')({
-  component: ExamplePage,
-})
-
-function ExamplePage() {
+export function ExamplePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>

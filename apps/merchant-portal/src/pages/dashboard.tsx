@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { StatCard } from '#/components/dashboard/stat-card'
@@ -7,11 +7,7 @@ import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
 import { CreatePaymentDialog } from '#/components/dashboard/create-payment-dialog'
 
-export const Route = createFileRoute('/_dashboard/')({
-  component: DashboardIndex,
-})
-
-function DashboardIndex() {
+export function DashboardIndex() {
   const { data: meData } = useMe()
   const { data: paymentsData } = usePayments({ perPage: 5 })
 

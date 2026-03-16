@@ -1,4 +1,4 @@
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link, useLocation } from 'react-router-dom'
 import {
   CreditCard,
   Link2,
@@ -45,8 +45,8 @@ const bottomLinks = [
 ]
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
-  const routerState = useRouterState()
-  const currentPath = routerState.location.pathname
+  const location = useLocation()
+  const currentPath = location.pathname
 
   return (
     <Sidebar {...props}>

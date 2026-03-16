@@ -1,10 +1,6 @@
-import { createFileRoute, Outlet } from '@tanstack/react-router'
+import { Outlet } from 'react-router-dom'
 
-export const Route = createFileRoute('/_auth')({
-  component: AuthLayout,
-})
-
-function AuthLayout() {
+export function AuthLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="mb-8 flex items-center gap-2">

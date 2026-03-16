@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { useMe } from '#/hooks/use-auth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
@@ -17,11 +16,7 @@ import { CopyButton } from '#/components/dashboard/copy-button'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, AlertTriangle } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/settings')({
-  component: SettingsPage,
-})
-
-function SettingsPage() {
+export function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" description="Manage your merchant configuration and integration settings" />

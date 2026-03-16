@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -12,11 +11,7 @@ import { StatusBadge } from '#/components/dashboard/status-badge'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { UserPlus } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/users')({
-  component: UsersPage,
-})
-
-function UsersPage() {
+export function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   return (

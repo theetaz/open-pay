@@ -1,9 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { useParams } from 'react-router-dom'
 
-export const Route = createFileRoute('/pay/$slug')({ component: PaymentLinkPage })
-
-function PaymentLinkPage() {
-  const { slug } = Route.useParams()
+export function PaymentLinkCheckout() {
+  const { slug } = useParams<{ slug: string }>()
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

@@ -1,14 +1,12 @@
 import * as React from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCheckout } from '#/hooks/use-payments'
 import { CheckCircle2, XCircle, Clock } from 'lucide-react'
 
-export const Route = createFileRoute('/checkout/$paymentId')({ component: CheckoutPage })
-
-function CheckoutPage() {
-  const { paymentId } = Route.useParams()
-  const { data, isLoading, isError } = useCheckout(paymentId)
+export function CheckoutPage() {
+  const { paymentId } = useParams<{ paymentId: string }>()
+  const { data, isLoading, isError } = useCheckout(paymentId!)
 
   const payment = data?.data
 
@@ -114,7 +112,7 @@ function CheckoutPage() {
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Payment ID</span>
-              <span className="font-mono">{paymentId.slice(0, 12)}...</span>
+              <span className="font-mono">{paymentId!.slice(0, 12)}...</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Expires</span>

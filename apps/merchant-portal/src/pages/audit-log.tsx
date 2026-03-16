@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { Input } from '#/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
@@ -6,11 +5,7 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Search } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/audit-log')({
-  component: AuditLogPage,
-})
-
-function AuditLogPage() {
+export function AuditLogPage() {
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">

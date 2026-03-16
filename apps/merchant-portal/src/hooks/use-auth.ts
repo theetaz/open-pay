@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '#/lib/api'
-import { setTokens, clearTokens, isAuthenticated } from '#/lib/auth'
+import { isAuthenticated } from '#/lib/auth'
+import { useAuthStore } from '#/stores/auth'
 
 interface AuthResponse {
   data: {
@@ -42,10 +43,10 @@ export function useLogin() {
     mutationFn: (data: { email: string; password: string }) =>
       api.post<AuthResponse>('/v1/auth/login', data),
     onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken)
+      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
       toast.success('Welcome back!')
-      navigate({ to: '/' })
+      navigate('/')
     },
     onError: (err) => {
       toast.error(err.message)
@@ -61,10 +62,10 @@ export function useRegister() {
     mutationFn: (data: { businessName: string; email: string; password: string; name: string; phone?: string }) =>
       api.post<AuthResponse>('/v1/auth/register', data),
     onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken)
+      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
       toast.success('Account created! Complete your KYC to start accepting payments.')
-      navigate({ to: '/activate' })
+      navigate('/activate')
     },
     onError: (err) => {
       toast.error(err.message)
@@ -86,8 +87,8 @@ export function useLogout() {
   const queryClient = useQueryClient()
 
   return () => {
-    clearTokens()
+    useAuthStore.getState().logout()
     queryClient.clear()
-    navigate({ to: '/login' })
+    navigate('/login')
   }
 }

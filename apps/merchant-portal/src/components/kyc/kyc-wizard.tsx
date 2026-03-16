@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '#/components/ui/card'
 import { api } from '#/lib/api'
@@ -118,7 +118,7 @@ export function KycWizard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
-      navigate({ to: '/' })
+      navigate('/')
     },
   })
 
@@ -190,7 +190,7 @@ export function KycWizard() {
   }, [currentStep, form, validateCurrentStep])
 
   const handleSkipToDashboard = useCallback(() => {
-    navigate({ to: '/' })
+    navigate('/')
   }, [navigate])
 
   const handleStepClick = useCallback((step: number) => {

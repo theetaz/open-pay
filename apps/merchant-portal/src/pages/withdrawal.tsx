@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -20,11 +19,7 @@ import {
 } from '#/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 
-export const Route = createFileRoute('/_dashboard/withdrawal')({
-  component: WithdrawalPage,
-})
-
-function WithdrawalPage() {
+export function WithdrawalPage() {
   const { data: balanceData } = useBalance()
   const { data: withdrawalsData } = useWithdrawals()
   const { data: meData } = useMe()

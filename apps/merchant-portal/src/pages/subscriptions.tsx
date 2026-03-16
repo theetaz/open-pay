@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -28,11 +27,7 @@ import {
   SelectValue,
 } from '#/components/ui/select'
 
-export const Route = createFileRoute('/_dashboard/subscriptions')({
-  component: SubscriptionsPage,
-})
-
-function SubscriptionsPage() {
+export function SubscriptionsPage() {
   const { data: plansData } = usePlans()
   const { data: subsData } = useSubscriptions()
   const archivePlan = useArchivePlan()

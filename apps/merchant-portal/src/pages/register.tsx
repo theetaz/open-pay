@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { Link } from 'react-router-dom'
 import { User, Building2, Mail, Lock, Loader2 } from 'lucide-react'
 import {
   Card,
@@ -20,11 +20,7 @@ import {
 } from '#/components/ui/field'
 import { useRegister } from '#/hooks/use-auth'
 
-export const Route = createFileRoute('/_auth/register')({
-  component: RegisterPage,
-})
-
-function RegisterPage() {
+export function RegisterPage() {
   const [fullName, setFullName] = React.useState('')
   const [businessName, setBusinessName] = React.useState('')
   const [email, setEmail] = React.useState('')
@@ -146,11 +142,11 @@ function RegisterPage() {
               <Checkbox id="terms" required />
               <FieldLabel htmlFor="terms" className="font-normal">
                 I agree to the{' '}
-                <Link to="." className="text-primary hover:underline">
+                <Link to="#" className="text-primary hover:underline">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link to="." className="text-primary hover:underline">
+                <Link to="#" className="text-primary hover:underline">
                   Privacy Policy
                 </Link>
               </FieldLabel>

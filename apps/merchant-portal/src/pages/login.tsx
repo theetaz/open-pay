@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import {
   Card,
@@ -20,11 +20,7 @@ import {
 } from '#/components/ui/field'
 import { useLogin } from '#/hooks/use-auth'
 
-export const Route = createFileRoute('/_auth/login')({
-  component: LoginPage,
-})
-
-function LoginPage() {
+export function LoginPage() {
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
@@ -101,7 +97,7 @@ function LoginPage() {
                   Remember me
                 </FieldLabel>
               </div>
-              <Link to="." className="text-primary hover:underline text-sm">
+              <Link to="#" className="text-primary hover:underline text-sm">
                 Forgot password?
               </Link>
             </div>

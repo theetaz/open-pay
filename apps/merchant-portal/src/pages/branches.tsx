@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -12,11 +11,7 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, Search } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/branches')({
-  component: BranchesPage,
-})
-
-function BranchesPage() {
+export function BranchesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   return (

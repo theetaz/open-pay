@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '#/components/ui/tabs'
@@ -8,17 +7,13 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Search, DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/payments')({
-  component: PaymentsPage,
-})
-
-function PaymentsPage() {
+export function PaymentsPage() {
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Revenue" value="₹. 0.00" description="₮ 0.00" icon={DollarSign} />
+        <StatCard title="Total Revenue" value="Rs. 0.00" description="T 0.00" icon={DollarSign} />
         <StatCard title="Total Payments" value="0" description="All-time transactions" icon={CreditCard} />
-        <StatCard title="Unsettled Amount" value="₹. 0.00" description="₮ 0.00" icon={Clock} valueClassName="text-amber-500" />
+        <StatCard title="Unsettled Amount" value="Rs. 0.00" description="T 0.00" icon={Clock} valueClassName="text-amber-500" />
         <StatCard title="Unsettled Payments" value="0" description="Pending transactions" icon={AlertTriangle} valueClassName="text-amber-500" />
       </div>
 
@@ -63,21 +58,21 @@ function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Gross Amount</p>
-              <p className="font-bold text-lg">₮ 0.00</p>
-              <p className="text-xs text-muted-foreground">₹. 0.00</p>
+              <p className="font-bold text-lg">T 0.00</p>
+              <p className="text-xs text-muted-foreground">Rs. 0.00</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Fees</p>
-              <p className="font-bold text-lg text-red-500">₹. 0.00</p>
+              <p className="font-bold text-lg text-red-500">Rs. 0.00</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Net Amount</p>
-              <p className="font-bold text-lg">₹. 0.00</p>
+              <p className="font-bold text-lg">Rs. 0.00</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
-              <p className="text-xs text-muted-foreground">Exchange: ₹. 0.00</p>
-              <p className="text-xs text-muted-foreground">Platform: ₹. 0.00</p>
+              <p className="text-xs text-muted-foreground">Exchange: Rs. 0.00</p>
+              <p className="text-xs text-muted-foreground">Platform: Rs. 0.00</p>
             </div>
           </div>
 

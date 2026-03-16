@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -15,11 +14,7 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, Link2 } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/payment-links')({
-  component: PaymentLinksPage,
-})
-
-function PaymentLinksPage() {
+export function PaymentLinksPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
 
   return (
@@ -104,8 +99,8 @@ function PaymentLinksPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="LKR">LKR (₹.)</SelectItem>
-                  <SelectItem value="USDT">USDT (₮)</SelectItem>
+                  <SelectItem value="LKR">LKR (Rs.)</SelectItem>
+                  <SelectItem value="USDT">USDT (T)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
