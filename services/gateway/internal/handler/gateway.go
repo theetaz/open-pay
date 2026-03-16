@@ -64,6 +64,15 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/branches/{id}", p.ProxyToMerchant)
 	r.Delete("/v1/branches/{id}", p.ProxyToMerchant)
 
+	// Payment link routes → merchant service
+	r.Post("/v1/payment-links", p.ProxyToMerchant)
+	r.Get("/v1/payment-links", p.ProxyToMerchant)
+	r.Get("/v1/payment-links/{id}", p.ProxyToMerchant)
+	r.Put("/v1/payment-links/{id}", p.ProxyToMerchant)
+	r.Delete("/v1/payment-links/{id}", p.ProxyToMerchant)
+	r.Get("/v1/payment-links/check-slug/{slug}", p.ProxyToMerchant)
+	r.Get("/v1/public/payment-links/by-slug/{slug}", p.ProxyToMerchant)
+
 	// Payment routes → payment service (auth handled by payment service)
 	r.Post("/v1/payments", p.ProxyToPayment)
 	r.Get("/v1/payments", p.ProxyToPayment)

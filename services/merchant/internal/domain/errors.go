@@ -15,4 +15,7 @@ var (
 	ErrUserNotFound         = errors.New("user not found")
 	ErrAPIKeyNotFound       = errors.New("API key not found")
 	ErrDuplicateEmail       = errors.New("email already in use")
+	ErrInvalidPaymentLink   = errors.New("invalid payment link data")
+	ErrPaymentLinkNotFound  = errors.New("payment link not found")
+	ErrDuplicateSlug        = errors.New("slug already in use")
 )

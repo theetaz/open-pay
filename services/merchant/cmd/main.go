@@ -38,6 +38,7 @@ func main() {
 	apiKeyRepo := pgadapter.NewAPIKeyRepository(pool)
 	userRepo := pgadapter.NewUserRepository(pool)
 	branchRepo := pgadapter.NewBranchRepository(pool)
+	paymentLinkRepo := pgadapter.NewPaymentLinkRepository(pool)
 
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
@@ -71,7 +72,7 @@ func main() {
 
 	// HTTP Handler
 	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient)
-	router := handler.NewRouter(h, branchRepo, uploadHandler)
+	router := handler.NewRouter(h, branchRepo, paymentLinkRepo, uploadHandler)
 
 	// Server
 	port := getEnv("PORT", "8082")

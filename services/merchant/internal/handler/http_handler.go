@@ -50,7 +50,7 @@ func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditCli
 }
 
 // NewRouter creates a chi router with merchant routes.
-func NewRouter(h *MerchantHandler, branchRepo branchRepo, uploadHandler ...*FileUploadHandler) http.Handler {
+func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymentLinkRepo, uploadHandler ...*FileUploadHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -76,6 +76,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, uploadHandler ...*File
 	// Branch routes
 	if branchRepo != nil {
 		RegisterBranchRoutes(r, branchRepo, h.jwtSecret)
+	}
+
+	// Payment link routes
+	if paymentLinkRepo != nil {
+		RegisterPaymentLinkRoutes(r, paymentLinkRepo, h.jwtSecret)
 	}
 
 	// Upload routes
