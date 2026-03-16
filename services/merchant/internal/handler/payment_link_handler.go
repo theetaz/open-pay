@@ -39,10 +39,10 @@ func RegisterPaymentLinkRoutes(r chi.Router, repo paymentLinkRepo, jwtSecret str
 
 		r.Post("/v1/payment-links", h.Create)
 		r.Get("/v1/payment-links", h.List)
+		r.Get("/v1/payment-links/check-slug/{slug}", h.CheckSlug)
 		r.Get("/v1/payment-links/{id}", h.GetByID)
 		r.Put("/v1/payment-links/{id}", h.Update)
 		r.Delete("/v1/payment-links/{id}", h.Delete)
-		r.Get("/v1/payment-links/check-slug/{slug}", h.CheckSlug)
 	})
 
 	// Public route: resolve by slug (for checkout pages)
