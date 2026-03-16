@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
@@ -18,9 +17,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog'
 
-export const Route = createFileRoute('/_dashboard/merchants')({ component: MerchantsPage })
-
-function MerchantsPage() {
+export function MerchantsPage() {
   const queryClient = useQueryClient()
   const [selectedMerchant, setSelectedMerchant] = React.useState<any>(null)
 

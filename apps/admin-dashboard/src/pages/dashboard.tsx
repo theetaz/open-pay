@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { StatCard } from '#/components/dashboard/stat-card'
@@ -6,9 +5,7 @@ import { StatusBadge } from '#/components/dashboard/status-badge'
 import { Building2, ArrowDownToLine, CreditCard, TrendingUp } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/_dashboard/')({ component: AdminDashboard })
-
-function AdminDashboard() {
+export function DashboardIndex() {
   const { data: merchantsData } = useQuery({
     queryKey: ['admin', 'merchants'],
     queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/merchants?perPage=5'),

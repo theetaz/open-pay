@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Mail, Lock, Eye, EyeOff, Loader2, Shield } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '#/components/ui/card'
@@ -7,11 +7,9 @@ import { Input } from '#/components/ui/input'
 import { Button } from '#/components/ui/button'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { api } from '#/lib/api'
-import { setTokens } from '#/lib/auth'
+import { useAuthStore } from '#/stores/auth'
 
-export const Route = createFileRoute('/login')({ component: AdminLoginPage })
-
-function AdminLoginPage() {
+export function LoginPage() {
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
@@ -21,8 +19,8 @@ function AdminLoginPage() {
     mutationFn: (data: { email: string; password: string }) =>
       api.post<{ data: { accessToken: string; refreshToken: string; user: any } }>('/v1/admin/auth/login', data),
     onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken)
-      navigate({ to: '/' })
+      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
+      navigate('/')
     },
   })
 

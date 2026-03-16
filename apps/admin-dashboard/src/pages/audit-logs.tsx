@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
@@ -6,9 +5,7 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Search } from 'lucide-react'
 
-export const Route = createFileRoute('/_dashboard/audit-logs')({ component: AuditLogsPage })
-
-function AuditLogsPage() {
+export function AuditLogsPage() {
   return (
     <>
       <PageHeader

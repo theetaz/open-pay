@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
@@ -8,9 +7,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Landmark, TrendingUp, ArrowDownToLine, Banknote } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/_dashboard/treasury')({ component: TreasuryPage })
-
-function TreasuryPage() {
+export function TreasuryPage() {
   const { data: rateData } = useQuery({
     queryKey: ['admin', 'exchange-rate'],
     queryFn: () => api.get<{ data: { rate: string; source: string; fetchedAt: string } }>('/v1/exchange-rates/active'),

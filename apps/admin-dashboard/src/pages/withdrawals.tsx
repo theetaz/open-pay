@@ -1,4 +1,3 @@
-import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
@@ -10,9 +9,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { CheckCircle2, XCircle, BanknoteIcon, Clock, ArrowDownToLine } from 'lucide-react'
 import { api } from '#/lib/api'
 
-export const Route = createFileRoute('/_dashboard/withdrawals')({ component: WithdrawalsPage })
-
-function WithdrawalsPage() {
+export function WithdrawalsPage() {
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
