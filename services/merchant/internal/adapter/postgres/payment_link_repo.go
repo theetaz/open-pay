@@ -60,6 +60,10 @@ func (r *PaymentLinkRepository) GetBySlug(ctx context.Context, merchantID uuid.U
 	return r.getOne(ctx, "SELECT "+paymentLinkSelectCols+" FROM payment_links WHERE merchant_id = $1 AND slug = $2 AND deleted_at IS NULL", merchantID, slug)
 }
 
+func (r *PaymentLinkRepository) GetBySlugGlobal(ctx context.Context, slug string) (*domain.PaymentLink, error) {
+	return r.getOne(ctx, "SELECT "+paymentLinkSelectCols+" FROM payment_links WHERE slug = $1 AND deleted_at IS NULL", slug)
+}
+
 func (r *PaymentLinkRepository) SlugExists(ctx context.Context, merchantID uuid.UUID, slug string) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx,

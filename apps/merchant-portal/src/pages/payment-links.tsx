@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -13,8 +14,11 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
 import { EmptyState } from '#/components/dashboard/empty-state'
-import { Plus, Link2, Loader2, Check, X } from 'lucide-react'
-import { usePaymentLinks, useCreatePaymentLink, checkSlugAvailability } from '#/hooks/use-payment-links'
+import { CopyButton } from '#/components/dashboard/copy-button'
+import { Plus, Link2, Loader2, Check, X, ExternalLink, Trash2, QrCode } from 'lucide-react'
+import { usePaymentLinks, useCreatePaymentLink, useDeletePaymentLink, checkSlugAvailability } from '#/hooks/use-payment-links'
+import type { PaymentLink } from '#/hooks/use-payment-links'
+import { toast } from 'sonner'
 
 function toSlug(name: string): string {
   return name
@@ -28,13 +32,25 @@ function toSlug(name: string): string {
 
 type SlugStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
+function getPaymentLinkUrl(slug: string) {
+  return `${window.location.origin}/pay/${slug}`
+}
+
 export function PaymentLinksPage() {
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [detailLink, setDetailLink] = useState<PaymentLink | null>(null)
   const { data: linksData } = usePaymentLinks({ perPage: 100 })
+  const deleteMutation = useDeletePaymentLink()
   const links = linksData?.data || []
   const total = linksData?.meta?.total || 0
   const activeLinks = links.filter((l) => l.status === 'ACTIVE')
   const totalUsed = links.reduce((sum, l) => sum + l.usageCount, 0)
+
+  const handleDelete = (link: PaymentLink) => {
+    if (confirm(`Delete "${link.name}"? This cannot be undone.`)) {
+      deleteMutation.mutate(link.id)
+    }
+  }
 
   return (
     <>
@@ -42,7 +58,7 @@ export function PaymentLinksPage() {
         title="Payment Links"
         description="Create and manage shareable payment links for your customers"
         action={
-          <Button onClick={() => setDialogOpen(true)}>
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 size-4" /> Create Link
           </Button>
         }
@@ -70,18 +86,63 @@ export function PaymentLinksPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Used</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {links.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <EmptyState message="No payment links yet. Create your first one." />
                   </TableCell>
                 </TableRow>
               ) : (
                 links.map((link) => (
-                  <PaymentLinkRow key={link.id} link={link} />
+                  <TableRow key={link.id} className="cursor-pointer" onClick={() => setDetailLink(link)}>
+                    <TableCell className="font-medium">{link.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{link.slug}</TableCell>
+                    <TableCell>
+                      {link.allowCustomAmount ? 'Custom' : `${parseFloat(link.amount).toLocaleString()} ${link.currency}`}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={link.status} />
+                    </TableCell>
+                    <TableCell>{link.usageCount}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {new Date(link.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-8 p-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(getPaymentLinkUrl(link.slug))
+                            toast.success('Payment link copied to clipboard')
+                          }}
+                        >
+                          <Link2 className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-8 p-0"
+                          onClick={() => setDetailLink(link)}
+                        >
+                          <QrCode className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(link)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
             </TableBody>
@@ -89,27 +150,86 @@ export function PaymentLinksPage() {
         </CardContent>
       </Card>
 
-      <CreatePaymentLinkDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CreatePaymentLinkDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <PaymentLinkDetailDialog link={detailLink} onClose={() => setDetailLink(null)} />
     </>
   )
 }
 
-function PaymentLinkRow({ link }: { link: import('#/hooks/use-payment-links').PaymentLink }) {
+function PaymentLinkDetailDialog({ link, onClose }: { link: PaymentLink | null; onClose: () => void }) {
+  if (!link) return null
+
+  const payUrl = getPaymentLinkUrl(link.slug)
+
   return (
-    <TableRow>
-      <TableCell className="font-medium">{link.name}</TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{link.slug}</TableCell>
-      <TableCell>
-        {link.allowCustomAmount ? 'Custom' : `${link.amount} ${link.currency}`}
-      </TableCell>
-      <TableCell>
-        <StatusBadge status={link.status} />
-      </TableCell>
-      <TableCell>{link.usageCount}</TableCell>
-      <TableCell className="text-muted-foreground text-sm">
-        {new Date(link.createdAt).toLocaleDateString()}
-      </TableCell>
-    </TableRow>
+    <Dialog open={!!link} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{link.name}</DialogTitle>
+          <DialogDescription>{link.description || 'Payment link details'}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-2">
+          {/* QR Code */}
+          <div className="flex flex-col items-center">
+            <div className="rounded-lg border bg-white p-4">
+              <QRCodeSVG value={payUrl} size={200} level="M" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">Scan to open payment page</p>
+          </div>
+
+          {/* Share URL */}
+          <div className="space-y-2">
+            <Label>Payment URL</Label>
+            <div className="flex items-center gap-2">
+              <Input value={payUrl} readOnly className="font-mono text-xs" />
+              <CopyButton value={payUrl} />
+              <Button variant="outline" size="sm" className="shrink-0" onClick={() => window.open(payUrl, '_blank')}>
+                <ExternalLink className="size-4" />
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Details */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Amount</p>
+              <p className="font-medium">
+                {link.allowCustomAmount ? 'Custom' : `${parseFloat(link.amount).toLocaleString()} ${link.currency}`}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Status</p>
+              <StatusBadge status={link.status} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Times Used</p>
+              <p className="font-medium">{link.usageCount}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Reusable</p>
+              <p className="font-medium">{link.isReusable ? 'Yes' : 'No (single use)'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Created</p>
+              <p className="font-medium">{new Date(link.createdAt).toLocaleDateString()}</p>
+            </div>
+            {link.expireAt && (
+              <div>
+                <p className="text-xs text-muted-foreground">Expires</p>
+                <p className="font-medium">{new Date(link.expireAt).toLocaleDateString()}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

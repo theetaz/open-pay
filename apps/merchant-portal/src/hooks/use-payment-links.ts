@@ -95,3 +95,12 @@ export function useDeletePaymentLink() {
 export function checkSlugAvailability(slug: string) {
   return api.get<SlugCheckResponse>(`/v1/payment-links/check-slug/${slug}`)
 }
+
+export function usePublicPaymentLink(slug: string) {
+  return useQuery({
+    queryKey: ['public-payment-link', slug],
+    queryFn: () => api.get<PaymentLinkResponse>(`/v1/public/payment-links/by-slug/${slug}`),
+    enabled: !!slug,
+    retry: false,
+  })
+}

@@ -55,6 +55,7 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 	})
 
 	// Public routes
+	r.Post("/v1/public/payments", h.CreatePublicPayment)
 	r.Get("/v1/payments/{id}/checkout", h.GetCheckout)
 	r.Post("/v1/payments/{id}/callback", h.HandleCallback)
 
@@ -106,6 +107,73 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		Provider:        prov,
 		MerchantTradeNo: req.MerchantTradeNo,
 		WebhookURL:      req.WebhookURL,
+		CustomerEmail:   req.CustomerEmail,
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidPayment) {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create payment")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, envelope{"data": paymentResponse(payment)})
+}
+
+// CreatePublicPayment handles POST /v1/public/payments (no auth - for payment links).
+// Requires merchantId in the request body instead of JWT claims.
+func (h *PaymentHandler) CreatePublicPayment(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		MerchantID      string  `json:"merchantId"`
+		Amount          string  `json:"amount"`
+		Currency        string  `json:"currency"`
+		Provider        string  `json:"provider"`
+		MerchantTradeNo string  `json:"merchantTradeNo"`
+		CustomerEmail   string  `json:"customerEmail"`
+		BranchID        *string `json:"branchId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	merchantID, err := uuid.Parse(req.MerchantID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_MERCHANT_ID", "invalid merchant ID")
+		return
+	}
+
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_AMOUNT", "amount must be a valid number")
+		return
+	}
+
+	prov := req.Provider
+	if prov == "" {
+		prov = "TEST"
+	}
+	currency := req.Currency
+	if currency == "" {
+		currency = "USDT"
+	}
+
+	var branchID *uuid.UUID
+	if req.BranchID != nil && *req.BranchID != "" {
+		bid, err := uuid.Parse(*req.BranchID)
+		if err == nil {
+			branchID = &bid
+		}
+	}
+
+	payment, err := h.svc.CreatePayment(r.Context(), service.CreatePaymentInput{
+		MerchantID:      merchantID,
+		BranchID:        branchID,
+		Amount:          amount,
+		Currency:        currency,
+		Provider:        prov,
+		MerchantTradeNo: req.MerchantTradeNo,
 		CustomerEmail:   req.CustomerEmail,
 	})
 	if err != nil {

@@ -19,6 +19,7 @@ type paymentLinkRepo interface {
 	Create(ctx context.Context, pl *domain.PaymentLink) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.PaymentLink, error)
 	GetBySlug(ctx context.Context, merchantID uuid.UUID, slug string) (*domain.PaymentLink, error)
+	GetBySlugGlobal(ctx context.Context, slug string) (*domain.PaymentLink, error)
 	SlugExists(ctx context.Context, merchantID uuid.UUID, slug string) (bool, error)
 	List(ctx context.Context, params postgres.PaymentLinkListParams) ([]*domain.PaymentLink, int, error)
 	Update(ctx context.Context, pl *domain.PaymentLink) error
@@ -293,20 +294,12 @@ func (h *PaymentLinkHandler) CheckSlug(w http.ResponseWriter, r *http.Request) {
 // GetBySlugPublic handles GET /v1/public/payment-links/by-slug/{slug} (no auth).
 func (h *PaymentLinkHandler) GetBySlugPublic(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	merchantIDStr := r.URL.Query().Get("merchantId")
-
-	if slug == "" || merchantIDStr == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "slug and merchantId are required")
+	if slug == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "slug is required")
 		return
 	}
 
-	merchantID, err := uuid.Parse(merchantIDStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
-		return
-	}
-
-	pl, err := h.repo.GetBySlug(r.Context(), merchantID, slug)
+	pl, err := h.repo.GetBySlugGlobal(r.Context(), slug)
 	if err != nil {
 		if errors.Is(err, domain.ErrPaymentLinkNotFound) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "payment link not found")
