@@ -116,6 +116,15 @@ func (h *MerchantHandler) RegisterWithUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if h.auditLog != nil {
+		merchantID := result.Merchant.ID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: result.User.ID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			Action: "merchant.registered", ResourceType: "merchant", ResourceID: &merchantID,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, envelope{"data": authResponse(result)})
 }
 
@@ -139,6 +148,15 @@ func (h *MerchantHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
 		return
+	}
+
+	if h.auditLog != nil {
+		merchantID := result.Merchant.ID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: result.User.ID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			Action: "merchant.login", ResourceType: "user", ResourceID: &result.User.ID,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": authResponse(result)})

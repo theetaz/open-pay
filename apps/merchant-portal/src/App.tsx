@@ -12,6 +12,8 @@ import { WithdrawalPage } from '#/pages/withdrawal'
 import { BranchesPage } from '#/pages/branches'
 import { UsersPage } from '#/pages/users'
 import { SettingsPage } from '#/pages/settings'
+import { ProfilePage } from '#/pages/profile'
+import { SecurityPage } from '#/pages/security'
 import { AuditLogPage } from '#/pages/audit-log'
 import { ExamplePage } from '#/pages/example'
 import { PaymentLinkCheckout } from '#/pages/pay-slug'
@@ -33,6 +35,8 @@ export function App() {
         <Route path="withdrawal" element={<WithdrawalPage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="security" element={<SecurityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
         <Route path="example" element={<ExamplePage />} />

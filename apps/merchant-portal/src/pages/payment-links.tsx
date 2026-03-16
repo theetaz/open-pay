@@ -6,7 +6,7 @@ import { Label } from '#/components/ui/label'
 import { Textarea } from '#/components/ui/textarea'
 import { Switch } from '#/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '#/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '#/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Separator } from '#/components/ui/separator'
 import { PageHeader } from '#/components/dashboard/page-header'
@@ -15,7 +15,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, Link2 } from 'lucide-react'
 
 export function PaymentLinksPage() {
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
     <>
@@ -23,7 +23,7 @@ export function PaymentLinksPage() {
         title="Payment Links"
         description="Create and manage shareable payment links for your customers"
         action={
-          <Button onClick={() => setSheetOpen(true)}>
+          <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2 size-4" /> Create Link
           </Button>
         }
@@ -66,14 +66,14 @@ export function PaymentLinksPage() {
         </CardContent>
       </Card>
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Create Payment Link</SheetTitle>
-            <SheetDescription>Create a new payment link for your customers</SheetDescription>
-          </SheetHeader>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Payment Link</DialogTitle>
+            <DialogDescription>Create a new payment link for your customers</DialogDescription>
+          </DialogHeader>
 
-          <div className="space-y-6 py-4">
+          <div className="space-y-6 py-2">
             <Separator />
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</p>
 
@@ -89,7 +89,7 @@ export function PaymentLinksPage() {
 
             <div className="space-y-2">
               <Label htmlFor="link-desc">Description</Label>
-              <Textarea id="link-desc" placeholder="Item Description (supports Markdown)" rows={4} />
+              <Textarea id="link-desc" placeholder="Item Description (supports Markdown)" rows={3} />
             </div>
 
             <div className="space-y-2">
@@ -143,12 +143,12 @@ export function PaymentLinksPage() {
             </div>
           </div>
 
-          <SheetFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button>Create Payment Link</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
