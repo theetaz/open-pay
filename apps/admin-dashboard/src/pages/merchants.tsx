@@ -22,7 +22,7 @@ export function MerchantsPage() {
   const [selectedMerchant, setSelectedMerchant] = React.useState<any>(null)
 
   const { data } = useQuery({
-    queryKey: ['admin', 'merchants'],
+    queryKey: ['admin', 'merchants', { perPage: 50 }],
     queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/merchants?perPage=50'),
     retry: false,
   })

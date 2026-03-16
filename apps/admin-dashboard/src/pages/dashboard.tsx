@@ -7,7 +7,7 @@ import { api } from '#/lib/api'
 
 export function DashboardIndex() {
   const { data: merchantsData } = useQuery({
-    queryKey: ['admin', 'merchants'],
+    queryKey: ['admin', 'merchants', { perPage: 5 }],
     queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/merchants?perPage=5'),
     retry: false,
   })
