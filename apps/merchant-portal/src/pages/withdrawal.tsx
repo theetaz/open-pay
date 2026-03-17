@@ -8,6 +8,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, Loader2, DollarSign, Clock, ArrowDownToLine } from 'lucide-react'
 import { useBalance, useWithdrawals, useRequestWithdrawal } from '#/hooks/use-settlements'
 import { useMe } from '#/hooks/use-auth'
+import { useExchangeRate } from '#/hooks/use-exchange-rate'
 import { formatDualAmount, formatAmount } from '#/lib/currency'
 import {
   Dialog,
@@ -24,19 +25,21 @@ export function WithdrawalPage() {
   const { data: balanceData } = useBalance()
   const { data: withdrawalsData } = useWithdrawals()
   const { data: meData } = useMe()
+  const { data: rateData } = useExchangeRate()
 
   const balance = balanceData?.data
   const withdrawals = withdrawalsData?.data || []
   const merchant = meData?.data?.merchant
   const primaryCurrency = merchant?.defaultCurrency || 'LKR'
+  const liveRate = rateData?.data?.effectiveRate || (withdrawals.length > 0 ? withdrawals[0].exchangeRate : null)
 
   const pending = withdrawals.filter((w) => w.status === 'REQUESTED')
   const completed = withdrawals.filter((w) => w.status === 'COMPLETED')
   const totalWithdrawn = completed.reduce((sum, w) => sum + parseFloat(w.amountLkr), 0)
 
-  const availableFmt = formatDualAmount(balance?.availableUsdt || '0', undefined, undefined, primaryCurrency)
-  const pendingFmt = formatDualAmount(balance?.pendingUsdt || '0', undefined, undefined, primaryCurrency)
-  const earnedFmt = formatDualAmount(balance?.totalEarnedUsdt || '0', undefined, undefined, primaryCurrency)
+  const availableFmt = formatDualAmount(balance?.availableUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
+  const pendingFmt = formatDualAmount(balance?.pendingUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
+  const earnedFmt = formatDualAmount(balance?.totalEarnedUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
 
   return (
     <>

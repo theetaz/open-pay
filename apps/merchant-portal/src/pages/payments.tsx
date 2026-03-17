@@ -9,6 +9,7 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { DollarSign, CreditCard, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
+import { useExchangeRate } from '#/hooks/use-exchange-rate'
 import { formatDualAmount } from '#/lib/currency'
 
 const PER_PAGE = 20
@@ -19,19 +20,31 @@ export function PaymentsPage() {
   const { data: meData } = useMe()
   const { data: paymentsData, isLoading } = usePayments({ page, perPage: PER_PAGE, status: statusFilter || undefined })
 
+  const { data: rateData } = useExchangeRate()
   const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
+  const liveRate = rateData?.data?.effectiveRate || null
   const payments = paymentsData?.data || []
   const total = paymentsData?.meta?.total || 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Calculate stats from all fetched payments
   const paidPayments = payments.filter((p) => p.status === 'PAID')
-  const totalRevenue = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
-  const totalFees = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
+  const totalRevenueUsdt = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
+  const totalFeesUsdt = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
   const unsettledPayments = payments.filter((p) => p.status === 'INITIATED' || p.status === 'USER_REVIEW')
 
-  const revenueFmt = formatDualAmount(totalRevenue, undefined, undefined, primaryCurrency)
-  const feesFmt = formatDualAmount(totalFees, undefined, undefined, primaryCurrency)
+  // Sum LKR equivalents from each payment's own exchange rate, fallback to live rate
+  const totalRevenueLkr = paidPayments.reduce((sum, p) => {
+    const rate = parseFloat(p.exchangeRate || '0') || parseFloat(liveRate || '0')
+    return sum + parseFloat(p.netAmountUsdt || '0') * rate
+  }, 0)
+  const totalFeesLkr = paidPayments.reduce((sum, p) => {
+    const rate = parseFloat(p.exchangeRate || '0') || parseFloat(liveRate || '0')
+    return sum + parseFloat(p.totalFeesUsdt || '0') * rate
+  }, 0)
+
+  const revenueFmt = formatDualAmount(totalRevenueUsdt, totalRevenueLkr > 0 ? totalRevenueLkr : undefined, 'LKR', primaryCurrency, liveRate)
+  const feesFmt = formatDualAmount(totalFeesUsdt, totalFeesLkr > 0 ? totalFeesLkr : undefined, 'LKR', primaryCurrency, liveRate)
 
   const statuses = [
     { label: 'All', value: '' },

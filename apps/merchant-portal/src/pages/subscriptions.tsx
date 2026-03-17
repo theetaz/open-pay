@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Plus, RefreshCw, Users, Loader2, DollarSign } from 'lucide-react'
 import { usePlans, useSubscriptions, useCreatePlan, useArchivePlan, useCancelSubscription } from '#/hooks/use-subscriptions'
 import { useMe } from '#/hooks/use-auth'
+import { useExchangeRate } from '#/hooks/use-exchange-rate'
 import { formatAmount, formatDualAmount } from '#/lib/currency'
 import {
   Dialog,
@@ -33,16 +34,18 @@ export function SubscriptionsPage() {
   const { data: plansData } = usePlans()
   const { data: subsData } = useSubscriptions()
   const { data: meData } = useMe()
+  const { data: rateData } = useExchangeRate()
   const archivePlan = useArchivePlan()
   const cancelSub = useCancelSubscription()
 
   const plans = plansData?.data || []
   const subscriptions = subsData?.data || []
   const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
+  const liveRate = rateData?.data?.effectiveRate || null
   const activePlans = plans.filter((p) => p.status === 'ACTIVE')
   const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'TRIAL')
   const totalSubRevenue = subscriptions.reduce((sum, s) => sum + parseFloat(s.totalPaidUsdt || '0'), 0)
-  const subRevenueFmt = formatDualAmount(totalSubRevenue, undefined, undefined, primaryCurrency)
+  const subRevenueFmt = formatDualAmount(totalSubRevenue, undefined, undefined, primaryCurrency, liveRate)
 
   return (
     <>
@@ -151,7 +154,7 @@ export function SubscriptionsPage() {
                         <TableCell className="text-sm">{new Date(s.nextBillingDate).toLocaleDateString()}</TableCell>
                         <TableCell className="text-sm">
                           {(() => {
-                            const paid = formatDualAmount(s.totalPaidUsdt, undefined, undefined, primaryCurrency)
+                            const paid = formatDualAmount(s.totalPaidUsdt, undefined, undefined, primaryCurrency, liveRate)
                             return (
                               <>
                                 <p className="font-medium">{paid.primary}</p>
