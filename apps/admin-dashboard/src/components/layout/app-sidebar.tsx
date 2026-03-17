@@ -26,6 +26,7 @@ const navItems = [
   { title: 'Withdrawals', href: '/withdrawals', icon: ArrowDownToLine },
   { title: 'Treasury', href: '/treasury', icon: Landmark },
   { title: 'Audit Logs', href: '/audit-logs', icon: ScrollText },
+  { title: 'System Health', href: '/system-health', icon: Activity },
 ]
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
@@ -73,22 +74,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>System</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="System Health"
-                  render={<Link to="/" onClick={() => setTimeout(() => document.getElementById('system-health')?.scrollIntoView({ behavior: 'smooth' }), 100)} />}
-                >
-                  <Activity className="size-4" />
-                  <span>System Health</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarRail />

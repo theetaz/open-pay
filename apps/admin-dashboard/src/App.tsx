@@ -6,6 +6,7 @@ import { MerchantsPage } from '#/pages/merchants'
 import { WithdrawalsPage } from '#/pages/withdrawals'
 import { TreasuryPage } from '#/pages/treasury'
 import { AuditLogsPage } from '#/pages/audit-logs'
+import { SystemHealthPage } from '#/pages/system-health'
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
         <Route path="withdrawals" element={<WithdrawalsPage />} />
         <Route path="treasury" element={<TreasuryPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="system-health" element={<SystemHealthPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -108,6 +109,12 @@ func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	result, err := h.authSvc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
+			// Log failed login attempt
+			h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+				ActorType: "ADMIN", Action: "admin.login.failed",
+				ResourceType: "admin_user", IPAddress: stripPort(r.RemoteAddr),
+				UserAgent: r.UserAgent(),
+			})
 			writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "invalid email or password")
 			return
 		}
@@ -118,6 +125,13 @@ func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
 		return
 	}
+
+	// Log successful login
+	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		ActorID: result.User.ID, ActorType: "ADMIN", Action: "admin.login",
+		ResourceType: "admin_user", ResourceID: &result.User.ID,
+		IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+	})
 
 	writeJSON(w, http.StatusOK, envelope{"data": adminAuthResponse(result)})
 }
@@ -421,6 +435,14 @@ func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+			ActorID: claims.UserID, ActorType: "ADMIN", Action: "legal_document.created",
+			ResourceType: "legal_document", ResourceID: &doc.ID,
+			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, envelope{"data": legalDocResponse(doc)})
 }
 
@@ -466,7 +488,23 @@ func (h *AdminHandler) ActivateLegalDocument(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+			ActorID: claims.UserID, ActorType: "ADMIN", Action: "legal_document.activated",
+			ResourceType: "legal_document", ResourceID: &id,
+			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "activated"}})
+}
+
+func stripPort(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 func legalDocResponse(d *postgres.LegalDocument) map[string]any {

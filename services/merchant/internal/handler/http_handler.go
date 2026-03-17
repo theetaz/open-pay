@@ -264,6 +264,18 @@ func (h *MerchantHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if h.auditLog != nil {
+		action := "merchant.profile_updated"
+		if req.SubmitKYC {
+			action = "merchant.kyc_submitted"
+		}
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &id,
+			Action: action, ResourceType: "merchant", ResourceID: &id,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": merchantResponse(merchant)})
 }
 
