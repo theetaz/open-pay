@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
@@ -28,12 +29,16 @@ type paymentLinkRepo interface {
 
 // PaymentLinkHandler handles payment link HTTP requests.
 type PaymentLinkHandler struct {
-	repo paymentLinkRepo
+	repo     paymentLinkRepo
+	auditLog *audit.Client
 }
 
 // RegisterPaymentLinkRoutes registers payment link routes on the router.
-func RegisterPaymentLinkRoutes(r chi.Router, repo paymentLinkRepo, jwtSecret string) {
+func RegisterPaymentLinkRoutes(r chi.Router, repo paymentLinkRepo, jwtSecret string, auditClient ...*audit.Client) {
 	h := &PaymentLinkHandler{repo: repo}
+	if len(auditClient) > 0 {
+		h.auditLog = auditClient[0]
+	}
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(jwtSecret))
@@ -105,6 +110,15 @@ func (h *PaymentLinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create payment link")
 		return
+	}
+
+	if h.auditLog != nil {
+		merchantID := claims.MerchantID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			Action: "payment_link.created", ResourceType: "payment_link", ResourceID: &pl.ID,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
 	}
 
 	writeJSON(w, http.StatusCreated, envelope{"data": paymentLinkResponse(pl)})
@@ -263,6 +277,15 @@ func (h *PaymentLinkHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.SoftDelete(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete payment link")
 		return
+	}
+
+	if h.auditLog != nil {
+		merchantID := claims.MerchantID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			Action: "payment_link.deleted", ResourceType: "payment_link", ResourceID: &id,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deleted"}})

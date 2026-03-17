@@ -58,6 +58,12 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/audit-logs/{id}", h.GetAuditLog)
 	})
 
+	// Merchant-scoped audit log access (JWT required, auto-filtered by merchantId)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware(jwtSecret))
+		r.Get("/v1/merchant/audit-logs", h.ListMerchantAuditLogs)
+	})
+
 	// Internal endpoint for creating audit logs from other services
 	r.Post("/internal/audit-logs", h.CreateAuditLog)
 
@@ -136,6 +142,44 @@ func (h *AdminHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		Action:       r.URL.Query().Get("action"),
 		ActorType:    r.URL.Query().Get("actorType"),
 		ResourceType: r.URL.Query().Get("resourceType"),
+	}
+
+	if mid := r.URL.Query().Get("merchantId"); mid != "" {
+		if id, err := uuid.Parse(mid); err == nil {
+			params.MerchantID = &id
+		}
+	}
+
+	logs, total, err := h.auditSvc.List(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list audit logs")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(logs))
+	for _, l := range logs {
+		items = append(items, auditResponse(l))
+	}
+
+	writeJSON(w, http.StatusOK, envelope{
+		"data": items,
+		"meta": map[string]any{"total": total, "page": params.Page, "perPage": params.PerPage},
+	})
+}
+
+func (h *AdminHandler) ListMerchantAuditLogs(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	merchantID := claims.MerchantID
+	params := postgres.ListParams{
+		Page:         intQuery(r, "page", 1),
+		PerPage:      intQuery(r, "perPage", 20),
+		Action:       r.URL.Query().Get("action"),
+		MerchantID:   &merchantID,
 	}
 
 	logs, total, err := h.auditSvc.List(r.Context(), params)

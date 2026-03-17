@@ -80,7 +80,7 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 
 	// Payment link routes
 	if paymentLinkRepo != nil {
-		RegisterPaymentLinkRoutes(r, paymentLinkRepo, h.jwtSecret)
+		RegisterPaymentLinkRoutes(r, paymentLinkRepo, h.jwtSecret, h.auditLog)
 	}
 
 	// Upload routes

@@ -116,6 +116,9 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Notification routes → notification service
 	r.Get("/v1/notifications", p.ProxyToNotification)
 
+	// Merchant audit logs → admin service (merchant JWT)
+	r.Get("/v1/merchant/audit-logs", p.ProxyToAdmin)
+
 	// Admin auth routes → admin service (public)
 	r.Post("/v1/admin/auth/login", p.ProxyToAdmin)
 	r.Post("/v1/admin/auth/refresh", p.ProxyToAdmin)

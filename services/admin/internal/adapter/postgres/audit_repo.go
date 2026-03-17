@@ -71,6 +71,11 @@ func (r *AuditRepository) List(ctx context.Context, params ListParams) ([]*domai
 		args = append(args, params.ResourceType)
 		argIdx++
 	}
+	if params.MerchantID != nil {
+		conditions = append(conditions, fmt.Sprintf("merchant_id = $%d", argIdx))
+		args = append(args, *params.MerchantID)
+		argIdx++
+	}
 
 	where := strings.Join(conditions, " AND ")
 
@@ -110,6 +115,7 @@ type ListParams struct {
 	Action       string
 	ActorType    string
 	ResourceType string
+	MerchantID   *uuid.UUID
 }
 
 func scanAuditLog(rows pgx.Rows) (*domain.AuditLog, error) {
