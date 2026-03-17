@@ -1,19 +1,11 @@
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { LogOut, User, Shield } from 'lucide-react'
 import { SidebarTrigger } from '#/components/ui/sidebar'
 import { Separator } from '#/components/ui/separator'
 import { Avatar, AvatarFallback } from '#/components/ui/avatar'
 import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
 import { ThemeToggle } from '#/components/theme-toggle'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '#/components/ui/dropdown-menu'
 import { useAuthStore } from '#/stores/auth'
 
 function getInitials(name: string): string {
@@ -29,11 +21,25 @@ export function SiteHeader() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   const initials = user?.name ? getInitials(user.name) : 'A'
 
@@ -42,56 +48,66 @@ export function SiteHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
       <div className="flex-1" />
-      <div className="flex items-center gap-2">
-        {user && (
-          <span className="text-xs text-muted-foreground hidden sm:inline">{user.name}</span>
-        )}
-      </div>
+      {user && (
+        <span className="text-xs text-muted-foreground hidden sm:inline">{user.name}</span>
+      )}
       <ThemeToggle />
 
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="rounded-full size-9 p-0" />}>
+      <div className="relative" ref={ref}>
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+        >
           <Avatar className="size-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
               {initials}
             </AvatarFallback>
           </Avatar>
-        </DropdownMenuTrigger>
+        </button>
 
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex items-start gap-3 p-1">
-              <Avatar className="size-10 mt-0.5">
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col gap-1 min-w-0">
-                <p className="text-sm font-medium leading-none truncate">{user?.name || 'Admin'}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
-                <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0">
-                  <Shield className="size-3 mr-1" />
-                  {user?.role?.name || 'ADMIN'}
-                </Badge>
+        {open && (
+          <div className="absolute right-0 top-full mt-2 w-64 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md z-50 animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-100">
+            <div className="px-2 py-2">
+              <div className="flex items-start gap-3">
+                <Avatar className="size-10 mt-0.5">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <p className="text-sm font-medium leading-none truncate">{user?.name || 'Admin'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
+                  <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0">
+                    <Shield className="size-3 mr-1" />
+                    {user?.role?.name || 'ADMIN'}
+                  </Badge>
+                </div>
               </div>
             </div>
-          </DropdownMenuLabel>
 
-          <DropdownMenuSeparator />
+            <div className="h-px bg-border my-1" />
 
-          <DropdownMenuItem render={<Link to="/settings/team" />}>
-            <User className="size-4 mr-2" />
-            Team Settings
-          </DropdownMenuItem>
+            <Link
+              to="/settings/team"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            >
+              <User className="size-4" />
+              Team Settings
+            </Link>
 
-          <DropdownMenuSeparator />
+            <div className="h-px bg-border my-1" />
 
-          <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-            <LogOut className="size-4 mr-2" />
-            Log out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 cursor-pointer"
+            >
+              <LogOut className="size-4" />
+              Log out
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   )
 }

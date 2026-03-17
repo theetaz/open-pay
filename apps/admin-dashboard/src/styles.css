@@ -133,4 +133,8 @@
   html {
     @apply font-mono;
   }
+  /* Fix base-ui Menu dialog backdrop covering the screen */
+  dialog::backdrop {
+    background: transparent;
+  }
 }
