@@ -9,7 +9,7 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { DollarSign, CreditCard, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
-import { formatAmount, formatDualAmount } from '#/lib/currency'
+import { formatDualAmount } from '#/lib/currency'
 
 const PER_PAGE = 20
 
@@ -30,6 +30,9 @@ export function PaymentsPage() {
   const totalFees = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
   const unsettledPayments = payments.filter((p) => p.status === 'INITIATED' || p.status === 'USER_REVIEW')
 
+  const revenueFmt = formatDualAmount(totalRevenue, undefined, undefined, primaryCurrency)
+  const feesFmt = formatDualAmount(totalFees, undefined, undefined, primaryCurrency)
+
   const statuses = [
     { label: 'All', value: '' },
     { label: 'Paid', value: 'PAID' },
@@ -45,15 +48,15 @@ export function PaymentsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         <StatCard
           title="Total Revenue"
-          value={formatAmount(totalRevenue, 'USDT')}
-          description="From paid transactions"
+          value={revenueFmt.primary}
+          description={revenueFmt.secondary || 'From paid transactions'}
           icon={DollarSign}
         />
         <StatCard title="Total Payments" value={String(total)} description="All-time transactions" icon={CreditCard} />
         <StatCard
           title="Total Fees"
-          value={formatAmount(totalFees, 'USDT')}
-          description="Exchange + Platform"
+          value={feesFmt.primary}
+          description={feesFmt.secondary || 'Exchange + Platform'}
           icon={Clock}
           valueClassName="text-amber-500"
         />
@@ -107,6 +110,7 @@ export function PaymentsPage() {
               ) : (
                 payments.map((p) => {
                   const amt = formatDualAmount(p.amountUsdt, p.amount, p.currency, primaryCurrency, p.exchangeRate)
+                  const fee = formatDualAmount(p.totalFeesUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
                   const net = formatDualAmount(p.netAmountUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
 
                   return (
@@ -133,8 +137,11 @@ export function PaymentsPage() {
                           <p className="text-xs text-muted-foreground">@ {parseFloat(p.exchangeRate).toFixed(2)}</p>
                         )}
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {formatAmount(p.totalFeesUsdt, 'USDT')}
+                      <TableCell className="text-right">
+                        <p className="text-sm font-medium">{fee.primary}</p>
+                        {fee.secondary && (
+                          <p className="text-xs text-muted-foreground">({fee.secondary})</p>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <p className="text-sm font-medium">{net.primary}</p>

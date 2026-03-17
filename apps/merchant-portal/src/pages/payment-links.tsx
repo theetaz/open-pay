@@ -19,6 +19,7 @@ import { Plus, Link2, Loader2, Check, X, ExternalLink, Trash2, QrCode } from 'lu
 import { usePaymentLinks, useCreatePaymentLink, useDeletePaymentLink, checkSlugAvailability } from '#/hooks/use-payment-links'
 import type { PaymentLink } from '#/hooks/use-payment-links'
 import { toast } from 'sonner'
+import { formatAmount } from '#/lib/currency'
 
 function toSlug(name: string): string {
   return name
@@ -102,7 +103,7 @@ export function PaymentLinksPage() {
                     <TableCell className="font-medium">{link.name}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{link.slug}</TableCell>
                     <TableCell>
-                      {link.allowCustomAmount ? 'Custom' : `${parseFloat(link.amount).toLocaleString()} ${link.currency}`}
+                      {link.allowCustomAmount ? 'Custom' : formatAmount(link.amount, link.currency)}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={link.status} />
@@ -197,7 +198,7 @@ function PaymentLinkDetailDialog({ link, onClose }: { link: PaymentLink | null; 
             <div>
               <p className="text-xs text-muted-foreground">Amount</p>
               <p className="font-medium">
-                {link.allowCustomAmount ? 'Custom' : `${parseFloat(link.amount).toLocaleString()} ${link.currency}`}
+                {link.allowCustomAmount ? 'Custom' : formatAmount(link.amount, link.currency)}
               </p>
             </div>
             <div>

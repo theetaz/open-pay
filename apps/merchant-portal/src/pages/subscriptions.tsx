@@ -8,8 +8,10 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { Plus, RefreshCw, Users, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, Users, Loader2, DollarSign } from 'lucide-react'
 import { usePlans, useSubscriptions, useCreatePlan, useArchivePlan, useCancelSubscription } from '#/hooks/use-subscriptions'
+import { useMe } from '#/hooks/use-auth'
+import { formatAmount, formatDualAmount } from '#/lib/currency'
 import {
   Dialog,
   DialogContent,
@@ -30,13 +32,17 @@ import {
 export function SubscriptionsPage() {
   const { data: plansData } = usePlans()
   const { data: subsData } = useSubscriptions()
+  const { data: meData } = useMe()
   const archivePlan = useArchivePlan()
   const cancelSub = useCancelSubscription()
 
   const plans = plansData?.data || []
   const subscriptions = subsData?.data || []
+  const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
   const activePlans = plans.filter((p) => p.status === 'ACTIVE')
   const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'TRIAL')
+  const totalSubRevenue = subscriptions.reduce((sum, s) => sum + parseFloat(s.totalPaidUsdt || '0'), 0)
+  const subRevenueFmt = formatDualAmount(totalSubRevenue, undefined, undefined, primaryCurrency)
 
   return (
     <>
@@ -49,7 +55,7 @@ export function SubscriptionsPage() {
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <StatCard title="Active Plans" value={String(activePlans.length)} description="Subscription plans" icon={RefreshCw} />
         <StatCard title="Active Subscribers" value={String(activeSubs.length)} description="Currently subscribed" icon={Users} />
-        <StatCard title="Total Revenue" value="0.00 USDT" description="From subscriptions" />
+        <StatCard title="Total Revenue" value={subRevenueFmt.primary} description={subRevenueFmt.secondary || 'From subscriptions'} icon={DollarSign} />
       </div>
 
       <Tabs defaultValue="plans">
@@ -89,7 +95,7 @@ export function SubscriptionsPage() {
                             {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
                           </div>
                         </TableCell>
-                        <TableCell className="font-medium">{p.amount} {p.currency}</TableCell>
+                        <TableCell className="font-medium">{formatAmount(p.amount, p.currency)}</TableCell>
                         <TableCell className="text-sm">Every {p.intervalCount > 1 ? `${p.intervalCount} ` : ''}{p.intervalType.toLowerCase()}{p.intervalCount > 1 ? 's' : ''}</TableCell>
                         <TableCell className="text-sm">{p.trialDays > 0 ? `${p.trialDays} days` : '-'}</TableCell>
                         <TableCell><StatusBadge status={p.status} /></TableCell>
@@ -143,7 +149,17 @@ export function SubscriptionsPage() {
                         <TableCell className="font-medium">{s.subscriberEmail}</TableCell>
                         <TableCell><StatusBadge status={s.status} /></TableCell>
                         <TableCell className="text-sm">{new Date(s.nextBillingDate).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-sm">{s.totalPaidUsdt} USDT</TableCell>
+                        <TableCell className="text-sm">
+                          {(() => {
+                            const paid = formatDualAmount(s.totalPaidUsdt, undefined, undefined, primaryCurrency)
+                            return (
+                              <>
+                                <p className="font-medium">{paid.primary}</p>
+                                {paid.secondary && <p className="text-xs text-muted-foreground">({paid.secondary})</p>}
+                              </>
+                            )
+                          })()}
+                        </TableCell>
                         <TableCell className="text-sm">{s.billingCount}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>

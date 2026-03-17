@@ -8,6 +8,7 @@ import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, Loader2, DollarSign, Clock, ArrowDownToLine } from 'lucide-react'
 import { useBalance, useWithdrawals, useRequestWithdrawal } from '#/hooks/use-settlements'
 import { useMe } from '#/hooks/use-auth'
+import { formatDualAmount, formatAmount } from '#/lib/currency'
 import {
   Dialog,
   DialogContent,
@@ -27,10 +28,15 @@ export function WithdrawalPage() {
   const balance = balanceData?.data
   const withdrawals = withdrawalsData?.data || []
   const merchant = meData?.data?.merchant
+  const primaryCurrency = merchant?.defaultCurrency || 'LKR'
 
   const pending = withdrawals.filter((w) => w.status === 'REQUESTED')
   const completed = withdrawals.filter((w) => w.status === 'COMPLETED')
   const totalWithdrawn = completed.reduce((sum, w) => sum + parseFloat(w.amountLkr), 0)
+
+  const availableFmt = formatDualAmount(balance?.availableUsdt || '0', undefined, undefined, primaryCurrency)
+  const pendingFmt = formatDualAmount(balance?.pendingUsdt || '0', undefined, undefined, primaryCurrency)
+  const earnedFmt = formatDualAmount(balance?.totalEarnedUsdt || '0', undefined, undefined, primaryCurrency)
 
   return (
     <>
@@ -48,9 +54,9 @@ export function WithdrawalPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard title="Available Balance" value={`${balance?.availableUsdt || '0'} USDT`} icon={DollarSign} />
-        <StatCard title="Pending Withdrawal" value={`${balance?.pendingUsdt || '0'} USDT`} icon={Clock} valueClassName="text-amber-500" />
-        <StatCard title="Total Earned" value={`${balance?.totalEarnedUsdt || '0'} USDT`} icon={ArrowDownToLine} />
+        <StatCard title="Available Balance" value={availableFmt.primary} description={availableFmt.secondary} icon={DollarSign} />
+        <StatCard title="Pending Withdrawal" value={pendingFmt.primary} description={pendingFmt.secondary} icon={Clock} valueClassName="text-amber-500" />
+        <StatCard title="Total Earned" value={earnedFmt.primary} description={earnedFmt.secondary} icon={ArrowDownToLine} />
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground mb-2">Status Overview</p>
@@ -65,7 +71,7 @@ export function WithdrawalPage() {
               </div>
               <div className="flex justify-between">
                 <span>Total Withdrawn:</span>
-                <span className="font-medium">{totalWithdrawn.toFixed(2)} LKR</span>
+                <span className="font-medium">{formatAmount(totalWithdrawn, 'LKR')}</span>
               </div>
             </div>
           </CardContent>
@@ -78,9 +84,8 @@ export function WithdrawalPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Amount (USDT)</TableHead>
+                <TableHead>Amount</TableHead>
                 <TableHead>Rate</TableHead>
-                <TableHead>Amount (LKR)</TableHead>
                 <TableHead>Bank</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Reference</TableHead>
@@ -89,17 +94,23 @@ export function WithdrawalPage() {
             <TableBody>
               {withdrawals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={6}>
                     <EmptyState message="No withdrawal requests yet." />
                   </TableCell>
                 </TableRow>
               ) : (
-                withdrawals.map((w) => (
+                withdrawals.map((w) => {
+                  const wAmt = formatDualAmount(w.amountUsdt, w.amountLkr, 'LKR', primaryCurrency, w.exchangeRate)
+                  return (
                   <TableRow key={w.id}>
                     <TableCell className="text-sm">{new Date(w.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium">{w.amountUsdt}</TableCell>
-                    <TableCell>{w.exchangeRate}</TableCell>
-                    <TableCell>{w.amountLkr}</TableCell>
+                    <TableCell>
+                      <p className="font-medium">{wAmt.primary}</p>
+                      {wAmt.secondary && (
+                        <p className="text-xs text-muted-foreground">({wAmt.secondary})</p>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">@ {parseFloat(w.exchangeRate).toFixed(2)}</TableCell>
                     <TableCell className="text-sm">{w.bankName}</TableCell>
                     <TableCell>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -113,7 +124,8 @@ export function WithdrawalPage() {
                     </TableCell>
                     <TableCell className="text-sm font-mono">{w.bankReference || '-'}</TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -165,7 +177,7 @@ function WithdrawDialog({ availableUsdt, bankName, bankAccountNo, bankAccountNam
           <DialogHeader>
             <DialogTitle>Request Withdrawal</DialogTitle>
             <DialogDescription>
-              Available balance: {availableUsdt} USDT
+              Available balance: {formatAmount(parseFloat(availableUsdt), 'USDT')}
             </DialogDescription>
           </DialogHeader>
 
