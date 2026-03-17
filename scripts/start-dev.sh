@@ -226,10 +226,15 @@ echo -e "${BOLD}Starting infrastructure...${NC}"
 docker compose up -d postgres redis nats minio minio-init mailpit
 
 echo -e "  Waiting for PostgreSQL..."
-timeout 30 bash -c 'until docker compose exec -T postgres pg_isready -U olp 2>/dev/null; do sleep 1; done' || {
-    echo -e "${RED}PostgreSQL failed to start!${NC}"
-    exit 1
-}
+TRIES=0
+until docker compose exec -T postgres pg_isready -U olp 2>/dev/null; do
+    TRIES=$((TRIES + 1))
+    if [ "$TRIES" -ge 30 ]; then
+        echo -e "${RED}PostgreSQL failed to start!${NC}"
+        exit 1
+    fi
+    sleep 1
+done
 echo -e "  ${GREEN}PostgreSQL ready.${NC}"
 
 echo -e "  Waiting for other services..."
