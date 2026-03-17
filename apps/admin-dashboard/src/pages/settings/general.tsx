@@ -90,12 +90,12 @@ export function SettingsGeneralPage() {
             <FieldGroup>
               <Field>
                 <FieldLabel>Platform Logo</FieldLabel>
-                <div className="flex items-start gap-4">
+                <div className="flex items-stretch gap-4">
                   {/* Logo preview */}
                   <div className="shrink-0">
                     {logoUrl ? (
-                      <div className="relative group">
-                        <div className="size-20 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
+                      <div className="relative group h-full">
+                        <div className="h-full w-28 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden p-2">
                           {imgError ? (
                             <ImageIcon className="size-8 text-muted-foreground" />
                           ) : (
@@ -116,22 +116,22 @@ export function SettingsGeneralPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="size-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground">
+                      <div className="h-full w-28 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground">
                         <ImageIcon className="size-8" />
                       </div>
                     )}
                   </div>
 
                   {/* Upload area */}
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1">
                     <div
-                      className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                      className="h-full border-2 border-dashed border-border rounded-lg p-4 flex flex-col items-center justify-center text-center hover:border-primary/50 transition-colors cursor-pointer"
                       onClick={() => !uploading && fileInputRef.current?.click()}
                     >
                       {uploading ? (
-                        <Loader2 className="size-5 mx-auto text-primary animate-spin mb-1" />
+                        <Loader2 className="size-5 text-primary animate-spin mb-1" />
                       ) : (
-                        <Upload className="size-5 mx-auto text-muted-foreground mb-1" />
+                        <Upload className="size-5 text-muted-foreground mb-1" />
                       )}
                       <p className="text-sm text-muted-foreground">
                         {uploading ? 'Uploading...' : 'Click to upload logo'}
