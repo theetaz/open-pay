@@ -14,6 +14,10 @@ set -e
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Ensure GOPATH/bin is in PATH (where `go install` puts binaries)
+GOBIN="${GOBIN:-$(go env GOPATH)/bin}"
+export PATH="$GOBIN:$PATH"
+
 PIDS_DIR="$ROOT_DIR/.pids"
 LOGS_DIR="$ROOT_DIR/.logs"
 mkdir -p "$PIDS_DIR" "$LOGS_DIR"
