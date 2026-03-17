@@ -89,12 +89,12 @@ function KycBanner() {
     )
   }
 
-  if (merchant.kycStatus === 'UNDER_REVIEW') {
+  if (merchant.kycStatus === 'UNDER_REVIEW' || merchant.kycStatus === 'INSTANT_ACCESS') {
     return (
       <div className="mx-6 mt-4 rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 flex items-center gap-3">
         <Clock className="size-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
         <p className="text-sm text-blue-700 dark:text-blue-300">
-          Your KYC verification is under review. We'll notify you once it's approved.
+          Your KYC application is under review. You have limited access while we verify your documents.
         </p>
       </div>
     )

@@ -29,12 +29,12 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
       <FieldGroup>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel htmlFor="firstName">First Name</FieldLabel>
+            <FieldLabel htmlFor="firstName" required>First Name</FieldLabel>
             <Input id="firstName" placeholder="Enter first name" {...register('firstName')} />
             <FieldError>{errors.firstName?.message}</FieldError>
           </Field>
           <Field>
-            <FieldLabel htmlFor="lastName">Last Name</FieldLabel>
+            <FieldLabel htmlFor="lastName" required>Last Name</FieldLabel>
             <Input id="lastName" placeholder="Enter last name" {...register('lastName')} />
             <FieldError>{errors.lastName?.message}</FieldError>
           </Field>
@@ -49,7 +49,7 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
       <FieldGroup>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel htmlFor="addressLine1">Address Line 1</FieldLabel>
+            <FieldLabel htmlFor="addressLine1" required>Address Line 1</FieldLabel>
             <Input id="addressLine1" placeholder="Street address" {...register('addressLine1')} />
             <FieldError>{errors.addressLine1?.message}</FieldError>
           </Field>
@@ -61,12 +61,12 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel htmlFor="city">City</FieldLabel>
+            <FieldLabel htmlFor="city" required>City</FieldLabel>
             <Input id="city" placeholder="Enter city" {...register('city')} />
             <FieldError>{errors.city?.message}</FieldError>
           </Field>
           <Field>
-            <FieldLabel htmlFor="postalCode">Postal Code</FieldLabel>
+            <FieldLabel htmlFor="postalCode" required>Postal Code</FieldLabel>
             <Input id="postalCode" placeholder="Enter postal code" {...register('postalCode')} />
             <FieldError>{errors.postalCode?.message}</FieldError>
           </Field>
@@ -80,7 +80,7 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
 
       <FieldGroup>
         <Field>
-          <FieldLabel>ID Type</FieldLabel>
+          <FieldLabel required>ID Type</FieldLabel>
           <RadioGroup
             className="flex flex-row gap-4"
             value={idType}
@@ -99,7 +99,7 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="idNumber">
+          <FieldLabel htmlFor="idNumber" required>
             {idType === 'passport' ? 'Passport Number' : 'NIC Number'}
           </FieldLabel>
           <Input
@@ -119,7 +119,7 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
       <FieldGroup>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel>Date of Birth</FieldLabel>
+            <FieldLabel required>Date of Birth</FieldLabel>
             <Controller
               name="dateOfBirth"
               control={control}
@@ -135,7 +135,7 @@ export function PersonalDetails({ form }: PersonalDetailsProps) {
             <FieldError>{errors.dateOfBirth?.message}</FieldError>
           </Field>
           <Field>
-            <FieldLabel htmlFor="mobileNo">
+            <FieldLabel htmlFor="mobileNo" required>
               <span className="inline-flex items-center gap-1">
                 <Phone className="size-3.5" />
                 Mobile No

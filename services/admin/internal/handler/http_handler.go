@@ -30,13 +30,22 @@ type AdminAuthServiceInterface interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*service.AdminLoginResult, error)
 }
 
+type LegalDocRepo interface {
+	GetActiveByType(ctx context.Context, docType string) (*postgres.LegalDocument, error)
+	List(ctx context.Context) ([]*postgres.LegalDocument, error)
+	Create(ctx context.Context, doc *postgres.LegalDocument) error
+	Update(ctx context.Context, doc *postgres.LegalDocument) error
+	Activate(ctx context.Context, id uuid.UUID) error
+}
+
 type AdminHandler struct {
 	auditSvc AuditServiceInterface
 	authSvc  AdminAuthServiceInterface
+	legalDocs LegalDocRepo
 }
 
-func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface) *AdminHandler {
-	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc}
+func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo) *AdminHandler {
+	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs}
 }
 
 func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
@@ -63,6 +72,20 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 		r.Use(auth.JWTMiddleware(jwtSecret))
 		r.Get("/v1/merchant/audit-logs", h.ListMerchantAuditLogs)
 	})
+
+	// Protected legal document management
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware(jwtSecret))
+		r.Use(auth.RequirePlatformAdmin())
+
+		r.Get("/v1/admin/legal-documents", h.ListLegalDocuments)
+		r.Post("/v1/admin/legal-documents", h.CreateLegalDocument)
+		r.Put("/v1/admin/legal-documents/{id}", h.UpdateLegalDocument)
+		r.Post("/v1/admin/legal-documents/{id}/activate", h.ActivateLegalDocument)
+	})
+
+	// Public endpoint for fetching active legal documents (used by merchant portal)
+	r.Get("/v1/legal-documents/active", h.GetActiveLegalDocument)
 
 	// Internal endpoint for creating audit logs from other services
 	r.Post("/internal/audit-logs", h.CreateAuditLog)
@@ -337,4 +360,128 @@ func intQuery(r *http.Request, key string, defaultVal int) int {
 		return defaultVal
 	}
 	return v
+}
+
+// --- Legal Document Handlers ---
+
+func (h *AdminHandler) GetActiveLegalDocument(w http.ResponseWriter, r *http.Request) {
+	docType := r.URL.Query().Get("type")
+	if docType == "" {
+		docType = "terms_and_conditions"
+	}
+
+	doc, err := h.legalDocs.GetActiveByType(r.Context(), docType)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "no active document found for this type")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": legalDocResponse(doc)})
+}
+
+func (h *AdminHandler) ListLegalDocuments(w http.ResponseWriter, r *http.Request) {
+	docs, err := h.legalDocs.List(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list documents")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(docs))
+	for _, d := range docs {
+		items = append(items, legalDocResponse(d))
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
+}
+
+func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Type    string `json:"type"`
+		Version int    `json:"version"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+	if req.Type == "" || req.Title == "" || req.Content == "" || req.Version < 1 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "type, version, title, and content are required")
+		return
+	}
+
+	doc := &postgres.LegalDocument{
+		Type:    req.Type,
+		Version: req.Version,
+		Title:   req.Title,
+		Content: req.Content,
+	}
+
+	if err := h.legalDocs.Create(r.Context(), doc); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create document")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, envelope{"data": legalDocResponse(doc)})
+}
+
+func (h *AdminHandler) UpdateLegalDocument(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid document ID")
+		return
+	}
+
+	var req struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	doc := &postgres.LegalDocument{
+		ID:      id,
+		Title:   req.Title,
+		Content: req.Content,
+	}
+
+	if err := h.legalDocs.Update(r.Context(), doc); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update document")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "updated"}})
+}
+
+func (h *AdminHandler) ActivateLegalDocument(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid document ID")
+		return
+	}
+
+	if err := h.legalDocs.Activate(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to activate document")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "activated"}})
+}
+
+func legalDocResponse(d *postgres.LegalDocument) map[string]any {
+	resp := map[string]any{
+		"id":        d.ID.String(),
+		"type":      d.Type,
+		"version":   d.Version,
+		"title":     d.Title,
+		"content":   d.Content,
+		"isActive":  d.IsActive,
+		"createdAt": d.CreatedAt.Format(time.RFC3339),
+		"updatedAt": d.UpdatedAt.Format(time.RFC3339),
+	}
+	if d.CreatedBy != nil {
+		resp["createdBy"] = d.CreatedBy.String()
+	}
+	return resp
 }

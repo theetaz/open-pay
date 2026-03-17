@@ -11,6 +11,7 @@ import (
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/notification/internal/adapter/postgres"
+	smtpadapter "github.com/openlankapay/openlankapay/services/notification/internal/adapter/smtp"
 	"github.com/openlankapay/openlankapay/services/notification/internal/handler"
 	"github.com/openlankapay/openlankapay/services/notification/internal/service"
 )
@@ -30,10 +31,20 @@ func main() {
 
 	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
 
-	notifRepo := pgadapter.NewNotificationRepository(pool)
-	svc := service.NewNotificationService(notifRepo)
+	// SMTP sender
+	smtpSender := smtpadapter.NewSender(smtpadapter.Config{
+		Host:     getEnv("SMTP_HOST", "localhost"),
+		Port:     getEnv("SMTP_PORT", "1025"),
+		Username: getEnv("SMTP_USERNAME", ""),
+		Password: getEnv("SMTP_PASSWORD", ""),
+		From:     getEnv("SMTP_FROM", "noreply@openlankapay.dev"),
+	})
 
-	h := handler.NewNotificationHandler(svc)
+	notifRepo := pgadapter.NewNotificationRepository(pool)
+	templateRepo := pgadapter.NewEmailTemplateRepository(pool)
+	svc := service.NewNotificationService(notifRepo, smtpSender)
+
+	h := handler.NewNotificationHandler(svc, templateRepo)
 	router := handler.NewRouter(h, jwtSecret)
 
 	port := getEnv("PORT", "8087")

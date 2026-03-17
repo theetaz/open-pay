@@ -115,6 +115,9 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Notification routes → notification service
 	r.Get("/v1/notifications", p.ProxyToNotification)
+	r.Get("/v1/admin/email-templates", p.ProxyToNotification)
+	r.Post("/v1/admin/email-templates", p.ProxyToNotification)
+	r.Put("/v1/admin/email-templates/{id}", p.ProxyToNotification)
 
 	// Merchant audit logs → admin service (merchant JWT)
 	r.Get("/v1/merchant/audit-logs", p.ProxyToAdmin)
@@ -127,6 +130,13 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/admin/auth/me", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs/{id}", p.ProxyToAdmin)
+
+	// Legal documents → admin service
+	r.Get("/v1/legal-documents/active", p.ProxyToAdmin)
+	r.Get("/v1/admin/legal-documents", p.ProxyToAdmin)
+	r.Post("/v1/admin/legal-documents", p.ProxyToAdmin)
+	r.Put("/v1/admin/legal-documents/{id}", p.ProxyToAdmin)
+	r.Post("/v1/admin/legal-documents/{id}/activate", p.ProxyToAdmin)
 
 	return r
 }

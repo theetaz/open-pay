@@ -78,7 +78,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field>
-              <FieldLabel>Nature of Business</FieldLabel>
+              <FieldLabel required>Nature of Business</FieldLabel>
               <Controller
                 name="businessNature"
                 control={control}
@@ -100,7 +100,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Business Category</FieldLabel>
+              <FieldLabel required>Business Category</FieldLabel>
               <Controller
                 name="businessCategory"
                 control={control}
@@ -123,7 +123,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Item Category</FieldLabel>
+              <FieldLabel required>Item Category</FieldLabel>
               <Controller
                 name="itemCategory"
                 control={control}
@@ -147,7 +147,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel>Item Type</FieldLabel>
+              <FieldLabel required>Item Type</FieldLabel>
               <Controller
                 name="itemType"
                 control={control}
@@ -170,7 +170,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Store Type</FieldLabel>
+              <FieldLabel required>Store Type</FieldLabel>
               <Controller
                 name="storeType"
                 control={control}
@@ -192,7 +192,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
           </div>
 
           <Field>
-            <FieldLabel htmlFor="registeredBusinessName">Registered Business Name</FieldLabel>
+            <FieldLabel htmlFor="registeredBusinessName" required>Registered Business Name</FieldLabel>
             <Input
               id="registeredBusinessName"
               placeholder="Enter registered business name"
@@ -202,7 +202,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="businessDescription">Business Description</FieldLabel>
+            <FieldLabel htmlFor="businessDescription" required>Business Description</FieldLabel>
             <Textarea
               id="businessDescription"
               placeholder="Describe your business activities"
@@ -213,7 +213,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="registrationNo">Registration No</FieldLabel>
+              <FieldLabel htmlFor="registrationNo" required>Registration No</FieldLabel>
               <Input
                 id="registrationNo"
                 placeholder="Enter registration number"
@@ -222,7 +222,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.registrationNo?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel>Registered Date</FieldLabel>
+              <FieldLabel required>Registered Date</FieldLabel>
               <Controller
                 name="registeredDate"
                 control={control}
@@ -249,7 +249,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel>Upload BR Copy</FieldLabel>
+              <FieldLabel required>Upload BR Copy</FieldLabel>
               {brCopyFile ? (
                 <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                   <FileText className="size-5 text-muted-foreground" />
@@ -296,7 +296,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Upload Form 01/20/40</FieldLabel>
+              <FieldLabel required>Upload Form 01/20/40</FieldLabel>
               {formDocFile ? (
                 <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                   <FileText className="size-5 text-muted-foreground" />
@@ -357,7 +357,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessEmail">Business Email</FieldLabel>
+              <FieldLabel htmlFor="businessEmail" required>Business Email</FieldLabel>
               <Input
                 id="businessEmail"
                 type="email"
@@ -367,7 +367,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.businessEmail?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel htmlFor="businessPhone">Business Phone</FieldLabel>
+              <FieldLabel htmlFor="businessPhone" required>Business Phone</FieldLabel>
               <Input
                 id="businessPhone"
                 placeholder="Enter business phone"
@@ -384,7 +384,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessAddressLine1">Address Line 1</FieldLabel>
+              <FieldLabel htmlFor="businessAddressLine1" required>Address Line 1</FieldLabel>
               <Input
                 id="businessAddressLine1"
                 placeholder="Street address"
@@ -404,7 +404,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessCity">City</FieldLabel>
+              <FieldLabel htmlFor="businessCity" required>City</FieldLabel>
               <Input
                 id="businessCity"
                 placeholder="Enter city"
@@ -413,7 +413,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.businessCity?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel htmlFor="businessPostalCode">Postal Code</FieldLabel>
+              <FieldLabel htmlFor="businessPostalCode" required>Postal Code</FieldLabel>
               <Input
                 id="businessPostalCode"
                 placeholder="Enter postal code"

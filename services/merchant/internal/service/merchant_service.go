@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/openlankapay/openlankapay/pkg/auth"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
 )
 
@@ -115,6 +116,7 @@ type MerchantService struct {
 	apiKeys    APIKeyRepository
 	users      UserRepository
 	events     EventPublisher
+	notifier   *notification.Client
 	jwtSecret  string
 	tokenTTL   time.Duration
 	refreshTTL time.Duration
@@ -127,12 +129,14 @@ func NewMerchantService(
 	users UserRepository,
 	events EventPublisher,
 	jwtSecret string,
+	notifier *notification.Client,
 ) *MerchantService {
 	return &MerchantService{
 		merchants:  merchants,
 		apiKeys:    apiKeys,
 		users:      users,
 		events:     events,
+		notifier:   notifier,
 		jwtSecret:  jwtSecret,
 		tokenTTL:   24 * time.Hour,
 		refreshTTL: 7 * 24 * time.Hour,
@@ -333,6 +337,17 @@ func (s *MerchantService) UpdateMerchantProfile(ctx context.Context, id uuid.UUI
 		return nil, err
 	}
 
+	// Send KYC submitted notification
+	if input.SubmitKYC && s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "KYC Application Submitted — Open Pay",
+			Body:       fmt.Sprintf(`<p>Thank you for submitting your KYC application for <strong>%s</strong>.</p><p>Our team will review your application and get back to you within 1-3 business days. You have been granted instant access with a limited transaction volume in the meantime.</p><p>If you have any questions, please contact our support team.</p>`, merchant.BusinessName),
+			EventType:  "kyc.submitted",
+		})
+	}
+
 	return merchant, nil
 }
 
@@ -385,6 +400,17 @@ func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID) error {
 
 	_ = s.events.Publish(ctx, "merchant.approved", merchant)
 
+	// Send approval notification email
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "KYC Approved — Open Pay",
+			Body:       fmt.Sprintf(`<p>Congratulations! Your KYC application for <strong>%s</strong> has been approved.</p><p>You now have full access to all Open Pay features with no transaction limits. Start accepting payments today!</p>`, merchant.BusinessName),
+			EventType:  "kyc.approved",
+		})
+	}
+
 	return nil
 }
 
@@ -406,6 +432,17 @@ func (s *MerchantService) Reject(ctx context.Context, id uuid.UUID, reason strin
 	}
 
 	_ = s.events.Publish(ctx, "merchant.rejected", merchant)
+
+	// Send rejection notification email
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "KYC Application Update — Open Pay",
+			Body:       fmt.Sprintf(`<p>We regret to inform you that your KYC application for <strong>%s</strong> was not approved.</p><p><strong>Reason:</strong> %s</p><p>Please review the feedback and resubmit your application with the required changes. If you have questions, contact our support team.</p>`, merchant.BusinessName, reason),
+			EventType:  "kyc.rejected",
+		})
+	}
 
 	return nil
 }

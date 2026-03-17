@@ -10,6 +10,7 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/merchant/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/handler"
@@ -43,8 +44,15 @@ func main() {
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
+	// Notification client
+	notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
+	notifClient := notification.NewClient(notifServiceURL)
+
 	// Service
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret)
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifClient)
+
+	// Document repository
+	docRepo := pgadapter.NewDocumentRepository(pool)
 
 	// File upload handler (MinIO)
 	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
@@ -58,7 +66,7 @@ func main() {
 		SecretKey: minioSecretKey,
 		Bucket:    minioBucket,
 		UseSSL:    false,
-	})
+	}, docRepo)
 	if err != nil {
 		logger.Warn().Err(err).Msg("MinIO not available, file uploads disabled")
 		uploadHandler = nil

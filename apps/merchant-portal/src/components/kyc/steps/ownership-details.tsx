@@ -68,7 +68,7 @@ export function OwnershipDetails({ form }: OwnershipDetailsProps) {
             {fields.map((field, index) => (
               <div key={field.id} className="flex items-start gap-3">
                 <Field className="flex-1">
-                  <FieldLabel htmlFor={`directors.${index}.email`}>
+                  <FieldLabel htmlFor={`directors.${index}.email`} required>
                     Director {index + 1} Email
                   </FieldLabel>
                   <div className="flex items-center gap-2">
