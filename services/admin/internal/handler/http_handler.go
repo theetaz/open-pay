@@ -68,7 +68,7 @@ func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInt
 	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs, settings: settings, userRepo: userRepo}
 }
 
-func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
+func NewRouter(h *AdminHandler, jwtSecret string, uploadHandler ...*AdminUploadHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -119,6 +119,11 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/admin/roles", h.ListRoles)
 		r.Post("/v1/admin/roles", h.CreateRole)
 		r.Put("/v1/admin/roles/{id}", h.UpdateRoleHandler)
+
+		// Admin file uploads (logos, branding)
+		if len(uploadHandler) > 0 && uploadHandler[0] != nil {
+			r.Post("/v1/admin/uploads", uploadHandler[0].Upload)
+		}
 	})
 
 	// Public endpoint for fetching active legal documents (used by merchant portal)

@@ -39,7 +39,23 @@ func main() {
 	authSvc := service.NewAdminAuthService(adminUserRepo, jwtSecret)
 
 	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo, settingsRepo, adminUserRepo)
-	router := handler.NewRouter(h, jwtSecret)
+
+	// Admin file upload handler (MinIO)
+	var uploadHandler *handler.AdminUploadHandler
+	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
+	uploadHandler, err = handler.NewAdminUploadHandler(handler.AdminUploadConfig{
+		Endpoint:  minioEndpoint,
+		AccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		SecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin123"),
+		Bucket:    getEnv("MINIO_BUCKET", "kyc-documents"),
+		UseSSL:    false,
+	})
+	if err != nil {
+		logger.Warn().Err(err).Msg("MinIO not available, admin uploads disabled")
+		uploadHandler = nil
+	}
+
+	router := handler.NewRouter(h, jwtSecret, uploadHandler)
 
 	port := getEnv("PORT", "8088")
 	srv := &http.Server{

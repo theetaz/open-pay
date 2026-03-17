@@ -131,6 +131,9 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/audit-logs", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs/{id}", p.ProxyToAdmin)
 
+	// Admin uploads → admin service
+	r.Post("/v1/admin/uploads", p.ProxyToAdmin)
+
 	// Platform settings → admin service
 	r.Get("/v1/admin/settings", p.ProxyToAdmin)
 	r.Put("/v1/admin/settings", p.ProxyToAdmin)
