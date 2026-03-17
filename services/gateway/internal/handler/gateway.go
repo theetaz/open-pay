@@ -185,12 +185,15 @@ func serviceHealthCheck(serviceURL string) map[string]any {
 func systemHealth(cfg GatewayConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		services := map[string]string{
-			"gateway":    "http://localhost:" + cfg.GatewayPort,
-			"payment":    cfg.ServiceProxy.PaymentURL,
-			"merchant":   cfg.ServiceProxy.MerchantURL,
-			"settlement": cfg.ServiceProxy.SettlementURL,
-			"webhook":    cfg.ServiceProxy.WebhookURL,
-			"exchange":   cfg.ServiceProxy.ExchangeURL,
+			"gateway":      "http://localhost:" + cfg.GatewayPort,
+			"payment":      cfg.ServiceProxy.PaymentURL,
+			"merchant":     cfg.ServiceProxy.MerchantURL,
+			"settlement":   cfg.ServiceProxy.SettlementURL,
+			"webhook":      cfg.ServiceProxy.WebhookURL,
+			"exchange":     cfg.ServiceProxy.ExchangeURL,
+			"subscription": cfg.ServiceProxy.SubscriptionURL,
+			"notification": cfg.ServiceProxy.NotificationURL,
+			"admin":        cfg.ServiceProxy.AdminURL,
 		}
 
 		results := make(map[string]any, len(services))
