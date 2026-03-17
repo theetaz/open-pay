@@ -39,14 +39,33 @@ type LegalDocRepo interface {
 	Activate(ctx context.Context, id uuid.UUID) error
 }
 
-type AdminHandler struct {
-	auditSvc AuditServiceInterface
-	authSvc  AdminAuthServiceInterface
-	legalDocs LegalDocRepo
+type SettingsRepo interface {
+	GetAll(ctx context.Context) ([]*postgres.PlatformSetting, error)
+	GetByCategory(ctx context.Context, category string) ([]*postgres.PlatformSetting, error)
+	BulkUpdate(ctx context.Context, updates map[string]string, updatedBy uuid.UUID) error
 }
 
-func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo) *AdminHandler {
-	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs}
+type AdminUserRepo interface {
+	ListUsers(ctx context.Context, page, perPage int) ([]*domain.AdminUser, int, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.AdminUser, error)
+	Create(ctx context.Context, user *domain.AdminUser) error
+	UpdateUser(ctx context.Context, user *domain.AdminUser) error
+	ListRoles(ctx context.Context) ([]*domain.AdminRole, error)
+	CreateRole(ctx context.Context, role *domain.AdminRole) error
+	UpdateRole(ctx context.Context, role *domain.AdminRole) error
+	GetRoleByName(ctx context.Context, name string) (*domain.AdminRole, error)
+}
+
+type AdminHandler struct {
+	auditSvc  AuditServiceInterface
+	authSvc   AdminAuthServiceInterface
+	legalDocs LegalDocRepo
+	settings  SettingsRepo
+	userRepo  AdminUserRepo
+}
+
+func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo, settings SettingsRepo, userRepo AdminUserRepo) *AdminHandler {
+	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs, settings: settings, userRepo: userRepo}
 }
 
 func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
@@ -74,15 +93,32 @@ func NewRouter(h *AdminHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/merchant/audit-logs", h.ListMerchantAuditLogs)
 	})
 
-	// Protected legal document management
+	// Protected admin management routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(jwtSecret))
 		r.Use(auth.RequirePlatformAdmin())
 
+		// Legal documents
 		r.Get("/v1/admin/legal-documents", h.ListLegalDocuments)
 		r.Post("/v1/admin/legal-documents", h.CreateLegalDocument)
 		r.Put("/v1/admin/legal-documents/{id}", h.UpdateLegalDocument)
 		r.Post("/v1/admin/legal-documents/{id}/activate", h.ActivateLegalDocument)
+
+		// Platform settings
+		r.Get("/v1/admin/settings", h.GetSettings)
+		r.Put("/v1/admin/settings", h.UpdateSettings)
+		r.Get("/v1/admin/settings/{category}", h.GetSettingsByCategory)
+
+		// Admin user management
+		r.Get("/v1/admin/users", h.ListAdminUsers)
+		r.Post("/v1/admin/users", h.CreateAdminUser)
+		r.Put("/v1/admin/users/{id}", h.UpdateAdminUser)
+		r.Post("/v1/admin/users/{id}/deactivate", h.DeactivateAdminUser)
+
+		// Admin role management
+		r.Get("/v1/admin/roles", h.ListRoles)
+		r.Post("/v1/admin/roles", h.CreateRole)
+		r.Put("/v1/admin/roles/{id}", h.UpdateRoleHandler)
 	})
 
 	// Public endpoint for fetching active legal documents (used by merchant portal)
@@ -505,6 +541,297 @@ func stripPort(addr string) string {
 		return addr
 	}
 	return host
+}
+
+// --- Platform Settings Handlers ---
+
+func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settings.GetAll(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get settings")
+		return
+	}
+
+	grouped := make(map[string][]map[string]any)
+	for _, s := range settings {
+		grouped[s.Category] = append(grouped[s.Category], map[string]any{
+			"key": s.Key, "value": s.Value, "description": s.Description, "updatedAt": s.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": grouped})
+}
+
+func (h *AdminHandler) GetSettingsByCategory(w http.ResponseWriter, r *http.Request) {
+	category := chi.URLParam(r, "category")
+	settings, err := h.settings.GetByCategory(r.Context(), category)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get settings")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(settings))
+	for _, s := range settings {
+		items = append(items, map[string]any{
+			"key": s.Key, "value": s.Value, "description": s.Description, "updatedAt": s.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
+}
+
+func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Settings map[string]string `json:"settings"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Settings) == 0 {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "settings map is required")
+		return
+	}
+
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	if err := h.settings.BulkUpdate(r.Context(), req.Settings, claims.UserID); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update settings")
+		return
+	}
+
+	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		ActorID: claims.UserID, ActorType: "ADMIN", Action: "settings.updated",
+		ResourceType: "platform_settings", IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+	})
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "updated"}})
+}
+
+// --- Admin User Management Handlers ---
+
+func (h *AdminHandler) ListAdminUsers(w http.ResponseWriter, r *http.Request) {
+	page := intQuery(r, "page", 1)
+	perPage := intQuery(r, "perPage", 20)
+
+	users, total, err := h.userRepo.ListUsers(r.Context(), page, perPage)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list users")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(users))
+	for _, u := range users {
+		items = append(items, adminUserListResponse(u))
+	}
+	writeJSON(w, http.StatusOK, envelope{
+		"data": items,
+		"meta": map[string]int{"total": total, "page": page, "perPage": perPage},
+	})
+}
+
+func (h *AdminHandler) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Name     string `json:"name"`
+		RoleID   string `json:"roleId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	roleID, err := uuid.Parse(req.RoleID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid role ID")
+		return
+	}
+
+	user, err := domain.NewAdminUser(req.Email, req.Password, req.Name, roleID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	if err := h.userRepo.Create(r.Context(), user); err != nil {
+		if errors.Is(err, domain.ErrDuplicateAdminEmail) {
+			writeError(w, http.StatusConflict, "DUPLICATE_EMAIL", "email already in use")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create user")
+		return
+	}
+
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+			ActorID: claims.UserID, ActorType: "ADMIN", Action: "admin_user.created",
+			ResourceType: "admin_user", ResourceID: &user.ID,
+			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+		})
+	}
+
+	writeJSON(w, http.StatusCreated, envelope{"data": adminUserListResponse(user)})
+}
+
+func (h *AdminHandler) UpdateAdminUser(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid user ID")
+		return
+	}
+
+	var req struct {
+		Name   *string `json:"name"`
+		RoleID *string `json:"roleId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	user, err := h.userRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		return
+	}
+
+	if req.Name != nil {
+		user.Name = *req.Name
+	}
+	if req.RoleID != nil {
+		roleID, err := uuid.Parse(*req.RoleID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid role ID")
+			return
+		}
+		user.RoleID = roleID
+	}
+
+	if err := h.userRepo.UpdateUser(r.Context(), user); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update user")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "updated"}})
+}
+
+func (h *AdminHandler) DeactivateAdminUser(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid user ID")
+		return
+	}
+
+	user, err := h.userRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		return
+	}
+
+	user.IsActive = !user.IsActive
+	if err := h.userRepo.UpdateUser(r.Context(), user); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update user")
+		return
+	}
+
+	action := "admin_user.deactivated"
+	if user.IsActive {
+		action = "admin_user.activated"
+	}
+
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+			ActorID: claims.UserID, ActorType: "ADMIN", Action: action,
+			ResourceType: "admin_user", ResourceID: &id,
+			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": action}})
+}
+
+// --- Admin Role Handlers ---
+
+func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	roles, err := h.userRepo.ListRoles(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list roles")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(roles))
+	for _, role := range roles {
+		items = append(items, map[string]any{
+			"id": role.ID.String(), "name": role.Name, "description": role.Description,
+			"permissions": role.Permissions, "isSystem": role.IsSystem,
+			"createdAt": role.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
+}
+
+func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "name is required")
+		return
+	}
+
+	role := &domain.AdminRole{
+		ID: uuid.New(), Name: req.Name, Description: req.Description,
+		Permissions: req.Permissions, IsSystem: false, CreatedAt: time.Now().UTC(),
+	}
+
+	if err := h.userRepo.CreateRole(r.Context(), role); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create role")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, envelope{"data": map[string]any{
+		"id": role.ID.String(), "name": role.Name, "permissions": role.Permissions,
+	}})
+}
+
+func (h *AdminHandler) UpdateRoleHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid role ID")
+		return
+	}
+
+	var req struct {
+		Description string   `json:"description"`
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	role := &domain.AdminRole{ID: id, Description: req.Description, Permissions: req.Permissions}
+	if err := h.userRepo.UpdateRole(r.Context(), role); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update role")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "updated"}})
+}
+
+func adminUserListResponse(u *domain.AdminUser) map[string]any {
+	resp := map[string]any{
+		"id": u.ID.String(), "email": u.Email, "name": u.Name,
+		"isActive": u.IsActive, "createdAt": u.CreatedAt.Format(time.RFC3339),
+	}
+	if u.Role != nil {
+		resp["role"] = map[string]any{"id": u.Role.ID.String(), "name": u.Role.Name, "permissions": u.Role.Permissions}
+	}
+	if u.LastLoginAt != nil {
+		resp["lastLoginAt"] = u.LastLoginAt.Format(time.RFC3339)
+	}
+	return resp
 }
 
 func legalDocResponse(d *postgres.LegalDocument) map[string]any {

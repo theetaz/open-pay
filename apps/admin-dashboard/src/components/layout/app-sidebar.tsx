@@ -6,6 +6,13 @@ import {
   ScrollText,
   Landmark,
   Activity,
+  Settings2,
+  Receipt,
+  Mail,
+  Users,
+  Shield,
+  FileText,
+  MailPlus,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -29,10 +36,50 @@ const navItems = [
   { title: 'System Health', href: '/system-health', icon: Activity },
 ]
 
-export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+const settingsItems = [
+  { title: 'General', href: '/settings/general', icon: Settings2 },
+  { title: 'Fees & Pricing', href: '/settings/fees', icon: Receipt },
+  { title: 'Email', href: '/settings/email', icon: Mail },
+  { title: 'Team', href: '/settings/team', icon: Users },
+  { title: 'Roles', href: '/settings/roles', icon: Shield },
+  { title: 'Legal Documents', href: '/settings/legal-documents', icon: FileText },
+  { title: 'Email Templates', href: '/settings/email-templates', icon: MailPlus },
+]
+
+function NavGroup({ label, items }: { label: string; items: typeof navItems }) {
   const location = useLocation()
   const currentPath = location.pathname
 
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => {
+            const isActive = 'exact' in item && item.exact
+              ? currentPath === item.href
+              : currentPath.startsWith(item.href)
+
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  tooltip={item.title}
+                  isActive={isActive}
+                  render={<Link to={item.href} />}
+                >
+                  <item.icon className="size-4" />
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
+export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <SidebarHeader className="p-4">
@@ -48,32 +95,8 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive = item.exact
-                  ? currentPath === item.href
-                  : currentPath.startsWith(item.href)
-
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={item.title}
-                      isActive={isActive}
-                      render={<Link to={item.href} />}
-                    >
-                      <item.icon className="size-4" />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
+        <NavGroup label="Management" items={navItems} />
+        <NavGroup label="Settings" items={settingsItems} />
       </SidebarContent>
 
       <SidebarRail />

@@ -33,11 +33,12 @@ func main() {
 	auditRepo := pgadapter.NewAuditRepository(pool)
 	adminUserRepo := pgadapter.NewAdminUserRepository(pool)
 	legalDocRepo := pgadapter.NewLegalDocumentRepository(pool)
+	settingsRepo := pgadapter.NewSettingsRepository(pool)
 
 	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAdminAuthService(adminUserRepo, jwtSecret)
 
-	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo)
+	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo, settingsRepo, adminUserRepo)
 	router := handler.NewRouter(h, jwtSecret)
 
 	port := getEnv("PORT", "8088")
