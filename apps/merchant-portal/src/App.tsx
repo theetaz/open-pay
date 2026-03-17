@@ -18,6 +18,7 @@ import { AuditLogPage } from '#/pages/audit-log'
 import { ExamplePage } from '#/pages/example'
 import { PaymentLinkCheckout } from '#/pages/pay-slug'
 import { CheckoutPage } from '#/pages/checkout'
+import { SandboxPayPage } from '#/pages/sandbox-pay'
 
 export function App() {
   return (
@@ -43,6 +44,7 @@ export function App() {
       </Route>
       <Route path="/pay/:slug" element={<PaymentLinkCheckout />} />
       <Route path="/checkout/:paymentId" element={<CheckoutPage />} />
+      <Route path="/sandbox/pay/:providerPayId" element={<SandboxPayPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

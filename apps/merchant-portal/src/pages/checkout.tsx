@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCheckout } from '#/hooks/use-payments'
-import { CheckCircle2, XCircle, Clock, Zap } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Smartphone } from 'lucide-react'
 
 export function CheckoutPage() {
   const { paymentId } = useParams<{ paymentId: string }>()
@@ -70,11 +70,15 @@ export function CheckoutPage() {
     )
   }
 
-  // Check if this is a sandbox/test payment by looking at QR content
+  // Sandbox mode: override QR to point to scannable mock wallet page
   const isSandbox = payment.qrContent?.startsWith('mock-qr://')
-  const providerPayId = isSandbox
-    ? payment.qrContent.replace('mock-qr://', '').split('?')[0]
-    : null
+  let qrValue = payment.qrContent
+  let providerPayId = ''
+
+  if (isSandbox) {
+    providerPayId = payment.qrContent.replace('mock-qr://', '').split('?')[0]
+    qrValue = `${window.location.origin}/sandbox/pay/${providerPayId}?pid=${paymentId}`
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -97,13 +101,15 @@ export function CheckoutPage() {
 
           <div className="rounded-lg border border-border bg-muted/50 p-6 flex flex-col items-center">
             <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center mb-3 p-2">
-              {payment.qrContent ? (
-                <QRCodeSVG value={payment.qrContent} size={176} level="M" />
+              {qrValue ? (
+                <QRCodeSVG value={qrValue} size={176} level="M" />
               ) : (
                 <span className="text-muted-foreground text-xs">No QR data</span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">Scan with your wallet app to pay</p>
+            <p className="text-xs text-muted-foreground">
+              {isSandbox ? 'Scan with your phone to open mock wallet' : 'Scan with your wallet app to pay'}
+            </p>
           </div>
 
           <div className="mt-4 flex items-center justify-center gap-2">
@@ -111,9 +117,17 @@ export function CheckoutPage() {
             <span className="text-sm text-muted-foreground">Waiting for payment...</span>
           </div>
 
-          {/* Sandbox simulate button */}
-          {isSandbox && providerPayId && (
-            <SandboxSimulateButton paymentId={paymentId!} providerPayId={providerPayId} />
+          {/* Sandbox hint */}
+          {isSandbox && (
+            <div className="mt-4 rounded-md border border-blue-500/20 bg-blue-500/5 p-3 flex items-start gap-2.5">
+              <Smartphone className="size-4 text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs text-blue-300 font-medium">Sandbox Mode</p>
+                <p className="text-xs text-blue-400/70 mt-0.5">
+                  Scan the QR code with your phone camera to open a mock wallet page where you can confirm or cancel the payment.
+                </p>
+              </div>
+            </div>
           )}
 
           <div className="mt-4 rounded-md bg-muted/50 p-3 space-y-1">
@@ -138,48 +152,6 @@ export function CheckoutPage() {
       </div>
     </div>
   )
-}
-
-function SandboxSimulateButton({ paymentId, providerPayId }: { paymentId: string; providerPayId: string }) {
-  const [simulating, setSimulating] = React.useState(false)
-  const [error, setError] = React.useState('')
-
-  const handleSimulate = async () => {
-    setSimulating(true)
-    setError('')
-    try {
-      // Step 1: Simulate payment in mock provider
-      await fetch(`${getApiBase()}/test/simulate/${providerPayId}`, { method: 'POST' })
-      // Step 2: Trigger callback to update payment status
-      await fetch(`${getApiBase()}/v1/payments/${paymentId}/callback`, { method: 'POST' })
-      // The polling (every 3s) will pick up the status change automatically
-    } catch {
-      setError('Simulation failed. Try again.')
-    } finally {
-      setSimulating(false)
-    }
-  }
-
-  return (
-    <div className="mt-4">
-      <button
-        onClick={handleSimulate}
-        disabled={simulating}
-        className="w-full rounded-md border border-green-500/30 bg-green-500/10 py-2.5 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        <Zap className="size-4" />
-        {simulating ? 'Simulating...' : 'Simulate Payment (Sandbox)'}
-      </button>
-      {error && <p className="text-xs text-destructive mt-1 text-center">{error}</p>}
-      <p className="text-xs text-muted-foreground mt-1 text-center">
-        This button is only visible in sandbox/test mode
-      </p>
-    </div>
-  )
-}
-
-function getApiBase() {
-  return (typeof window !== 'undefined' && import.meta.env.VITE_API_URL) || 'http://localhost:8080'
 }
 
 function CountdownTimer({ expireTime }: { expireTime: string }) {
