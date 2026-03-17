@@ -13,6 +13,7 @@ export function SettingsGeneralPage() {
   const queryClient = useQueryClient()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = React.useState(false)
+  const [imgError, setImgError] = React.useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'settings', 'general'],
@@ -46,6 +47,7 @@ export function SettingsGeneralPage() {
     try {
       const result = await api.upload<{ data: { url: string; key: string; filename: string } }>(file, 'branding')
       update('platform_logo_url', result.data.url)
+      setImgError(false)
       toast.success('Logo uploaded')
     } catch {
       toast.error('Failed to upload logo')
@@ -61,7 +63,10 @@ export function SettingsGeneralPage() {
 
   if (isLoading) return <div className="text-muted-foreground text-sm">Loading...</div>
 
-  const logoUrl = form.platform_logo_url
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+  const rawLogoUrl = form.platform_logo_url
+  // If URL starts with /v1/assets, prepend the API base URL for display
+  const logoUrl = rawLogoUrl?.startsWith('/v1/') ? `${apiBase}${rawLogoUrl}` : rawLogoUrl
 
   return (
     <>
@@ -83,14 +88,17 @@ export function SettingsGeneralPage() {
                     {logoUrl ? (
                       <div className="relative group">
                         <div className="size-20 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
-                          <img
-                            src={logoUrl}
-                            alt="Platform logo"
-                            className="max-w-full max-h-full object-contain"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none'
-                            }}
-                          />
+                          {imgError ? (
+                            <ImageIcon className="size-8 text-muted-foreground" />
+                          ) : (
+                            <img
+                              key={logoUrl}
+                              src={logoUrl}
+                              alt="Platform logo"
+                              className="max-w-full max-h-full object-contain"
+                              onError={() => setImgError(true)}
+                            />
+                          )}
                         </div>
                         <button
                           onClick={removeLogo}

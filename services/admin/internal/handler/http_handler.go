@@ -126,6 +126,11 @@ func NewRouter(h *AdminHandler, jwtSecret string, uploadHandler ...*AdminUploadH
 		}
 	})
 
+	// Public asset serving (logos, branding images from MinIO)
+	if len(uploadHandler) > 0 && uploadHandler[0] != nil {
+		r.Get("/v1/assets/*", uploadHandler[0].ServeAsset)
+	}
+
 	// Public endpoint for fetching active legal documents (used by merchant portal)
 	r.Get("/v1/legal-documents/active", h.GetActiveLegalDocument)
 

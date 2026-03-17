@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -107,7 +108,8 @@ func (h *AdminUploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileURL := fmt.Sprintf("http://%s/%s/%s", h.endpoint, h.bucketName, objectKey)
+	// Return a gateway-relative URL to avoid cross-origin issues with direct MinIO access
+	fileURL := fmt.Sprintf("/v1/assets/%s", objectKey)
 
 	writeJSON(w, http.StatusOK, envelope{
 		"data": map[string]string{
@@ -116,4 +118,30 @@ func (h *AdminUploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			"filename": header.Filename,
 		},
 	})
+}
+
+// ServeAsset handles GET /v1/assets/* — serves uploaded files from MinIO.
+func (h *AdminUploadHandler) ServeAsset(w http.ResponseWriter, r *http.Request) {
+	objectKey := chi.URLParam(r, "*")
+	if objectKey == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "asset path is required")
+		return
+	}
+
+	obj, err := h.minioClient.GetObject(r.Context(), h.bucketName, objectKey, minio.GetObjectOptions{})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "asset not found")
+		return
+	}
+	defer obj.Close()
+
+	info, err := obj.Stat()
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "asset not found")
+		return
+	}
+
+	w.Header().Set("Content-Type", info.ContentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, info.Key, info.LastModified, obj)
 }
