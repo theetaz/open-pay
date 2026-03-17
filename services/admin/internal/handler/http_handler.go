@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openlankapay/openlankapay/pkg/auth"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/services/admin/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/admin/internal/domain"
 	"github.com/openlankapay/openlankapay/services/admin/internal/service"
@@ -62,10 +64,11 @@ type AdminHandler struct {
 	legalDocs LegalDocRepo
 	settings  SettingsRepo
 	userRepo  AdminUserRepo
+	notifier  *notification.Client
 }
 
-func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo, settings SettingsRepo, userRepo AdminUserRepo) *AdminHandler {
-	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs, settings: settings, userRepo: userRepo}
+func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo, settings SettingsRepo, userRepo AdminUserRepo, notifier *notification.Client) *AdminHandler {
+	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs, settings: settings, userRepo: userRepo, notifier: notifier}
 }
 
 func NewRouter(h *AdminHandler, jwtSecret string, uploadHandler ...*AdminUploadHandler) http.Handler {
@@ -676,6 +679,24 @@ func (h *AdminHandler) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: "admin_user.created",
 			ResourceType: "admin_user", ResourceID: &user.ID,
 			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+		})
+	}
+
+	// Send invite email to the new admin user
+	if h.notifier != nil {
+		h.notifier.SendEmail(r.Context(), notification.SendEmailInput{
+			MerchantID: uuid.Nil,
+			Recipient:  req.Email,
+			Subject:    "You've been invited to Open Pay Admin",
+			Body: fmt.Sprintf(
+				`<p>Hi <strong>%s</strong>,</p>
+				<p>You've been invited as an administrator on the Open Pay platform.</p>
+				<p>You can log in using your email address and the temporary password provided by your administrator.</p>
+				<p><strong>Please change your password after your first login.</strong></p>
+				<p>If you did not expect this invitation, please ignore this email.</p>`,
+				req.Name,
+			),
+			EventType: "admin.invite",
 		})
 	}
 

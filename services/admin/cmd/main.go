@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/admin/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/admin/internal/handler"
@@ -38,7 +39,11 @@ func main() {
 	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAdminAuthService(adminUserRepo, jwtSecret)
 
-	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo, settingsRepo, adminUserRepo)
+	// Notification client
+	notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
+	notifClient := notification.NewClient(notifServiceURL)
+
+	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo, settingsRepo, adminUserRepo, notifClient)
 
 	// Admin file upload handler (MinIO)
 	var uploadHandler *handler.AdminUploadHandler

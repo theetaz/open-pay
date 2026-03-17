@@ -131,7 +131,14 @@ export function SettingsTeamPage() {
             <Field>
               <FieldLabel>Role</FieldLabel>
               <Select value={form.roleId} onValueChange={(v) => v && setForm({ ...form, roleId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role">
+                    {form.roleId ? (() => {
+                      const selected = roles.find((r) => r.id === form.roleId)
+                      return selected ? `${selected.name} — ${selected.description}` : 'Select role'
+                    })() : undefined}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name} — {r.description}</SelectItem>
