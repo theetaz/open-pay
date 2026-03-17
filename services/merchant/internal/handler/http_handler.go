@@ -530,6 +530,7 @@ func merchantResponse(m *domain.Merchant) map[string]any {
 		"bankBranch":      m.BankBranch,
 		"bankAccountNo":   m.BankAccountNo,
 		"bankAccountName": m.BankAccountName,
+		"defaultCurrency": m.DefaultCurrency,
 		"status":          string(m.Status),
 		"createdAt":       m.CreatedAt.Format(time.RFC3339),
 	}

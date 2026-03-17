@@ -1,101 +1,169 @@
+import { useState } from 'react'
 import { Card, CardContent } from '#/components/ui/card'
-import { Input } from '#/components/ui/input'
-import { Tabs, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import { Button } from '#/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { StatCard } from '#/components/dashboard/stat-card'
+import { StatusBadge } from '#/components/dashboard/status-badge'
 import { EmptyState } from '#/components/dashboard/empty-state'
-import { Search, DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
+import { PageHeader } from '#/components/dashboard/page-header'
+import { DollarSign, CreditCard, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { usePayments } from '#/hooks/use-payments'
+import { useMe } from '#/hooks/use-auth'
+import { formatAmount, formatDualAmount } from '#/lib/currency'
+
+const PER_PAGE = 20
 
 export function PaymentsPage() {
+  const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState<string>('')
+  const { data: meData } = useMe()
+  const { data: paymentsData, isLoading } = usePayments({ page, perPage: PER_PAGE, status: statusFilter || undefined })
+
+  const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
+  const payments = paymentsData?.data || []
+  const total = paymentsData?.meta?.total || 0
+  const totalPages = Math.ceil(total / PER_PAGE)
+
+  // Calculate stats from all fetched payments
+  const paidPayments = payments.filter((p) => p.status === 'PAID')
+  const totalRevenue = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
+  const totalFees = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
+  const unsettledPayments = payments.filter((p) => p.status === 'INITIATED' || p.status === 'USER_REVIEW')
+
+  const statuses = [
+    { label: 'All', value: '' },
+    { label: 'Paid', value: 'PAID' },
+    { label: 'Initiated', value: 'INITIATED' },
+    { label: 'Failed', value: 'FAILED' },
+    { label: 'Expired', value: 'EXPIRED' },
+  ]
+
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Revenue" value="Rs. 0.00" description="T 0.00" icon={DollarSign} />
-        <StatCard title="Total Payments" value="0" description="All-time transactions" icon={CreditCard} />
-        <StatCard title="Unsettled Amount" value="Rs. 0.00" description="T 0.00" icon={Clock} valueClassName="text-amber-500" />
-        <StatCard title="Unsettled Payments" value="0" description="Pending transactions" icon={AlertTriangle} valueClassName="text-amber-500" />
+      <PageHeader title="Payments" description="View and manage all payment transactions" />
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        <StatCard
+          title="Total Revenue"
+          value={formatAmount(totalRevenue, 'USDT')}
+          description="From paid transactions"
+          icon={DollarSign}
+        />
+        <StatCard title="Total Payments" value={String(total)} description="All-time transactions" icon={CreditCard} />
+        <StatCard
+          title="Total Fees"
+          value={formatAmount(totalFees, 'USDT')}
+          description="Exchange + Platform"
+          icon={Clock}
+          valueClassName="text-amber-500"
+        />
+        <StatCard
+          title="Unsettled"
+          value={String(unsettledPayments.length)}
+          description="Pending transactions"
+          icon={AlertTriangle}
+          valueClassName="text-amber-500"
+        />
       </div>
 
-      <div className="mt-6">
-        <Tabs defaultValue="paid">
-          <TabsList>
-            <TabsTrigger value="paid">Paid</TabsTrigger>
-            <TabsTrigger value="initiated">Initiated</TabsTrigger>
-            <TabsTrigger value="failed">Failed</TabsTrigger>
-            <TabsTrigger value="expired">Expired</TabsTrigger>
-            <TabsTrigger value="all">All</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Status filter tabs */}
+      <div className="flex gap-1 mb-4">
+        {statuses.map((s) => (
+          <Button
+            key={s.value}
+            variant={statusFilter === s.value ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setStatusFilter(s.value); setPage(1) }}
+          >
+            {s.label}
+          </Button>
+        ))}
       </div>
 
-      <Card className="mt-4">
-        <CardContent className="pt-4">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2 flex-1 max-w-sm">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input placeholder="Search..." className="pl-9" />
-              </div>
-            </div>
-            <Select defaultValue="7d">
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Date range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 Days</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
-                <SelectItem value="all">All Time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-5 gap-4 mb-4 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Payments</p>
-              <p className="font-bold text-lg">0</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Gross Amount</p>
-              <p className="font-bold text-lg">T 0.00</p>
-              <p className="text-xs text-muted-foreground">Rs. 0.00</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Fees</p>
-              <p className="font-bold text-lg text-red-500">Rs. 0.00</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Net Amount</p>
-              <p className="font-bold text-lg">Rs. 0.00</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Fee Breakdown</p>
-              <p className="text-xs text-muted-foreground">Exchange: Rs. 0.00</p>
-              <p className="text-xs text-muted-foreground">Platform: Rs. 0.00</p>
-            </div>
-          </div>
-
+      <Card>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Payment No</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Item</TableHead>
-                <TableHead>Method</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Associations</TableHead>
+                <TableHead>Provider</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Fees</TableHead>
+                <TableHead className="text-right">Net</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <EmptyState message="No results." />
-                </TableCell>
-              </TableRow>
+              {payments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      message={isLoading ? 'Loading payments...' : 'No payments found.'}
+                      description={!isLoading ? 'Payments will appear here once transactions are processed.' : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                payments.map((p) => {
+                  const amt = formatDualAmount(p.amountUsdt, p.amount, p.currency, primaryCurrency, p.exchangeRate)
+                  const net = formatDualAmount(p.netAmountUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
+
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell>
+                        <p className="font-mono text-sm">{p.paymentNo}</p>
+                        {p.merchantTradeNo && (
+                          <p className="text-xs text-muted-foreground">{p.merchantTradeNo}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {new Date(p.createdAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={p.status} />
+                      </TableCell>
+                      <TableCell className="text-sm">{p.provider}</TableCell>
+                      <TableCell className="text-right">
+                        <p className="text-sm font-medium">{amt.primary}</p>
+                        {amt.secondary && (
+                          <p className="text-xs text-muted-foreground">({amt.secondary})</p>
+                        )}
+                        {p.exchangeRate && (
+                          <p className="text-xs text-muted-foreground">@ {parseFloat(p.exchangeRate).toFixed(2)}</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {formatAmount(p.totalFeesUsdt, 'USDT')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <p className="text-sm font-medium">{net.primary}</p>
+                        {net.secondary && (
+                          <p className="text-xs text-muted-foreground">({net.secondary})</p>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <p className="text-sm text-muted-foreground">
+                Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </>

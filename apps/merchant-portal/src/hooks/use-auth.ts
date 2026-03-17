@@ -22,6 +22,7 @@ interface AuthResponse {
       businessName: string
       contactEmail: string
       kycStatus: string
+      defaultCurrency: string
       status: string
       [key: string]: unknown
     }
