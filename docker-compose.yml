@@ -75,6 +75,16 @@ services:
       exit 0;
       "
 
+  # ─── Mail Server (Development) ───
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
   # ─── Observability ───
   prometheus:
     image: prom/prometheus:latest
@@ -103,5 +113,6 @@ volumes:
   redis_data:
   nats_data:
   minio_data:
+  mailpit_data:
   prometheus_data:
   grafana_data:
