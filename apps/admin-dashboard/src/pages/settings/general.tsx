@@ -46,9 +46,13 @@ export function SettingsGeneralPage() {
     setUploading(true)
     try {
       const result = await api.upload<{ data: { url: string; key: string; filename: string } }>(file, 'branding')
-      update('platform_logo_url', result.data.url)
+      const newUrl = result.data.url
+      update('platform_logo_url', newUrl)
       setImgError(false)
-      toast.success('Logo uploaded')
+      // Auto-save logo URL to persist across refreshes
+      await api.put('/v1/admin/settings', { settings: { platform_logo_url: newUrl } })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      toast.success('Logo uploaded and saved')
     } catch {
       toast.error('Failed to upload logo')
     } finally {
@@ -57,8 +61,12 @@ export function SettingsGeneralPage() {
     }
   }
 
-  const removeLogo = () => {
+  const removeLogo = async () => {
     update('platform_logo_url', '')
+    setImgError(false)
+    await api.put('/v1/admin/settings', { settings: { platform_logo_url: '' } })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+    toast.success('Logo removed')
   }
 
   if (isLoading) return <div className="text-muted-foreground text-sm">Loading...</div>
