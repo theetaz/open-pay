@@ -1,9 +1,10 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { LogOut, User, Shield } from 'lucide-react'
 import { SidebarTrigger } from '#/components/ui/sidebar'
 import { Separator } from '#/components/ui/separator'
 import { Avatar, AvatarFallback } from '#/components/ui/avatar'
 import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
 import { ThemeToggle } from '#/components/theme-toggle'
 import {
   DropdownMenu,
@@ -41,12 +42,15 @@ export function SiteHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
       <div className="flex-1" />
+      <div className="flex items-center gap-2">
+        {user && (
+          <span className="text-xs text-muted-foreground hidden sm:inline">{user.name}</span>
+        )}
+      </div>
       <ThemeToggle />
 
       <DropdownMenu>
-        <DropdownMenuTrigger render={
-          <button className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer" />
-        }>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="rounded-full size-9 p-0" />}>
           <Avatar className="size-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
               {initials}
@@ -75,7 +79,7 @@ export function SiteHeader() {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => navigate('/settings/team')}>
+          <DropdownMenuItem render={<Link to="/settings/team" />}>
             <User className="size-4 mr-2" />
             Team Settings
           </DropdownMenuItem>
