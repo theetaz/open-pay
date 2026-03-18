@@ -849,7 +849,7 @@ func (s *MerchantService) sendDirectorVerificationEmail(ctx context.Context, bus
 	}
 	portalURL := os.Getenv("MERCHANT_PORTAL_URL")
 	if portalURL == "" {
-		portalURL = "http://localhost:5173"
+		portalURL = "http://localhost:4600"
 	}
 	verifyLink := fmt.Sprintf("%s/verify/director/%s", portalURL, director.VerificationToken)
 	s.notifier.SendEmail(ctx, notification.SendEmailInput{
