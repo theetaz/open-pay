@@ -81,9 +81,10 @@ export function VerifyDirectorPage() {
     const formData = new FormData()
     formData.append('fullName', fullName)
     formData.append('dateOfBirth', dateOfBirth)
-    formData.append('nicPassport', nicPassport)
+    formData.append('nicPassportNumber', nicPassport)
     formData.append('phone', phone)
     formData.append('address', address)
+    formData.append('consent', 'true')
     if (document) {
       formData.append('document', document)
     }
