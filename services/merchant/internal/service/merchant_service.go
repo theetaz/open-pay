@@ -118,6 +118,7 @@ type MerchantService struct {
 	events     EventPublisher
 	notifier   *notification.Client
 	jwtSecret  string
+	adminEmail string
 	tokenTTL   time.Duration
 	refreshTTL time.Duration
 }
@@ -130,6 +131,7 @@ func NewMerchantService(
 	events EventPublisher,
 	jwtSecret string,
 	notifier *notification.Client,
+	adminEmail string,
 ) *MerchantService {
 	return &MerchantService{
 		merchants:  merchants,
@@ -138,6 +140,7 @@ func NewMerchantService(
 		events:     events,
 		notifier:   notifier,
 		jwtSecret:  jwtSecret,
+		adminEmail: adminEmail,
 		tokenTTL:   24 * time.Hour,
 		refreshTTL: 7 * 24 * time.Hour,
 	}
@@ -372,6 +375,24 @@ func (s *MerchantService) UpdateMerchantProfile(ctx context.Context, id uuid.UUI
 			Body:       fmt.Sprintf(`<p>Thank you for submitting your KYC application for <strong>%s</strong>.</p><p>Our team will review your application and get back to you within 1-3 business days. You have been granted instant access with a limited transaction volume in the meantime.</p><p>If you have any questions, please contact our support team.</p>`, merchant.BusinessName),
 			EventType:  "kyc.submitted",
 		})
+
+		// Notify admin about new KYC submission
+		if s.adminEmail != "" {
+			s.notifier.SendEmail(ctx, notification.SendEmailInput{
+				MerchantID: merchant.ID,
+				Recipient:  s.adminEmail,
+				Subject:    "New KYC Submission — Open Pay",
+				Body: fmt.Sprintf(
+					`<p>A new KYC application has been submitted and requires review.</p>
+					<p><strong>Business:</strong> %s<br/>
+					<strong>Contact:</strong> %s<br/>
+					<strong>Email:</strong> %s</p>
+					<p>Please review the application in the admin dashboard.</p>`,
+					merchant.BusinessName, merchant.ContactName, merchant.ContactEmail,
+				),
+				EventType: "kyc.admin_review_needed",
+			})
+		}
 	}
 
 	return merchant, nil
@@ -534,6 +555,32 @@ func (s *MerchantService) ValidateAPIKey(ctx context.Context, keyID, secret stri
 	}
 
 	return merchant, nil
+}
+
+// SendDirectorVerification sends a verification email to a director.
+func (s *MerchantService) SendDirectorVerification(ctx context.Context, merchantID uuid.UUID, email string) error {
+	merchant, err := s.merchants.GetByID(ctx, merchantID)
+	if err != nil {
+		return err
+	}
+
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchantID,
+			Recipient:  email,
+			Subject:    "Director Identity Verification — Open Pay",
+			Body: fmt.Sprintf(
+				`<p>You have been listed as a director for <strong>%s</strong> on the Open Pay platform.</p>
+				<p>As part of the KYC verification process, we need to confirm your identity.</p>
+				<p>Please confirm that you are a director of this business by replying to this email or contacting the business owner.</p>
+				<p>If you are not associated with this business, please ignore this email.</p>`,
+				merchant.BusinessName,
+			),
+			EventType: "director.verification",
+		})
+	}
+
+	return nil
 }
 
 // RevokeAPIKey deactivates an API key.

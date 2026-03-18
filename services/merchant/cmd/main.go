@@ -49,7 +49,8 @@ func main() {
 	notifClient := notification.NewClient(notifServiceURL)
 
 	// Service
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifClient)
+	adminEmail := getEnv("ADMIN_NOTIFICATION_EMAIL", "admin@openlankapay.lk")
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifClient, adminEmail)
 
 	// Document repository
 	docRepo := pgadapter.NewDocumentRepository(pool)

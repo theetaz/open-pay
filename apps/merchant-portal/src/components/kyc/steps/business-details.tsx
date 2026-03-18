@@ -19,6 +19,46 @@ import type { KycFormData } from '#/lib/schemas/kyc'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
 
+const BUSINESS_NATURE_OPTIONS = [
+  { value: 'sole_proprietorship', label: 'Sole Proprietorship' },
+  { value: 'partnership', label: 'Partnership' },
+  { value: 'private_limited', label: 'Private Limited' },
+  { value: 'public_limited', label: 'Public Limited' },
+]
+
+const BUSINESS_CATEGORY_OPTIONS = [
+  { value: 'retail', label: 'Retail' },
+  { value: 'wholesale', label: 'Wholesale' },
+  { value: 'services', label: 'Services' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'technology', label: 'Technology' },
+]
+
+const ITEM_CATEGORY_OPTIONS = [
+  { value: 'physical_goods', label: 'Physical Goods' },
+  { value: 'digital_goods', label: 'Digital Goods' },
+  { value: 'services', label: 'Services' },
+  { value: 'subscriptions', label: 'Subscriptions' },
+]
+
+const ITEM_TYPE_OPTIONS = [
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'clothing', label: 'Clothing' },
+  { value: 'food_beverage', label: 'Food & Beverage' },
+  { value: 'software', label: 'Software' },
+  { value: 'other', label: 'Other' },
+]
+
+const STORE_TYPE_OPTIONS = [
+  { value: 'online', label: 'Online' },
+  { value: 'physical', label: 'Physical' },
+  { value: 'both', label: 'Both' },
+]
+
+function getLabel(options: { value: string; label: string }[], value: string): string | undefined {
+  return options.find((o) => o.value === value)?.label
+}
+
 interface BusinessDetailsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<KycFormData, any, any>
@@ -85,13 +125,10 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select nature" />
+                      <SelectValue placeholder="Select nature">{getLabel(BUSINESS_NATURE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sole_proprietorship">Sole Proprietorship</SelectItem>
-                      <SelectItem value="partnership">Partnership</SelectItem>
-                      <SelectItem value="private_limited">Private Limited</SelectItem>
-                      <SelectItem value="public_limited">Public Limited</SelectItem>
+                      {BUSINESS_NATURE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -107,14 +144,10 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder="Select category">{getLabel(BUSINESS_CATEGORY_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="retail">Retail</SelectItem>
-                      <SelectItem value="wholesale">Wholesale</SelectItem>
-                      <SelectItem value="services">Services</SelectItem>
-                      <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                      <SelectItem value="technology">Technology</SelectItem>
+                      {BUSINESS_CATEGORY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -130,13 +163,10 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select item category" />
+                      <SelectValue placeholder="Select item category">{getLabel(ITEM_CATEGORY_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="physical_goods">Physical Goods</SelectItem>
-                      <SelectItem value="digital_goods">Digital Goods</SelectItem>
-                      <SelectItem value="services">Services</SelectItem>
-                      <SelectItem value="subscriptions">Subscriptions</SelectItem>
+                      {ITEM_CATEGORY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -154,14 +184,10 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select item type" />
+                      <SelectValue placeholder="Select item type">{getLabel(ITEM_TYPE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="electronics">Electronics</SelectItem>
-                      <SelectItem value="clothing">Clothing</SelectItem>
-                      <SelectItem value="food_beverage">Food & Beverage</SelectItem>
-                      <SelectItem value="software">Software</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {ITEM_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -177,12 +203,10 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select store type" />
+                      <SelectValue placeholder="Select store type">{getLabel(STORE_TYPE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="physical">Physical</SelectItem>
-                      <SelectItem value="both">Both</SelectItem>
+                      {STORE_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}

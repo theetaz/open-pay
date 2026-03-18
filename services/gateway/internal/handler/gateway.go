@@ -53,6 +53,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/merchants/{id}/approve", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/reject", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/deactivate", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/directors/verify", p.ProxyToMerchant)
 
 	// File upload routes → merchant service
 	r.Post("/v1/uploads", p.ProxyToMerchant)

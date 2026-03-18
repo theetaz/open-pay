@@ -31,6 +31,7 @@ type MerchantServiceInterface interface {
 	Reject(ctx context.Context, id uuid.UUID, reason string) error
 	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
+	SendDirectorVerification(ctx context.Context, merchantID uuid.UUID, email string) error
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
@@ -69,6 +70,7 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
 		r.Post("/v1/merchants/{id}/approve", h.ApproveMerchant)
+		r.Post("/v1/merchants/{id}/directors/verify", h.SendDirectorVerification)
 		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
 		r.Post("/v1/merchants/{id}/deactivate", h.DeactivateMerchant)
 	})
@@ -428,6 +430,41 @@ func (h *MerchantHandler) DeactivateMerchant(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deactivated"}})
+}
+
+// SendDirectorVerification handles POST /v1/merchants/{id}/directors/verify.
+func (h *MerchantHandler) SendDirectorVerification(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if claims.MerchantID != id {
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "cannot access another merchant")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "email is required")
+		return
+	}
+
+	if err := h.svc.SendDirectorVerification(r.Context(), id, req.Email); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to send verification email")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "verification_sent", "email": req.Email}})
 }
 
 func stripPort(addr string) string {
