@@ -11,15 +11,16 @@ import (
 
 // LegalDocument represents a versioned legal document.
 type LegalDocument struct {
-	ID        uuid.UUID
-	Type      string
-	Version   int
-	Title     string
-	Content   string
-	IsActive  bool
-	CreatedBy *uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           uuid.UUID
+	Type         string
+	Version      int
+	Title        string
+	Content      string
+	IsActive     bool
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	PdfObjectKey string
 }
 
 // LegalDocumentRepository provides access to legal documents.
@@ -36,9 +37,9 @@ func NewLegalDocumentRepository(pool *pgxpool.Pool) *LegalDocumentRepository {
 func (r *LegalDocumentRepository) GetActiveByType(ctx context.Context, docType string) (*LegalDocument, error) {
 	doc := &LegalDocument{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, type, version, title, content, is_active, created_by, created_at, updated_at
+		`SELECT id, type, version, title, content, is_active, created_by, created_at, updated_at, COALESCE(pdf_object_key, '')
 		 FROM legal_documents WHERE type = $1 AND is_active = TRUE LIMIT 1`, docType,
-	).Scan(&doc.ID, &doc.Type, &doc.Version, &doc.Title, &doc.Content, &doc.IsActive, &doc.CreatedBy, &doc.CreatedAt, &doc.UpdatedAt)
+	).Scan(&doc.ID, &doc.Type, &doc.Version, &doc.Title, &doc.Content, &doc.IsActive, &doc.CreatedBy, &doc.CreatedAt, &doc.UpdatedAt, &doc.PdfObjectKey)
 	if err != nil {
 		return nil, fmt.Errorf("legal document not found: %w", err)
 	}
@@ -48,7 +49,7 @@ func (r *LegalDocumentRepository) GetActiveByType(ctx context.Context, docType s
 // List returns all legal documents ordered by type and version.
 func (r *LegalDocumentRepository) List(ctx context.Context) ([]*LegalDocument, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, type, version, title, content, is_active, created_by, created_at, updated_at
+		`SELECT id, type, version, title, content, is_active, created_by, created_at, updated_at, COALESCE(pdf_object_key, '')
 		 FROM legal_documents ORDER BY type, version DESC`)
 	if err != nil {
 		return nil, err
@@ -58,7 +59,7 @@ func (r *LegalDocumentRepository) List(ctx context.Context) ([]*LegalDocument, e
 	var docs []*LegalDocument
 	for rows.Next() {
 		d := &LegalDocument{}
-		if err := rows.Scan(&d.ID, &d.Type, &d.Version, &d.Title, &d.Content, &d.IsActive, &d.CreatedBy, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Type, &d.Version, &d.Title, &d.Content, &d.IsActive, &d.CreatedBy, &d.CreatedAt, &d.UpdatedAt, &d.PdfObjectKey); err != nil {
 			return nil, err
 		}
 		docs = append(docs, d)
@@ -73,9 +74,9 @@ func (r *LegalDocumentRepository) Create(ctx context.Context, doc *LegalDocument
 	doc.UpdatedAt = doc.CreatedAt
 
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO legal_documents (id, type, version, title, content, is_active, created_by, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		doc.ID, doc.Type, doc.Version, doc.Title, doc.Content, doc.IsActive, doc.CreatedBy, doc.CreatedAt, doc.UpdatedAt,
+		`INSERT INTO legal_documents (id, type, version, title, content, is_active, created_by, created_at, updated_at, pdf_object_key)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		doc.ID, doc.Type, doc.Version, doc.Title, doc.Content, doc.IsActive, doc.CreatedBy, doc.CreatedAt, doc.UpdatedAt, doc.PdfObjectKey,
 	)
 	return err
 }
@@ -104,8 +105,8 @@ func (r *LegalDocumentRepository) Activate(ctx context.Context, id uuid.UUID) er
 func (r *LegalDocumentRepository) Update(ctx context.Context, doc *LegalDocument) error {
 	doc.UpdatedAt = time.Now().UTC()
 	_, err := r.pool.Exec(ctx,
-		`UPDATE legal_documents SET title = $1, content = $2, updated_at = $3 WHERE id = $4`,
-		doc.Title, doc.Content, doc.UpdatedAt, doc.ID,
+		`UPDATE legal_documents SET title = $1, content = $2, updated_at = $3, pdf_object_key = $4 WHERE id = $5`,
+		doc.Title, doc.Content, doc.UpdatedAt, doc.PdfObjectKey, doc.ID,
 	)
 	return err
 }

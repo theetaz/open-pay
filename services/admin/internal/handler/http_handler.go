@@ -515,10 +515,11 @@ func (h *AdminHandler) ListLegalDocuments(w http.ResponseWriter, r *http.Request
 
 func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Type    string `json:"type"`
-		Version int    `json:"version"`
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Type         string `json:"type"`
+		Version      int    `json:"version"`
+		Title        string `json:"title"`
+		Content      string `json:"content"`
+		PdfObjectKey string `json:"pdfObjectKey"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
@@ -530,10 +531,11 @@ func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Reques
 	}
 
 	doc := &postgres.LegalDocument{
-		Type:    req.Type,
-		Version: req.Version,
-		Title:   req.Title,
-		Content: req.Content,
+		Type:         req.Type,
+		Version:      req.Version,
+		Title:        req.Title,
+		Content:      req.Content,
+		PdfObjectKey: req.PdfObjectKey,
 	}
 
 	if err := h.legalDocs.Create(r.Context(), doc); err != nil {
@@ -560,8 +562,9 @@ func (h *AdminHandler) UpdateLegalDocument(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title        string `json:"title"`
+		Content      string `json:"content"`
+		PdfObjectKey string `json:"pdfObjectKey"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
@@ -569,9 +572,10 @@ func (h *AdminHandler) UpdateLegalDocument(w http.ResponseWriter, r *http.Reques
 	}
 
 	doc := &postgres.LegalDocument{
-		ID:      id,
-		Title:   req.Title,
-		Content: req.Content,
+		ID:           id,
+		Title:        req.Title,
+		Content:      req.Content,
+		PdfObjectKey: req.PdfObjectKey,
 	}
 
 	if err := h.legalDocs.Update(r.Context(), doc); err != nil {
@@ -928,14 +932,15 @@ func adminUserListResponse(u *domain.AdminUser) map[string]any {
 
 func legalDocResponse(d *postgres.LegalDocument) map[string]any {
 	resp := map[string]any{
-		"id":        d.ID.String(),
-		"type":      d.Type,
-		"version":   d.Version,
-		"title":     d.Title,
-		"content":   d.Content,
-		"isActive":  d.IsActive,
-		"createdAt": d.CreatedAt.Format(time.RFC3339),
-		"updatedAt": d.UpdatedAt.Format(time.RFC3339),
+		"id":           d.ID.String(),
+		"type":         d.Type,
+		"version":      d.Version,
+		"title":        d.Title,
+		"content":      d.Content,
+		"isActive":     d.IsActive,
+		"createdAt":    d.CreatedAt.Format(time.RFC3339),
+		"updatedAt":    d.UpdatedAt.Format(time.RFC3339),
+		"pdfObjectKey": d.PdfObjectKey,
 	}
 	if d.CreatedBy != nil {
 		resp["createdBy"] = d.CreatedBy.String()
