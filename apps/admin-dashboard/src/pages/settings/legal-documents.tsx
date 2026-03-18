@@ -1,12 +1,13 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent } from '#/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
 import { Badge } from '#/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '#/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '#/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { ScrollArea } from '#/components/ui/scroll-area'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { PageHeader } from '#/components/dashboard/page-header'
@@ -26,12 +27,25 @@ interface LegalDoc {
   pdfObjectKey?: string
 }
 
+const DOCUMENT_TYPES = [
+  { value: 'terms_and_conditions', label: 'Terms & Conditions' },
+  { value: 'privacy_policy', label: 'Privacy Policy' },
+  { value: 'sign_agreement', label: 'Sign Agreement' },
+] as const
+
+function typeLabel(type: string) {
+  return DOCUMENT_TYPES.find(t => t.value === type)?.label || type
+}
+
 export function SettingsLegalDocumentsPage() {
   const queryClient = useQueryClient()
 
-  // Create/Edit dialog state (new version = edit active + save as new version)
+  // Selected document type filter
+  const [selectedType, setSelectedType] = React.useState('terms_and_conditions')
+
+  // Create/New version dialog state
   const [createOpen, setCreateOpen] = React.useState(false)
-  const [createForm, setCreateForm] = React.useState({ type: 'terms_and_conditions', version: 1, title: '', content: '' })
+  const [createForm, setCreateForm] = React.useState({ type: '', version: 1, title: '', content: '' })
   const [createPdfKey, setCreatePdfKey] = React.useState<string | undefined>(undefined)
   const [createPdfFilename, setCreatePdfFilename] = React.useState<string | undefined>(undefined)
   const [createUploading, setCreateUploading] = React.useState(false)
@@ -51,10 +65,7 @@ export function SettingsLegalDocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'legal-documents'] })
       setCreateOpen(false)
-      setCreateForm({ type: 'terms_and_conditions', version: 1, title: '', content: '' })
-      setCreatePdfKey(undefined)
-      setCreatePdfFilename(undefined)
-      toast.success('Document created')
+      toast.success('New version created successfully')
     },
     onError: () => toast.error('Failed to create document'),
   })
@@ -63,18 +74,24 @@ export function SettingsLegalDocumentsPage() {
     mutationFn: (id: string) => api.post(`/v1/admin/legal-documents/${id}/activate`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'legal-documents'] })
-      toast.success('Document activated')
+      toast.success('Document version activated')
     },
     onError: () => toast.error('Failed to activate document'),
   })
 
-  const docs = data?.data || []
+  const allDocs = data?.data || []
 
-  // Open create dialog prepopulated from a source document (active version or specific doc)
+  // Filter docs by selected type
+  const typeDocs = allDocs.filter(d => d.type === selectedType)
+  const activeDoc = typeDocs.find(d => d.isActive)
+  const versionHistory = typeDocs.filter(d => !d.isActive).sort((a, b) => b.version - a.version)
+
+  // Open new version dialog prepopulated from a source doc (or the active version of selected type)
   function openNewVersion(sourceDoc?: LegalDoc) {
-    const maxVersion = docs.filter(d => d.type === (sourceDoc?.type || 'terms_and_conditions')).reduce((max, d) => Math.max(max, d.version), 0)
+    const type = sourceDoc?.type || selectedType
+    const maxVersion = allDocs.filter(d => d.type === type).reduce((max, d) => Math.max(max, d.version), 0)
     setCreateForm({
-      type: sourceDoc?.type || 'terms_and_conditions',
+      type,
       version: maxVersion + 1,
       title: sourceDoc?.title || '',
       content: sourceDoc?.content || '',
@@ -84,8 +101,7 @@ export function SettingsLegalDocumentsPage() {
     setCreateOpen(true)
   }
 
-  // Handle PDF upload for create dialog
-  async function handleCreatePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setCreateUploading(true)
@@ -108,57 +124,117 @@ export function SettingsLegalDocumentsPage() {
         title="Legal Documents"
         description="Manage versioned terms, conditions, and policies"
         action={
-          <Button onClick={() => {
-            const activeDoc = docs.find(d => d.isActive)
-            openNewVersion(activeDoc)
-          }}>
+          <Button onClick={() => openNewVersion(activeDoc)}>
             <Plus className="mr-2 size-4" />New Version
           </Button>
         }
       />
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {docs.length === 0 ? (
+      {/* Type selector */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-sm font-medium text-muted-foreground">Document Type:</span>
+        <div className="flex gap-1">
+          {DOCUMENT_TYPES.map(t => (
+            <Button
+              key={t.value}
+              variant={selectedType === t.value ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedType(t.value)}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Active version card */}
+      {activeDoc ? (
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base">{activeDoc.title}</CardTitle>
+                <Badge className="bg-green-500/10 text-green-600">Active</Badge>
+                <Badge variant="secondary">v{activeDoc.version}</Badge>
+                {activeDoc.pdfObjectKey && (
+                  <Badge variant="secondary" className="gap-1">
+                    <FileText className="size-3" />PDF
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setViewDoc(activeDoc)} title="View full content">
+                  <Eye className="size-4 mr-1" />View
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => openNewVersion(activeDoc)} title="Edit and save as new version">
+                  <Pencil className="size-4 mr-1" />Edit
+                </Button>
+                {activeDoc.pdfObjectKey && (
+                  <Button variant="ghost" size="sm" onClick={() => window.open(`http://localhost:8080/v1/assets/${activeDoc.pdfObjectKey}`, '_blank')}>
+                    <Download className="size-4 mr-1" />PDF
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{activeDoc.content}</p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Created: {new Date(activeDoc.createdAt).toLocaleDateString()}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-4">
+          <CardContent className="py-8">
+            <EmptyState
+              message={isLoading ? 'Loading...' : `No ${typeLabel(selectedType)} document yet.`}
+            />
+            {!isLoading && (
+              <div className="flex justify-center mt-3">
+                <Button variant="outline" size="sm" onClick={() => openNewVersion()}>
+                  <Plus className="size-4 mr-1" />Create First Version
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Version history */}
+      {versionHistory.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Version History</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6}>
-                    <EmptyState message={isLoading ? 'Loading...' : 'No legal documents yet.'} />
-                  </TableCell>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ) : docs.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs">{d.type}</TableCell>
-                  <TableCell>v{d.version}</TableCell>
-                  <TableCell className="font-medium">{d.title}</TableCell>
-                  <TableCell>
-                    {d.isActive
-                      ? <Badge className="bg-green-500/10 text-green-600">Active</Badge>
-                      : <Badge variant="secondary">Inactive</Badge>}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(d.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)} title="View document">
-                        <Eye className="size-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => openNewVersion(d)} title="Create new version from this">
-                        <Pencil className="size-4" />
-                      </Button>
-                      {!d.isActive && (
+              </TableHeader>
+              <TableBody>
+                {versionHistory.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell>v{d.version}</TableCell>
+                    <TableCell className="font-medium">{d.title}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(d.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)} title="View">
+                          <Eye className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openNewVersion(d)} title="Create new version from this">
+                          <Pencil className="size-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -168,15 +244,15 @@ export function SettingsLegalDocumentsPage() {
                         >
                           <CheckCircle2 className="size-4 mr-1" />Activate
                         </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* View Dialog */}
       <Dialog open={!!viewDoc} onOpenChange={(open) => { if (!open) setViewDoc(null) }}>
@@ -186,6 +262,7 @@ export function SettingsLegalDocumentsPage() {
               {viewDoc?.title}
               <Badge variant="secondary">v{viewDoc?.version}</Badge>
             </DialogTitle>
+            <DialogDescription>{viewDoc && typeLabel(viewDoc.type)}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] rounded-md border p-4">
             <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{viewDoc?.content}</pre>
@@ -209,15 +286,46 @@ export function SettingsLegalDocumentsPage() {
       {/* Create / New Version Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Create New Document Version</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>
+              {createForm.content ? `Edit ${typeLabel(createForm.type)}` : `Create ${typeLabel(createForm.type)}`}
+            </DialogTitle>
+            <DialogDescription>
+              {createForm.content
+                ? 'Make your changes below. This will be saved as a new version.'
+                : 'Create the first version of this document.'}
+            </DialogDescription>
+          </DialogHeader>
           <FieldGroup>
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel>Type</FieldLabel>
-                <Input
+                <FieldLabel>Document Type</FieldLabel>
+                <Select
                   value={createForm.type}
-                  onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-                />
+                  onValueChange={(value: string | null) => {
+                    if (!value) return
+                    // When type changes, prepopulate from that type's active doc
+                    const typeActiveDoc = allDocs.find(d => d.type === value && d.isActive)
+                    const maxVer = allDocs.filter(d => d.type === value).reduce((max, d) => Math.max(max, d.version), 0)
+                    setCreateForm({
+                      type: value,
+                      version: maxVer + 1,
+                      title: typeActiveDoc?.title || '',
+                      content: typeActiveDoc?.content || '',
+                    })
+                    setCreatePdfKey(typeActiveDoc?.pdfObjectKey)
+                    setCreatePdfFilename(typeActiveDoc?.pdfObjectKey ? typeActiveDoc.pdfObjectKey.split('/').pop() : undefined)
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map(t => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel>Version</FieldLabel>
@@ -233,6 +341,7 @@ export function SettingsLegalDocumentsPage() {
               <Input
                 value={createForm.title}
                 onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                placeholder="e.g. Open Pay — Terms and Conditions"
               />
             </Field>
             <Field>
@@ -241,10 +350,11 @@ export function SettingsLegalDocumentsPage() {
                 rows={16}
                 value={createForm.content}
                 onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
+                placeholder="Enter the document text content..."
               />
             </Field>
             <Field>
-              <FieldLabel>PDF Attachment</FieldLabel>
+              <FieldLabel>PDF Attachment (optional)</FieldLabel>
               {createPdfKey ? (
                 <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                   <FileText className="size-4 text-muted-foreground shrink-0" />
@@ -285,7 +395,7 @@ export function SettingsLegalDocumentsPage() {
                 type="file"
                 accept=".pdf"
                 className="hidden"
-                onChange={handleCreatePdfUpload}
+                onChange={handlePdfUpload}
               />
             </Field>
           </FieldGroup>
@@ -293,10 +403,10 @@ export function SettingsLegalDocumentsPage() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate({ ...createForm, pdfObjectKey: createPdfKey })}
-              disabled={createMutation.isPending || createUploading}
+              disabled={createMutation.isPending || createUploading || !createForm.title || !createForm.content}
             >
               {createMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Create
+              Save as v{createForm.version}
             </Button>
           </DialogFooter>
         </DialogContent>
