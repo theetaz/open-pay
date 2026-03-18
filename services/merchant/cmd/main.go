@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	minio "github.com/minio/minio-go/v7"
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/messaging"
@@ -41,6 +42,7 @@ func main() {
 	userRepo := pgadapter.NewUserRepository(pool)
 	branchRepo := pgadapter.NewBranchRepository(pool)
 	paymentLinkRepo := pgadapter.NewPaymentLinkRepository(pool)
+	directorRepo := pgadapter.NewDirectorRepository(pool)
 
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
@@ -62,7 +64,7 @@ func main() {
 
 	// Service
 	adminEmail := getEnv("ADMIN_NOTIFICATION_EMAIL", "admin@openlankapay.lk")
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifier, adminEmail)
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifier, adminEmail, directorRepo)
 
 	// Document repository
 	docRepo := pgadapter.NewDocumentRepository(pool)
@@ -91,8 +93,16 @@ func main() {
 	adminServiceURL := getEnv("ADMIN_SERVICE_URL", "http://localhost:8088")
 	auditClient := audit.NewClient(adminServiceURL)
 
+	// Extract MinIO client from upload handler for director document uploads
+	var minioClient *minio.Client
+	var minioBucketName string
+	if uploadHandler != nil {
+		minioClient = uploadHandler.MinioClient()
+		minioBucketName = uploadHandler.BucketName()
+	}
+
 	// HTTP Handler
-	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient, docRepo)
+	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient, docRepo, minioClient, minioBucketName)
 	router := handler.NewRouter(h, branchRepo, paymentLinkRepo, uploadHandler)
 
 	// Server

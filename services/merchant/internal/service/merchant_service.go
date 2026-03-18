@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,6 +42,28 @@ type UserRepository interface {
 	GetByEmailGlobal(ctx context.Context, email string) (*domain.User, error)
 	ListByMerchant(ctx context.Context, merchantID uuid.UUID) ([]*domain.User, error)
 	Update(ctx context.Context, user *domain.User) error
+}
+
+// DirectorRepository defines the data access contract for directors.
+type DirectorRepository interface {
+	Create(ctx context.Context, d *domain.Director) error
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Director, error)
+	GetByToken(ctx context.Context, token string) (*domain.Director, error)
+	ListByMerchant(ctx context.Context, merchantID uuid.UUID) ([]*domain.Director, error)
+	CountByMerchant(ctx context.Context, merchantID uuid.UUID) (int, error)
+	Update(ctx context.Context, d *domain.Director) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// SubmitDirectorInput holds data for director verification submission.
+type SubmitDirectorInput struct {
+	FullName          string
+	DateOfBirth       *time.Time
+	NICPassportNumber string
+	Phone             string
+	Address           string
+	DocumentObjectKey string
+	DocumentFilename  string
 }
 
 // EventPublisher defines the contract for publishing domain events.
@@ -116,6 +139,7 @@ type MerchantService struct {
 	merchants  MerchantRepository
 	apiKeys    APIKeyRepository
 	users      UserRepository
+	directors  DirectorRepository
 	events     EventPublisher
 	notifier   notification.Notifier
 	jwtSecret  string
@@ -133,11 +157,13 @@ func NewMerchantService(
 	jwtSecret string,
 	notifier notification.Notifier,
 	adminEmail string,
+	directors DirectorRepository,
 ) *MerchantService {
 	return &MerchantService{
 		merchants:  merchants,
 		apiKeys:    apiKeys,
 		users:      users,
+		directors:  directors,
 		events:     events,
 		notifier:   notifier,
 		jwtSecret:  jwtSecret,
@@ -432,14 +458,28 @@ func (s *MerchantService) List(ctx context.Context, params ListParams) ([]*domai
 }
 
 // Approve transitions a merchant's KYC status to APPROVED.
-func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID) error {
+func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID, force bool, forceReason string) error {
 	merchant, err := s.merchants.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
 
+	if !force {
+		allVerified, err := s.AllDirectorsVerified(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !allVerified {
+			return domain.ErrDirectorsNotVerified
+		}
+	}
+
 	if err := merchant.TransitionKYC(domain.KYCApproved); err != nil {
 		return err
+	}
+
+	if force && forceReason != "" {
+		merchant.KYCReviewNotes = forceReason
 	}
 
 	if err := s.merchants.Update(ctx, merchant); err != nil {
@@ -448,7 +488,6 @@ func (s *MerchantService) Approve(ctx context.Context, id uuid.UUID) error {
 
 	_ = s.events.Publish(ctx, "merchant.approved", merchant)
 
-	// Send approval notification email
 	if s.notifier != nil {
 		s.notifier.SendEmail(ctx, notification.SendEmailInput{
 			MerchantID: merchant.ID,
@@ -662,32 +701,6 @@ func (s *MerchantService) Terminate(ctx context.Context, id uuid.UUID, reason st
 	return nil
 }
 
-// SendDirectorVerification sends a verification email to a director.
-func (s *MerchantService) SendDirectorVerification(ctx context.Context, merchantID uuid.UUID, email string) error {
-	merchant, err := s.merchants.GetByID(ctx, merchantID)
-	if err != nil {
-		return err
-	}
-
-	if s.notifier != nil {
-		s.notifier.SendEmail(ctx, notification.SendEmailInput{
-			MerchantID: merchantID,
-			Recipient:  email,
-			Subject:    "Director Identity Verification — Open Pay",
-			Body: fmt.Sprintf(
-				`<p>You have been listed as a director for <strong>%s</strong> on the Open Pay platform.</p>
-				<p>As part of the KYC verification process, we need to confirm your identity.</p>
-				<p>Please confirm that you are a director of this business by replying to this email or contacting the business owner.</p>
-				<p>If you are not associated with this business, please ignore this email.</p>`,
-				merchant.BusinessName,
-			),
-			EventType: "director.verification",
-		})
-	}
-
-	return nil
-}
-
 // RevokeAPIKey deactivates an API key.
 func (s *MerchantService) RevokeAPIKey(ctx context.Context, id uuid.UUID, reason string) error {
 	key, err := s.apiKeys.GetByID(ctx, id)
@@ -700,4 +713,153 @@ func (s *MerchantService) RevokeAPIKey(ctx context.Context, id uuid.UUID, reason
 	}
 
 	return s.apiKeys.Update(ctx, key)
+}
+
+// CreateDirector creates a new director record and sends a verification email.
+func (s *MerchantService) CreateDirector(ctx context.Context, merchantID uuid.UUID, email string) (*domain.Director, error) {
+	merchant, err := s.merchants.GetByID(ctx, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	count, err := s.directors.CountByMerchant(ctx, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= domain.MaxDirectorsPerMerchant {
+		return nil, domain.ErrMaxDirectors
+	}
+	director, err := domain.NewDirector(merchantID, email)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.directors.Create(ctx, director); err != nil {
+		return nil, err
+	}
+	s.sendDirectorVerificationEmail(ctx, merchant.BusinessName, director)
+	return director, nil
+}
+
+// ListDirectors returns all directors for a merchant.
+func (s *MerchantService) ListDirectors(ctx context.Context, merchantID uuid.UUID) ([]*domain.Director, error) {
+	return s.directors.ListByMerchant(ctx, merchantID)
+}
+
+// ResendDirectorVerification regenerates the token and resends the verification email.
+func (s *MerchantService) ResendDirectorVerification(ctx context.Context, merchantID, directorID uuid.UUID) error {
+	merchant, err := s.merchants.GetByID(ctx, merchantID)
+	if err != nil {
+		return err
+	}
+	director, err := s.directors.GetByID(ctx, directorID)
+	if err != nil {
+		return err
+	}
+	if director.MerchantID != merchantID {
+		return domain.ErrDirectorNotFound
+	}
+	if director.Status == domain.DirectorStatusVerified {
+		return fmt.Errorf("%w: director already verified", domain.ErrInvalidDirector)
+	}
+	if err := director.RegenerateToken(); err != nil {
+		return err
+	}
+	if err := s.directors.Update(ctx, director); err != nil {
+		return err
+	}
+	s.sendDirectorVerificationEmail(ctx, merchant.BusinessName, director)
+	return nil
+}
+
+// RemoveDirector deletes an unverified director record.
+func (s *MerchantService) RemoveDirector(ctx context.Context, merchantID, directorID uuid.UUID) error {
+	director, err := s.directors.GetByID(ctx, directorID)
+	if err != nil {
+		return err
+	}
+	if director.MerchantID != merchantID {
+		return domain.ErrDirectorNotFound
+	}
+	if director.Status == domain.DirectorStatusVerified {
+		return fmt.Errorf("%w: cannot remove a verified director", domain.ErrInvalidDirector)
+	}
+	return s.directors.Delete(ctx, directorID)
+}
+
+// GetDirectorByToken looks up a director and their merchant by verification token.
+func (s *MerchantService) GetDirectorByToken(ctx context.Context, token string) (*domain.Director, *domain.Merchant, error) {
+	director, err := s.directors.GetByToken(ctx, token)
+	if err != nil {
+		return nil, nil, err
+	}
+	merchant, err := s.merchants.GetByID(ctx, director.MerchantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return director, merchant, nil
+}
+
+// SubmitDirectorVerification processes a director's identity submission.
+func (s *MerchantService) SubmitDirectorVerification(ctx context.Context, token string, input SubmitDirectorInput) (*domain.Director, error) {
+	director, err := s.directors.GetByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if err := director.Verify(
+		input.FullName, input.NICPassportNumber, input.Phone, input.Address,
+		input.DateOfBirth, input.DocumentObjectKey, input.DocumentFilename,
+	); err != nil {
+		return nil, err
+	}
+	if err := s.directors.Update(ctx, director); err != nil {
+		return nil, err
+	}
+	merchant, _ := s.merchants.GetByID(ctx, director.MerchantID)
+	if s.notifier != nil && merchant != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: director.MerchantID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "Director Verification Complete — Open Pay",
+			Body: fmt.Sprintf(
+				`<p>Director <strong>%s</strong> (%s) has verified their identity for <strong>%s</strong>.</p><p>You can check the KYC status in your dashboard.</p>`,
+				director.FullName, director.Email, merchant.BusinessName,
+			),
+			EventType: "director.verified",
+		})
+	}
+	return director, nil
+}
+
+// AllDirectorsVerified returns true if all directors for the merchant are verified.
+func (s *MerchantService) AllDirectorsVerified(ctx context.Context, merchantID uuid.UUID) (bool, error) {
+	directors, err := s.directors.ListByMerchant(ctx, merchantID)
+	if err != nil {
+		return false, err
+	}
+	for _, d := range directors {
+		if d.Status != domain.DirectorStatusVerified {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (s *MerchantService) sendDirectorVerificationEmail(ctx context.Context, businessName string, director *domain.Director) {
+	if s.notifier == nil {
+		return
+	}
+	portalURL := os.Getenv("MERCHANT_PORTAL_URL")
+	if portalURL == "" {
+		portalURL = "http://localhost:5173"
+	}
+	verifyLink := fmt.Sprintf("%s/verify/director/%s", portalURL, director.VerificationToken)
+	s.notifier.SendEmail(ctx, notification.SendEmailInput{
+		MerchantID: director.MerchantID,
+		Recipient:  director.Email,
+		Subject:    "Director Identity Verification — Open Pay",
+		Body: fmt.Sprintf(
+			`<p>You have been listed as a director for <strong>%s</strong> on the Open Pay platform.</p><p>As part of the KYC verification process, we need to confirm your identity.</p><p>Please click the link below to verify your identity. This link expires in 7 days.</p><p><a href="%s" style="display:inline-block;padding:12px 24px;background:#f97316;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Verify My Identity</a></p><p>If you are not associated with this business, please ignore this email.</p>`,
+			businessName, verifyLink,
+		),
+		EventType: "director.verification",
+	})
 }

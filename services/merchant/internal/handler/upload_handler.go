@@ -70,6 +70,12 @@ func NewFileUploadHandler(cfg FileUploadConfig, docs DocumentRepository) (*FileU
 	}, nil
 }
 
+// MinioClient returns the MinIO client used by this handler.
+func (h *FileUploadHandler) MinioClient() *minio.Client { return h.minioClient }
+
+// BucketName returns the bucket name used by this handler.
+func (h *FileUploadHandler) BucketName() string { return h.bucketName }
+
 // RegisterUploadRoutes adds upload routes to the router.
 func RegisterUploadRoutes(r chi.Router, h *FileUploadHandler, jwtSecret string) {
 	r.Group(func(r chi.Router) {

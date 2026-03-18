@@ -56,8 +56,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/merchants/{id}/freeze", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/unfreeze", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/terminate", p.ProxyToMerchant)
-	r.Post("/v1/merchants/{id}/directors/verify", p.ProxyToMerchant)
 	r.Get("/v1/merchants/{id}/documents", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/directors", p.ProxyToMerchant)
+	r.Get("/v1/merchants/{id}/directors", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/directors/{directorId}/resend", p.ProxyToMerchant)
+	r.Delete("/v1/merchants/{id}/directors/{directorId}", p.ProxyToMerchant)
 
 	// File upload routes → merchant service
 	r.Post("/v1/uploads", p.ProxyToMerchant)
@@ -87,6 +90,10 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/public/payments", p.ProxyToPayment)
 	r.Get("/v1/payments/{id}/checkout", p.ProxyToPayment)
 	r.Post("/v1/payments/{id}/callback", p.ProxyToPayment)
+
+	// Public director verification routes → merchant service (no auth)
+	r.Get("/v1/public/directors/verify/{token}", p.ProxyToMerchant)
+	r.Post("/v1/public/directors/verify/{token}", p.ProxyToMerchant)
 
 	// Sandbox routes → payment service (no auth, dev only)
 	r.Post("/test/simulate/{providerPayID}", p.ProxyToPayment)

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
@@ -27,27 +28,41 @@ type MerchantServiceInterface interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Merchant, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateMerchantProfile(ctx context.Context, id uuid.UUID, input service.UpdateProfileInput) (*domain.Merchant, error)
-	Approve(ctx context.Context, id uuid.UUID) error
+	Approve(ctx context.Context, id uuid.UUID, force bool, forceReason string) error
 	Reject(ctx context.Context, id uuid.UUID, reason string) error
 	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
 	Freeze(ctx context.Context, id uuid.UUID, reason string) error
 	Unfreeze(ctx context.Context, id uuid.UUID) error
 	Terminate(ctx context.Context, id uuid.UUID, reason string) error
-	SendDirectorVerification(ctx context.Context, merchantID uuid.UUID, email string) error
+	CreateDirector(ctx context.Context, merchantID uuid.UUID, email string) (*domain.Director, error)
+	ListDirectors(ctx context.Context, merchantID uuid.UUID) ([]*domain.Director, error)
+	ResendDirectorVerification(ctx context.Context, merchantID, directorID uuid.UUID) error
+	RemoveDirector(ctx context.Context, merchantID, directorID uuid.UUID) error
+	GetDirectorByToken(ctx context.Context, token string) (*domain.Director, *domain.Merchant, error)
+	SubmitDirectorVerification(ctx context.Context, token string, input service.SubmitDirectorInput) (*domain.Director, error)
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
 type MerchantHandler struct {
-	svc       MerchantServiceInterface
-	jwtSecret string
-	auditLog  *audit.Client
-	docRepo   DocumentRepository
+	svc         MerchantServiceInterface
+	jwtSecret   string
+	auditLog    *audit.Client
+	docRepo     DocumentRepository
+	minioClient *minio.Client
+	minioBucket string
 }
 
 // NewMerchantHandler creates a new MerchantHandler.
-func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient *audit.Client, docRepo DocumentRepository) *MerchantHandler {
-	return &MerchantHandler{svc: svc, jwtSecret: jwtSecret, auditLog: auditClient, docRepo: docRepo}
+func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient *audit.Client, docRepo DocumentRepository, minioClient *minio.Client, minioBucket string) *MerchantHandler {
+	return &MerchantHandler{
+		svc:         svc,
+		jwtSecret:   jwtSecret,
+		auditLog:    auditClient,
+		docRepo:     docRepo,
+		minioClient: minioClient,
+		minioBucket: minioBucket,
+	}
 }
 
 // NewRouter creates a chi router with merchant routes.
@@ -61,6 +76,10 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 	r.Post("/v1/auth/login", h.Login)
 	r.Post("/v1/auth/refresh", h.RefreshToken)
 
+	// Public director verification routes (no auth required)
+	r.Get("/v1/public/directors/verify/{token}", h.GetDirectorByToken)
+	r.Post("/v1/public/directors/verify/{token}", h.SubmitDirectorVerification)
+
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(h.jwtSecret))
@@ -70,13 +89,16 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
 		r.Post("/v1/merchants/{id}/approve", h.ApproveMerchant)
-		r.Post("/v1/merchants/{id}/directors/verify", h.SendDirectorVerification)
 		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
 		r.Post("/v1/merchants/{id}/deactivate", h.DeactivateMerchant)
 		r.Post("/v1/merchants/{id}/freeze", h.FreezeMerchant)
 		r.Post("/v1/merchants/{id}/unfreeze", h.UnfreezeMerchant)
 		r.Post("/v1/merchants/{id}/terminate", h.TerminateMerchant)
 		r.Get("/v1/merchants/{id}/documents", h.GetMerchantDocuments)
+		r.Post("/v1/merchants/{id}/directors", h.CreateDirector)
+		r.Get("/v1/merchants/{id}/directors", h.ListDirectors)
+		r.Post("/v1/merchants/{id}/directors/{directorId}/resend", h.ResendDirectorVerification)
+		r.Delete("/v1/merchants/{id}/directors/{directorId}", h.RemoveDirector)
 	})
 
 	// Branch routes
@@ -339,7 +361,13 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.svc.Approve(r.Context(), id); err != nil {
+	var req struct {
+		Force       bool   `json:"force"`
+		ForceReason string `json:"forceReason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if err := h.svc.Approve(r.Context(), id, req.Force, req.ForceReason); err != nil {
 		if errors.Is(err, domain.ErrMerchantNotFound) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
 			return
@@ -348,8 +376,17 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
 			return
 		}
+		if errors.Is(err, domain.ErrDirectorsNotVerified) {
+			writeError(w, http.StatusUnprocessableEntity, "DIRECTORS_NOT_VERIFIED", "not all directors have been verified; use force=true to override")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to approve merchant")
 		return
+	}
+
+	action := "merchant.approved"
+	if req.Force {
+		action = "merchant.force_approved"
 	}
 
 	if h.auditLog != nil {
@@ -358,7 +395,7 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 			actorID = claims.UserID
 		}
 		h.auditLog.Log(r.Context(), audit.LogEntry{
-			ActorID: actorID, ActorType: "ADMIN", Action: "merchant.approved",
+			ActorID: actorID, ActorType: "ADMIN", Action: action,
 			ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
 		})
 	}
@@ -579,41 +616,6 @@ func (h *MerchantHandler) GetMerchantDocuments(w http.ResponseWriter, r *http.Re
 		})
 	}
 	writeJSON(w, http.StatusOK, envelope{"data": items})
-}
-
-// SendDirectorVerification handles POST /v1/merchants/{id}/directors/verify.
-func (h *MerchantHandler) SendDirectorVerification(w http.ResponseWriter, r *http.Request) {
-	claims, ok := auth.ClaimsFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
-		return
-	}
-
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
-		return
-	}
-
-	if claims.MerchantID != id {
-		writeError(w, http.StatusForbidden, "FORBIDDEN", "cannot access another merchant")
-		return
-	}
-
-	var req struct {
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "email is required")
-		return
-	}
-
-	if err := h.svc.SendDirectorVerification(r.Context(), id, req.Email); err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to send verification email")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "verification_sent", "email": req.Email}})
 }
 
 func stripPort(addr string) string {
