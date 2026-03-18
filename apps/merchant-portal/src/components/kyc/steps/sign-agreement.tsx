@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { FileText, Shield, Pen, Loader2, Download } from "lucide-react"
+import { FileText, Shield, Pen, Loader2, Download, ScrollText } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { Alert, AlertDescription } from "#/components/ui/alert"
@@ -11,27 +11,81 @@ import { Field, FieldGroup, FieldLabel, FieldError, FieldSeparator } from "#/com
 import { api } from "#/lib/api"
 import type { KycFormData } from "#/lib/schemas/kyc"
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
 interface SignAgreementProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<KycFormData, any, any>
   completedSteps: number
 }
 
-function useTermsAndConditions() {
+interface LegalDocResponse {
+  data: { id: string; type: string; version: number; title: string; content: string; pdfObjectKey?: string }
+}
+
+function useLegalDocument(type: string) {
   return useQuery({
-    queryKey: ['legal-documents', 'terms_and_conditions'],
-    queryFn: () =>
-      api.get<{
-        data: { id: string; type: string; version: number; title: string; content: string; pdfObjectKey?: string }
-      }>('/v1/legal-documents/active?type=terms_and_conditions'),
+    queryKey: ['legal-documents', type],
+    queryFn: () => api.get<LegalDocResponse>(`/v1/legal-documents/active?type=${type}`),
     staleTime: 5 * 60 * 1000,
+    retry: false,
   })
 }
 
-export function SignAgreement({ form, completedSteps }: SignAgreementProps) {
-  const { data: termsData, isLoading: termsLoading } = useTermsAndConditions()
-  const terms = termsData?.data
+function DocumentSection({ type, icon: Icon, fallbackTitle }: { type: string; icon: React.ComponentType<{ className?: string }>; fallbackTitle: string }) {
+  const { data, isLoading, isError } = useLegalDocument(type)
+  const doc = data?.data
 
+  if (isError || (!isLoading && !doc)) {
+    return null // Don't show section if document type doesn't exist yet
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">
+          {doc?.title || fallbackTitle}
+          {doc?.version && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">v{doc.version}</span>
+          )}
+        </h3>
+      </div>
+
+      <div className="rounded-lg border border-border">
+        {doc?.pdfObjectKey && (
+          <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/30">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <FileText className="size-3" />
+              PDF version available
+            </span>
+            <button
+              type="button"
+              onClick={() => window.open(`${API_BASE}/v1/assets/${doc.pdfObjectKey}`, '_blank')}
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              <Download className="size-3" />
+              Download PDF
+            </button>
+          </div>
+        )}
+        <ScrollArea className="h-[200px] p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
+              {doc?.content || `${fallbackTitle} content is being loaded...`}
+            </p>
+          )}
+        </ScrollArea>
+      </div>
+    </div>
+  )
+}
+
+export function SignAgreement({ form, completedSteps }: SignAgreementProps) {
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -61,67 +115,39 @@ export function SignAgreement({ form, completedSteps }: SignAgreementProps) {
 
       <FieldSeparator />
 
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <Shield className="size-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">
-            {terms?.title || 'Terms and Conditions'}
-            {terms?.version && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">v{terms.version}</span>
+      {/* Terms and Conditions */}
+      <DocumentSection
+        type="terms_and_conditions"
+        icon={Shield}
+        fallbackTitle="Terms and Conditions"
+      />
+
+      {/* Sign Agreement */}
+      <DocumentSection
+        type="sign_agreement"
+        icon={ScrollText}
+        fallbackTitle="Sign Agreement"
+      />
+
+      <FieldGroup>
+        <Field orientation="horizontal">
+          <Controller
+            control={form.control}
+            name="agreedToTerms"
+            render={({ field }) => (
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
             )}
-          </h3>
-        </div>
+          />
+          <FieldLabel className="text-sm font-normal leading-relaxed cursor-pointer" required>
+            I agree to the Terms and Conditions, Privacy Policy, and Sign Agreement
+          </FieldLabel>
+        </Field>
 
-        <div className="rounded-lg border border-border">
-          {terms?.pdfObjectKey && (
-            <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/30">
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <FileText className="size-3" />
-                PDF version available
-              </span>
-              <button
-                type="button"
-                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/v1/assets/${terms.pdfObjectKey}`, '_blank')}
-                className="text-xs text-primary hover:underline flex items-center gap-1"
-              >
-                <Download className="size-3" />
-                Download PDF
-              </button>
-            </div>
-          )}
-          <ScrollArea className="h-[200px] p-4">
-            {termsLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
-                {terms?.content || 'Terms and conditions are being loaded...'}
-              </p>
-            )}
-          </ScrollArea>
-        </div>
-
-        <FieldGroup>
-          <Field orientation="horizontal">
-            <Controller
-              control={form.control}
-              name="agreedToTerms"
-              render={({ field }) => (
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              )}
-            />
-            <FieldLabel className="text-sm font-normal leading-relaxed cursor-pointer" required>
-              I agree to the Terms and Conditions and Privacy Policy
-            </FieldLabel>
-          </Field>
-
-          <FieldError>{form.formState.errors.agreedToTerms?.message}</FieldError>
-        </FieldGroup>
-      </div>
+        <FieldError>{form.formState.errors.agreedToTerms?.message}</FieldError>
+      </FieldGroup>
 
       <FieldSeparator />
 
