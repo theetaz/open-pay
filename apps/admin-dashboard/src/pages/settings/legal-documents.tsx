@@ -29,7 +29,7 @@ interface LegalDoc {
 export function SettingsLegalDocumentsPage() {
   const queryClient = useQueryClient()
 
-  // Create dialog state
+  // Create/Edit dialog state (new version = edit active + save as new version)
   const [createOpen, setCreateOpen] = React.useState(false)
   const [createForm, setCreateForm] = React.useState({ type: 'terms_and_conditions', version: 1, title: '', content: '' })
   const [createPdfKey, setCreatePdfKey] = React.useState<string | undefined>(undefined)
@@ -39,14 +39,6 @@ export function SettingsLegalDocumentsPage() {
 
   // View dialog state
   const [viewDoc, setViewDoc] = React.useState<LegalDoc | null>(null)
-
-  // Edit dialog state
-  const [editDoc, setEditDoc] = React.useState<LegalDoc | null>(null)
-  const [editForm, setEditForm] = React.useState({ title: '', content: '' })
-  const [editPdfKey, setEditPdfKey] = React.useState<string | undefined>(undefined)
-  const [editPdfFilename, setEditPdfFilename] = React.useState<string | undefined>(undefined)
-  const [editUploading, setEditUploading] = React.useState(false)
-  const editFileRef = React.useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'legal-documents'],
@@ -67,17 +59,6 @@ export function SettingsLegalDocumentsPage() {
     onError: () => toast.error('Failed to create document'),
   })
 
-  const editMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { title: string; content: string; pdfObjectKey?: string } }) =>
-      api.put(`/v1/admin/legal-documents/${id}`, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'legal-documents'] })
-      setEditDoc(null)
-      toast.success('Document updated')
-    },
-    onError: () => toast.error('Failed to update document'),
-  })
-
   const activateMutation = useMutation({
     mutationFn: (id: string) => api.post(`/v1/admin/legal-documents/${id}/activate`),
     onSuccess: () => {
@@ -89,12 +70,18 @@ export function SettingsLegalDocumentsPage() {
 
   const docs = data?.data || []
 
-  // Open edit dialog and pre-populate form
-  function openEdit(doc: LegalDoc) {
-    setEditDoc(doc)
-    setEditForm({ title: doc.title, content: doc.content })
-    setEditPdfKey(doc.pdfObjectKey)
-    setEditPdfFilename(doc.pdfObjectKey ? doc.pdfObjectKey.split('/').pop() : undefined)
+  // Open create dialog prepopulated from a source document (active version or specific doc)
+  function openNewVersion(sourceDoc?: LegalDoc) {
+    const maxVersion = docs.filter(d => d.type === (sourceDoc?.type || 'terms_and_conditions')).reduce((max, d) => Math.max(max, d.version), 0)
+    setCreateForm({
+      type: sourceDoc?.type || 'terms_and_conditions',
+      version: maxVersion + 1,
+      title: sourceDoc?.title || '',
+      content: sourceDoc?.content || '',
+    })
+    setCreatePdfKey(sourceDoc?.pdfObjectKey)
+    setCreatePdfFilename(sourceDoc?.pdfObjectKey ? sourceDoc.pdfObjectKey.split('/').pop() : undefined)
+    setCreateOpen(true)
   }
 
   // Handle PDF upload for create dialog
@@ -115,31 +102,16 @@ export function SettingsLegalDocumentsPage() {
     }
   }
 
-  // Handle PDF upload for edit dialog
-  async function handleEditPdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setEditUploading(true)
-    try {
-      const result = await api.upload<{ data: { key: string; filename: string } }>(file, 'legal-documents')
-      setEditPdfKey(result.data.key)
-      setEditPdfFilename(result.data.filename ?? file.name)
-      toast.success('PDF uploaded')
-    } catch {
-      toast.error('PDF upload failed')
-    } finally {
-      setEditUploading(false)
-      if (editFileRef.current) editFileRef.current.value = ''
-    }
-  }
-
   return (
     <>
       <PageHeader
         title="Legal Documents"
         description="Manage versioned terms, conditions, and policies"
         action={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => {
+            const activeDoc = docs.find(d => d.isActive)
+            openNewVersion(activeDoc)
+          }}>
             <Plus className="mr-2 size-4" />New Version
           </Button>
         }
@@ -180,10 +152,10 @@ export function SettingsLegalDocumentsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)}>
+                      <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)} title="View document">
                         <Eye className="size-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(d)}>
+                      <Button variant="ghost" size="sm" onClick={() => openNewVersion(d)} title="Create new version from this">
                         <Pencil className="size-4" />
                       </Button>
                       {!d.isActive && (
@@ -192,6 +164,7 @@ export function SettingsLegalDocumentsPage() {
                           size="sm"
                           onClick={() => activateMutation.mutate(d.id)}
                           disabled={activateMutation.isPending}
+                          title="Activate this version"
                         >
                           <CheckCircle2 className="size-4 mr-1" />Activate
                         </Button>
@@ -233,96 +206,9 @@ export function SettingsLegalDocumentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editDoc} onOpenChange={(open) => { if (!open) setEditDoc(null) }}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Edit Document</DialogTitle>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <FieldLabel>Title</FieldLabel>
-              <Input
-                value={editForm.title}
-                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Content</FieldLabel>
-              <Textarea
-                rows={16}
-                value={editForm.content}
-                onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>PDF Attachment</FieldLabel>
-              {editPdfKey ? (
-                <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <FileText className="size-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 truncate text-muted-foreground">{editPdfFilename ?? editPdfKey}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto px-2 py-0.5 text-xs"
-                    onClick={() => editFileRef.current?.click()}
-                    disabled={editUploading}
-                  >
-                    Replace
-                  </Button>
-                  <button
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => { setEditPdfKey(undefined); setEditPdfFilename(undefined) }}
-                    type="button"
-                    aria-label="Remove PDF"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => editFileRef.current?.click()}
-                  disabled={editUploading}
-                >
-                  {editUploading
-                    ? <Loader2 className="mr-2 size-4 animate-spin" />
-                    : <Upload className="mr-2 size-4" />}
-                  {editUploading ? 'Uploading...' : 'Upload PDF'}
-                </Button>
-              )}
-              <input
-                ref={editFileRef}
-                type="file"
-                accept=".pdf"
-                className="hidden"
-                onChange={handleEditPdfUpload}
-              />
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDoc(null)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (!editDoc) return
-                editMutation.mutate({
-                  id: editDoc.id,
-                  payload: { title: editForm.title, content: editForm.content, pdfObjectKey: editPdfKey },
-                })
-              }}
-              disabled={editMutation.isPending || editUploading}
-            >
-              {editMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Dialog */}
+      {/* Create / New Version Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create New Document Version</DialogTitle></DialogHeader>
           <FieldGroup>
             <div className="grid grid-cols-2 gap-4">
@@ -352,7 +238,7 @@ export function SettingsLegalDocumentsPage() {
             <Field>
               <FieldLabel>Content</FieldLabel>
               <Textarea
-                rows={12}
+                rows={16}
                 value={createForm.content}
                 onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
               />
