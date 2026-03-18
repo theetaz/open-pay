@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
@@ -40,8 +41,10 @@ function typeLabel(type: string) {
 export function SettingsLegalDocumentsPage() {
   const queryClient = useQueryClient()
 
-  // Selected document type filter
-  const [selectedType, setSelectedType] = React.useState('terms_and_conditions')
+  // Selected document type filter — persisted in URL params
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedType = searchParams.get('type') || 'terms_and_conditions'
+  const setSelectedType = (type: string) => setSearchParams({ type }, { replace: true })
 
   // Create/New version dialog state
   const [createOpen, setCreateOpen] = React.useState(false)

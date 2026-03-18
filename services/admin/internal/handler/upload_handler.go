@@ -86,10 +86,11 @@ func (h *AdminUploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		".svg":  "image/svg+xml",
 		".webp": "image/webp",
 		".ico":  "image/x-icon",
+		".pdf":  "application/pdf",
 	}
 	contentType, allowed := allowedExts[ext]
 	if !allowed {
-		writeError(w, http.StatusBadRequest, "INVALID_FILE_TYPE", "only PNG, JPG, SVG, WebP, ICO files are allowed")
+		writeError(w, http.StatusBadRequest, "INVALID_FILE_TYPE", "only PNG, JPG, SVG, WebP, ICO, PDF files are allowed")
 		return
 	}
 
