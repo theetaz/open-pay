@@ -1,6 +1,6 @@
 import type { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { FileText, Shield, Pen, Loader2 } from "lucide-react"
+import { FileText, Shield, Pen, Loader2, Download } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 import { Alert, AlertDescription } from "#/components/ui/alert"
@@ -22,7 +22,7 @@ function useTermsAndConditions() {
     queryKey: ['legal-documents', 'terms_and_conditions'],
     queryFn: () =>
       api.get<{
-        data: { id: string; type: string; version: number; title: string; content: string }
+        data: { id: string; type: string; version: number; title: string; content: string; pdfObjectKey?: string }
       }>('/v1/legal-documents/active?type=terms_and_conditions'),
     staleTime: 5 * 60 * 1000,
   })
@@ -73,6 +73,22 @@ export function SignAgreement({ form, completedSteps }: SignAgreementProps) {
         </div>
 
         <div className="rounded-lg border border-border">
+          {terms?.pdfObjectKey && (
+            <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/30">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <FileText className="size-3" />
+                PDF version available
+              </span>
+              <button
+                type="button"
+                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/v1/assets/${terms.pdfObjectKey}`, '_blank')}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <Download className="size-3" />
+                Download PDF
+              </button>
+            </div>
+          )}
           <ScrollArea className="h-[200px] p-4">
             {termsLoading ? (
               <div className="flex items-center justify-center h-full">
