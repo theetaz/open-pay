@@ -142,7 +142,7 @@ func (r *AdminUserRepository) ListUsers(ctx context.Context, page, perPage int) 
 		var permissionsJSON []byte
 		if err := rows.Scan(
 			&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.RoleID,
-			&user.IsActive, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
+			&user.IsActive, &user.MustChangePassword, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
 			&role.ID, &role.Name, &role.Description, &permissionsJSON, &role.IsSystem, &role.CreatedAt,
 		); err != nil {
 			return nil, 0, err
