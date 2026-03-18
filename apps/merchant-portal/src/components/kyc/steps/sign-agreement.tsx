@@ -2,6 +2,8 @@ import type { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
 import { FileText, Shield, Pen, Loader2, Download, ScrollText } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
+import Markdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 import { Alert, AlertDescription } from "#/components/ui/alert"
 import { Checkbox } from "#/components/ui/checkbox"
@@ -12,6 +14,20 @@ import { api } from "#/lib/api"
 import type { KycFormData } from "#/lib/schemas/kyc"
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
+const mdComponents = {
+  h1: ({ children, ...props }: React.ComponentProps<'h1'>) => <h1 className="text-base font-bold mt-3 mb-1" {...props}>{children}</h1>,
+  h2: ({ children, ...props }: React.ComponentProps<'h2'>) => <h2 className="text-sm font-semibold mt-2 mb-1" {...props}>{children}</h2>,
+  h3: ({ children, ...props }: React.ComponentProps<'h3'>) => <h3 className="text-sm font-semibold mt-2 mb-1" {...props}>{children}</h3>,
+  p: ({ children, ...props }: React.ComponentProps<'p'>) => <p className="text-xs text-muted-foreground leading-relaxed mb-1.5" {...props}>{children}</p>,
+  ul: ({ children, ...props }: React.ComponentProps<'ul'>) => <ul className="list-disc pl-4 mb-1.5 text-xs text-muted-foreground" {...props}>{children}</ul>,
+  ol: ({ children, ...props }: React.ComponentProps<'ol'>) => <ol className="list-decimal pl-4 mb-1.5 text-xs text-muted-foreground" {...props}>{children}</ol>,
+  li: ({ children, ...props }: React.ComponentProps<'li'>) => <li className="mb-0.5" {...props}>{children}</li>,
+  strong: ({ children, ...props }: React.ComponentProps<'strong'>) => <strong className="font-semibold text-foreground" {...props}>{children}</strong>,
+  a: ({ children, ...props }: React.ComponentProps<'a'>) => <a className="text-primary underline" {...props}>{children}</a>,
+  blockquote: ({ children, ...props }: React.ComponentProps<'blockquote'>) => <blockquote className="border-l-2 border-primary/30 pl-3 italic my-1.5 text-muted-foreground" {...props}>{children}</blockquote>,
+  hr: (props: React.ComponentProps<'hr'>) => <hr className="my-2 border-border" {...props} />,
+}
 
 interface SignAgreementProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,9 +91,9 @@ function DocumentSection({ type, icon: Icon, fallbackTitle }: { type: string; ic
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
-              {doc?.content || `${fallbackTitle} content is being loaded...`}
-            </p>
+            <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              {doc?.content || `*${fallbackTitle} content is being loaded...*`}
+            </Markdown>
           )}
         </ScrollArea>
       </div>

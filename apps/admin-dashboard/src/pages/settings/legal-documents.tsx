@@ -14,8 +14,28 @@ import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import { Plus, CheckCircle2, Loader2, Eye, Pencil, FileText, Upload, X, Download } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
+
+const markdownComponents = {
+  h1: ({ children, ...props }: React.ComponentProps<'h1'>) => <h1 className="text-xl font-bold mt-4 mb-2" {...props}>{children}</h1>,
+  h2: ({ children, ...props }: React.ComponentProps<'h2'>) => <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>,
+  h3: ({ children, ...props }: React.ComponentProps<'h3'>) => <h3 className="text-base font-semibold mt-3 mb-1" {...props}>{children}</h3>,
+  p: ({ children, ...props }: React.ComponentProps<'p'>) => <p className="text-sm leading-relaxed mb-2" {...props}>{children}</p>,
+  ul: ({ children, ...props }: React.ComponentProps<'ul'>) => <ul className="list-disc pl-5 mb-2 text-sm" {...props}>{children}</ul>,
+  ol: ({ children, ...props }: React.ComponentProps<'ol'>) => <ol className="list-decimal pl-5 mb-2 text-sm" {...props}>{children}</ol>,
+  li: ({ children, ...props }: React.ComponentProps<'li'>) => <li className="mb-1" {...props}>{children}</li>,
+  strong: ({ children, ...props }: React.ComponentProps<'strong'>) => <strong className="font-semibold" {...props}>{children}</strong>,
+  a: ({ children, ...props }: React.ComponentProps<'a'>) => <a className="text-primary underline" {...props}>{children}</a>,
+  table: ({ children, ...props }: React.ComponentProps<'table'>) => <table className="w-full border-collapse border border-border my-2 text-sm" {...props}>{children}</table>,
+  th: ({ children, ...props }: React.ComponentProps<'th'>) => <th className="border border-border px-3 py-1.5 bg-muted/50 text-left font-medium" {...props}>{children}</th>,
+  td: ({ children, ...props }: React.ComponentProps<'td'>) => <td className="border border-border px-3 py-1.5" {...props}>{children}</td>,
+  blockquote: ({ children, ...props }: React.ComponentProps<'blockquote'>) => <blockquote className="border-l-4 border-primary/30 pl-4 italic my-2 text-muted-foreground" {...props}>{children}</blockquote>,
+  hr: (props: React.ComponentProps<'hr'>) => <hr className="my-4 border-border" {...props} />,
+  code: ({ children, ...props }: React.ComponentProps<'code'>) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>,
+}
 
 interface LegalDoc {
   id: string
@@ -56,6 +76,9 @@ export function SettingsLegalDocumentsPage() {
 
   // View dialog state
   const [viewDoc, setViewDoc] = React.useState<LegalDoc | null>(null)
+
+  // Markdown editor mode: 'write' or 'preview'
+  const [editorMode, setEditorMode] = React.useState<'write' | 'preview'>('write')
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'legal-documents'],
@@ -101,6 +124,7 @@ export function SettingsLegalDocumentsPage() {
     })
     setCreatePdfKey(sourceDoc?.pdfObjectKey)
     setCreatePdfFilename(sourceDoc?.pdfObjectKey ? sourceDoc.pdfObjectKey.split('/').pop() : undefined)
+    setEditorMode('write')
     setCreateOpen(true)
   }
 
@@ -268,7 +292,9 @@ export function SettingsLegalDocumentsPage() {
             <DialogDescription>{viewDoc && typeLabel(viewDoc.type)}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] rounded-md border p-4">
-            <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{viewDoc?.content}</pre>
+            <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {viewDoc?.content || ''}
+            </Markdown>
           </ScrollArea>
           <DialogFooter className="flex items-center justify-between sm:justify-between">
             <div>
@@ -349,13 +375,44 @@ export function SettingsLegalDocumentsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel>Content</FieldLabel>
-              <Textarea
-                rows={16}
-                value={createForm.content}
-                onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
-                placeholder="Enter the document text content..."
-              />
+              <div className="flex items-center justify-between mb-1">
+                <FieldLabel>Content (Markdown supported)</FieldLabel>
+                <div className="flex gap-1 rounded-md border p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('write')}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${editorMode === 'write' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorMode('preview')}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${editorMode === 'preview' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
+              {editorMode === 'write' ? (
+                <Textarea
+                  rows={16}
+                  value={createForm.content}
+                  onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
+                  placeholder="Enter document content using Markdown formatting..."
+                  className="font-mono text-sm"
+                />
+              ) : (
+                <div className="rounded-md border p-4 min-h-[384px] max-h-[384px] overflow-y-auto">
+                  {createForm.content ? (
+                    <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {createForm.content}
+                    </Markdown>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Nothing to preview yet...</p>
+                  )}
+                </div>
+              )}
             </Field>
             <Field>
               <FieldLabel>PDF Attachment (optional)</FieldLabel>
