@@ -145,6 +145,7 @@ func NewMerchantService(
 
 // RegisterWithUser creates a new merchant and an admin user, returning JWT tokens.
 func (s *MerchantService) RegisterWithUser(ctx context.Context, input RegisterWithUserInput) (*LoginResult, error) {
+	// Validate all inputs BEFORE creating anything in the database
 	merchant, err := domain.NewMerchant(input.BusinessName, input.ContactEmail)
 	if err != nil {
 		return nil, err
@@ -153,12 +154,14 @@ func (s *MerchantService) RegisterWithUser(ctx context.Context, input RegisterWi
 	merchant.ContactPhone = input.ContactPhone
 	merchant.ContactName = input.ContactName
 
-	if err := s.merchants.Create(ctx, merchant); err != nil {
+	// Validate user (including password) before persisting merchant
+	user, err := domain.NewUser(merchant.ID, input.AdminEmail, input.AdminPassword, input.AdminName, domain.RoleAdmin, nil)
+	if err != nil {
 		return nil, err
 	}
 
-	user, err := domain.NewUser(merchant.ID, input.AdminEmail, input.AdminPassword, input.AdminName, domain.RoleAdmin, nil)
-	if err != nil {
+	// Now persist — merchant first, then user
+	if err := s.merchants.Create(ctx, merchant); err != nil {
 		return nil, err
 	}
 
@@ -177,6 +180,29 @@ func (s *MerchantService) RegisterWithUser(ctx context.Context, input RegisterWi
 	}
 
 	_ = s.events.Publish(ctx, "merchant.registered", merchant)
+
+	// Send welcome/onboarding email
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "Welcome to Open Pay!",
+			Body: fmt.Sprintf(
+				`<p>Hi <strong>%s</strong>,</p>
+				<p>Welcome to Open Pay! Your merchant account for <strong>%s</strong> has been created successfully.</p>
+				<p>Here's what to do next:</p>
+				<ol>
+					<li><strong>Complete KYC verification</strong> — Submit your business documents to unlock full payment processing.</li>
+					<li><strong>Set up your payment methods</strong> — Configure how you want to accept crypto payments.</li>
+					<li><strong>Start accepting payments</strong> — Create payment links or integrate our API.</li>
+				</ol>
+				<p>You can get started by logging into your dashboard.</p>
+				<p>If you have any questions, our support team is here to help.</p>`,
+				input.ContactName, merchant.BusinessName,
+			),
+			EventType: "merchant.welcome",
+		})
+	}
 
 	return &LoginResult{
 		User:         user,

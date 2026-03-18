@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import { User, Building2, Mail, Lock, Loader2 } from 'lucide-react'
+import { User, Building2, Mail, Lock, Loader2, Check, X } from 'lucide-react'
 import {
   Card,
   CardHeader,
@@ -20,18 +20,40 @@ import {
 } from '#/components/ui/field'
 import { useRegister } from '#/hooks/use-auth'
 
+function validatePassword(pw: string) {
+  return {
+    minLength: pw.length >= 8,
+    hasUpper: /[A-Z]/.test(pw),
+    hasNumber: /\d/.test(pw),
+  }
+}
+
+function PasswordRule({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-500' : 'text-muted-foreground'}`}>
+      {met ? <Check className="size-3" /> : <X className="size-3" />}
+      {label}
+    </div>
+  )
+}
+
 export function RegisterPage() {
   const [fullName, setFullName] = React.useState('')
   const [businessName, setBusinessName] = React.useState('')
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [confirmPassword, setConfirmPassword] = React.useState('')
+  const [agreed, setAgreed] = React.useState(false)
 
   const register = useRegister()
+  const rules = validatePassword(password)
+  const passwordValid = rules.minLength && rules.hasUpper && rules.hasNumber
+  const passwordsMatch = password === confirmPassword
+  const canSubmit = fullName && businessName && email && passwordValid && passwordsMatch && agreed && !register.isPending
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (password !== confirmPassword) return
+    if (!canSubmit) return
     register.mutate({ businessName, email, password, name: fullName })
   }
 
@@ -114,9 +136,13 @@ export function RegisterPage() {
                   required
                 />
               </div>
-              <FieldDescription>
-                Must be at least 8 characters with 1 uppercase and 1 number
-              </FieldDescription>
+              {password && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                  <PasswordRule met={rules.minLength} label="8+ characters" />
+                  <PasswordRule met={rules.hasUpper} label="1 uppercase" />
+                  <PasswordRule met={rules.hasNumber} label="1 number" />
+                </div>
+              )}
             </Field>
 
             <Field>
@@ -133,26 +159,27 @@ export function RegisterPage() {
                   required
                 />
               </div>
-              {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-destructive">Passwords do not match</p>
+              {confirmPassword && !passwordsMatch && (
+                <p className="text-xs text-destructive mt-1">Passwords do not match</p>
               )}
             </Field>
 
-            <div className="flex items-center gap-2">
-              <Checkbox id="terms" required />
-              <FieldLabel htmlFor="terms" className="font-normal">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="terms"
+                checked={agreed}
+                onCheckedChange={(v) => setAgreed(v === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
                 I agree to the{' '}
-                <Link to="#" className="text-primary hover:underline">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link to="#" className="text-primary hover:underline">
-                  Privacy Policy
-                </Link>
-              </FieldLabel>
+                <Link to="#" className="text-primary hover:underline">Terms of Service</Link>
+                {' '}and{' '}
+                <Link to="#" className="text-primary hover:underline">Privacy Policy</Link>
+              </label>
             </div>
 
-            <Button type="submit" size="lg" className="w-full" disabled={register.isPending || password !== confirmPassword}>
+            <Button type="submit" size="lg" className="w-full" disabled={!canSubmit}>
               {register.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
