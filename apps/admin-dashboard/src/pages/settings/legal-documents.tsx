@@ -332,7 +332,8 @@ export function SettingsLegalDocumentsPage() {
                 <Input
                   type="number"
                   value={createForm.version}
-                  onChange={(e) => setCreateForm({ ...createForm, version: parseInt(e.target.value) || 1 })}
+                  readOnly
+                  className="bg-muted"
                 />
               </Field>
             </div>

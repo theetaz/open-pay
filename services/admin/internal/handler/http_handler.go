@@ -543,6 +543,13 @@ func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Auto-activate the new version (deactivates other versions of the same type)
+	if err := h.legalDocs.Activate(r.Context(), doc.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to activate document")
+		return
+	}
+	doc.IsActive = true
+
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
 		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: "legal_document.created",
