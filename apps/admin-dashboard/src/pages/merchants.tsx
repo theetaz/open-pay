@@ -249,13 +249,45 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
   onClose: () => void
   onAction: (type: string, merchant: any) => void
 }) {
+  const queryClient = useQueryClient()
+  const [forceApproveOpen, setForceApproveOpen] = React.useState(false)
+  const [forceReason, setForceReason] = React.useState('')
+
   const { data: docsData } = useQuery({
     queryKey: ['admin', 'merchant-documents', merchant?.id],
     queryFn: () => api.get<{ data: MerchantDoc[] }>(`/v1/merchants/${merchant?.id}/documents`),
     enabled: !!merchant,
   })
 
+  const { data: directorsData } = useQuery({
+    queryKey: ['admin', 'directors', merchant?.id],
+    queryFn: () => api.get<{ data: any[] }>(`/v1/merchants/${merchant?.id}/directors`),
+    enabled: !!merchant,
+  })
+
   const docs = docsData?.data || []
+  const directors = directorsData?.data ?? []
+  const verifiedCount = directors.filter((d: any) => d.status === 'VERIFIED').length
+  const allVerified = directors.length === 0 || verifiedCount === directors.length
+  const pendingCount = directors.length - verifiedCount
+
+  const forceApproveMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      api.post(`/v1/merchants/${id}/approve`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'merchants'] })
+      setForceApproveOpen(false)
+      setForceReason('')
+      onClose()
+      toast.success('Force approved successfully')
+    },
+    onError: (err: any) => toast.error(err.message),
+  })
+
+  const handleForceApprove = () => {
+    if (!merchant || !forceReason.trim()) return
+    forceApproveMutation.mutate({ id: merchant.id, body: { force: true, forceReason } })
+  }
 
   if (!merchant) return null
 
@@ -281,6 +313,7 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
             <TabsTrigger value="business">Business Info</TabsTrigger>
             <TabsTrigger value="banking">Banking</TabsTrigger>
             <TabsTrigger value="documents">Documents ({docs.length})</TabsTrigger>
+            <TabsTrigger value="directors">Directors ({verifiedCount}/{directors.length})</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
@@ -337,6 +370,49 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
             )}
           </TabsContent>
 
+          <TabsContent value="directors" className="mt-4">
+            {directors.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No directors registered.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {directors.map((d: any) => (
+                  <div key={d.id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">{d.fullName || d.email}</p>
+                        {d.fullName && <p className="text-xs text-muted-foreground">{d.email}</p>}
+                      </div>
+                      {d.status === 'VERIFIED' ? (
+                        <Badge className="bg-green-500/10 text-green-600">Verified</Badge>
+                      ) : d.tokenExpired ? (
+                        <Badge className="bg-red-500/10 text-red-600">Expired</Badge>
+                      ) : (
+                        <Badge className="bg-amber-500/10 text-amber-600">Pending</Badge>
+                      )}
+                    </div>
+                    {d.status === 'VERIFIED' && (
+                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <div><span className="text-muted-foreground">NIC/Passport:</span> {d.nicPassportNumber}</div>
+                        <div><span className="text-muted-foreground">Phone:</span> {d.phone}</div>
+                        <div><span className="text-muted-foreground">DOB:</span> {d.dateOfBirth}</div>
+                        <div><span className="text-muted-foreground">Verified:</span> {d.verifiedAt ? new Date(d.verifiedAt).toLocaleDateString() : '-'}</div>
+                        {d.address && <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {d.address}</div>}
+                        {d.documentFilename && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Document:</span>{' '}
+                            <button className="text-primary underline" onClick={() => window.open(`http://localhost:8080/v1/assets/${d.documentObjectKey}`, '_blank')}>
+                              {d.documentFilename}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="timeline" className="mt-4 text-sm space-y-3">
             <TimelineItem label="Registered" date={merchant.createdAt} />
             {merchant.kycSubmittedAt && <TimelineItem label="KYC Submitted" date={merchant.kycSubmittedAt} />}
@@ -357,11 +433,50 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
           </TabsContent>
         </Tabs>
 
+        {forceApproveOpen && (
+          <div className="rounded-md border border-amber-300 bg-amber-500/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-amber-700">
+              Warning: {pendingCount} of {directors.length} directors have not completed verification.
+            </p>
+            <Textarea
+              placeholder="Enter reason for force approval (required)..."
+              value={forceReason}
+              onChange={(e) => setForceReason(e.target.value)}
+              rows={3}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleForceApprove}
+                disabled={!forceReason.trim() || forceApproveMutation.isPending}
+              >
+                Confirm Force Approve
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setForceApproveOpen(false); setForceReason('') }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="gap-2 flex-wrap">
           {(merchant.kycStatus === 'UNDER_REVIEW' || merchant.kycStatus === 'INSTANT_ACCESS') && (
             <>
-              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { onClose(); onAction('approve', merchant) }}>
+              <Button
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => { onClose(); onAction('approve', merchant) }}
+                disabled={!allVerified}
+                title={allVerified ? '' : 'All directors must verify first'}
+              >
                 <CheckCircle2 className="size-4 mr-1" /> Approve
+              </Button>
+              <Button
+                variant="outline"
+                className="border-amber-400 text-amber-700 hover:bg-amber-500/10"
+                onClick={() => setForceApproveOpen((v) => !v)}
+              >
+                Force Approve
               </Button>
               <Button variant="destructive" onClick={() => { onClose(); onAction('reject', merchant) }}>
                 <XCircle className="size-4 mr-1" /> Reject
