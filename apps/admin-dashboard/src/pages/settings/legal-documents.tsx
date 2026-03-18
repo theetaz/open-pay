@@ -24,8 +24,8 @@ const markdownComponents = {
   h2: ({ children, ...props }: React.ComponentProps<'h2'>) => <h2 className="text-lg font-semibold mt-3 mb-2" {...props}>{children}</h2>,
   h3: ({ children, ...props }: React.ComponentProps<'h3'>) => <h3 className="text-base font-semibold mt-3 mb-1" {...props}>{children}</h3>,
   p: ({ children, ...props }: React.ComponentProps<'p'>) => <p className="text-sm leading-relaxed mb-2" {...props}>{children}</p>,
-  ul: ({ children, ...props }: React.ComponentProps<'ul'>) => <ul className="list-disc ml-5 mb-2 text-sm" {...props}>{children}</ul>,
-  ol: ({ children, ...props }: React.ComponentProps<'ol'>) => <ol className="list-decimal ml-5 mb-2 text-sm" {...props}>{children}</ol>,
+  ul: ({ children, ...props }: React.ComponentProps<'ul'>) => <ul className="list-disc list-inside mb-2 text-sm" {...props}>{children}</ul>,
+  ol: ({ children, ...props }: React.ComponentProps<'ol'>) => <ol className="list-decimal list-inside mb-2 text-sm" {...props}>{children}</ol>,
   li: ({ children, ...props }: React.ComponentProps<'li'>) => <li className="mb-1" {...props}>{children}</li>,
   strong: ({ children, ...props }: React.ComponentProps<'strong'>) => <strong className="font-semibold" {...props}>{children}</strong>,
   a: ({ children, ...props }: React.ComponentProps<'a'>) => <a className="text-primary underline" {...props}>{children}</a>,
@@ -291,7 +291,7 @@ export function SettingsLegalDocumentsPage() {
             </DialogTitle>
             <DialogDescription>{viewDoc && typeLabel(viewDoc.type)}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh] rounded-md border p-4">
+          <ScrollArea className="max-h-[60vh] rounded-md border p-6">
             <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
               {viewDoc?.content || ''}
             </Markdown>
