@@ -164,7 +164,7 @@ function PaymentLinkDetailDialog({ link, onClose }: { link: PaymentLink | null; 
 
   return (
     <Dialog open={!!link} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{link.name}</DialogTitle>
           <DialogDescription>{link.description || 'Payment link details'}</DialogDescription>
@@ -348,7 +348,7 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
         onOpenChange(v)
       }}
     >
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Payment Link</DialogTitle>
           <DialogDescription>Create a new payment link for your customers</DialogDescription>
