@@ -253,7 +253,13 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
                 render={({ field }) => (
                   <DatePicker
                     value={field.value ? new Date(field.value) : undefined}
-                    onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                    onChange={(date) => {
+                      if (!date) return field.onChange('')
+                      const y = date.getFullYear()
+                      const m = String(date.getMonth() + 1).padStart(2, '0')
+                      const d = String(date.getDate()).padStart(2, '0')
+                      field.onChange(`${y}-${m}-${d}`)
+                    }}
                     placeholder="Select date"
                   />
                 )}
