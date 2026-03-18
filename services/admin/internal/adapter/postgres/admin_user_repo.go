@@ -21,7 +21,7 @@ func NewAdminUserRepository(pool *pgxpool.Pool) *AdminUserRepository {
 
 func (r *AdminUserRepository) GetByEmail(ctx context.Context, email string) (*domain.AdminUser, error) {
 	query := `SELECT u.id, u.email, u.password_hash, u.name, u.role_id, u.is_active,
-		u.last_login_at, u.created_at, u.updated_at,
+		u.must_change_password, u.last_login_at, u.created_at, u.updated_at,
 		r.id, r.name, r.description, r.permissions, r.is_system, r.created_at
 		FROM admin_users u
 		JOIN admin_roles r ON u.role_id = r.id
@@ -33,7 +33,7 @@ func (r *AdminUserRepository) GetByEmail(ctx context.Context, email string) (*do
 
 	err := r.pool.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.RoleID,
-		&user.IsActive, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
+		&user.IsActive, &user.MustChangePassword, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
 		&role.ID, &role.Name, &role.Description, &permissionsJSON, &role.IsSystem, &role.CreatedAt,
 	)
 	if err != nil {
@@ -47,7 +47,7 @@ func (r *AdminUserRepository) GetByEmail(ctx context.Context, email string) (*do
 
 func (r *AdminUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.AdminUser, error) {
 	query := `SELECT u.id, u.email, u.password_hash, u.name, u.role_id, u.is_active,
-		u.last_login_at, u.created_at, u.updated_at,
+		u.must_change_password, u.last_login_at, u.created_at, u.updated_at,
 		r.id, r.name, r.description, r.permissions, r.is_system, r.created_at
 		FROM admin_users u
 		JOIN admin_roles r ON u.role_id = r.id
@@ -59,7 +59,7 @@ func (r *AdminUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domai
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.RoleID,
-		&user.IsActive, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
+		&user.IsActive, &user.MustChangePassword, &user.LastLoginAt, &user.CreatedAt, &user.UpdatedAt,
 		&role.ID, &role.Name, &role.Description, &permissionsJSON, &role.IsSystem, &role.CreatedAt,
 	)
 	if err != nil {
@@ -72,12 +72,12 @@ func (r *AdminUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domai
 }
 
 func (r *AdminUserRepository) Create(ctx context.Context, user *domain.AdminUser) error {
-	query := `INSERT INTO admin_users (id, email, password_hash, name, role_id, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	query := `INSERT INTO admin_users (id, email, password_hash, name, role_id, is_active, must_change_password, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	_, err := r.pool.Exec(ctx, query,
 		user.ID, user.Email, user.PasswordHash, user.Name,
-		user.RoleID, user.IsActive, user.CreatedAt, user.UpdatedAt,
+		user.RoleID, user.IsActive, user.MustChangePassword, user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
 		if isDuplicateKeyError(err) {
@@ -122,7 +122,7 @@ func (r *AdminUserRepository) ListUsers(ctx context.Context, page, perPage int) 
 
 	offset := (page - 1) * perPage
 	query := `SELECT u.id, u.email, u.password_hash, u.name, u.role_id, u.is_active,
-		u.last_login_at, u.created_at, u.updated_at,
+		u.must_change_password, u.last_login_at, u.created_at, u.updated_at,
 		r.id, r.name, r.description, r.permissions, r.is_system, r.created_at
 		FROM admin_users u
 		JOIN admin_roles r ON u.role_id = r.id
@@ -200,6 +200,15 @@ func (r *AdminUserRepository) UpdateRole(ctx context.Context, role *domain.Admin
 	_, err := r.pool.Exec(ctx,
 		`UPDATE admin_roles SET description = $1, permissions = $2 WHERE id = $3 AND is_system = FALSE`,
 		role.Description, permJSON, role.ID)
+	return err
+}
+
+// ChangePassword updates the password hash and clears must_change_password flag.
+func (r *AdminUserRepository) ChangePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	now := time.Now().UTC()
+	_, err := r.pool.Exec(ctx,
+		`UPDATE admin_users SET password_hash = $1, must_change_password = FALSE, updated_at = $2 WHERE id = $3`,
+		passwordHash, now, id)
 	return err
 }
 

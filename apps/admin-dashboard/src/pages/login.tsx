@@ -20,13 +20,19 @@ export function LoginPage() {
       api.post<{ data: { accessToken: string; refreshToken: string; user: any } }>('/v1/admin/auth/login', data),
     onSuccess: (res) => {
       const user = res.data.user
-      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken, user ? {
+      const adminUser = user ? {
         id: user.id,
         email: user.email,
         name: user.name,
+        mustChangePassword: user.mustChangePassword,
         role: user.role || { name: 'ADMIN', permissions: [] },
-      } : undefined)
-      navigate('/')
+      } : undefined
+      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken, adminUser)
+      if (adminUser?.mustChangePassword) {
+        navigate('/change-password')
+      } else {
+        navigate('/')
+      }
     },
   })
 

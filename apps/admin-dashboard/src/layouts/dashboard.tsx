@@ -1,4 +1,4 @@
-import { Outlet, Navigate } from 'react-router-dom'
+import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { SidebarProvider, SidebarInset } from '#/components/ui/sidebar'
 import { TooltipProvider } from '#/components/ui/tooltip'
@@ -9,19 +9,23 @@ import { api } from '#/lib/api'
 
 export function DashboardLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const user = useAuthStore((state) => state.user)
   const setUser = useAuthStore((state) => state.setUser)
+  const location = useLocation()
 
   // Fetch current user profile on mount
   useQuery({
     queryKey: ['admin', 'me'],
     queryFn: async () => {
-      const res = await api.get<{ data: { user: any } }>('/v1/admin/auth/me')
-      if (res.data?.user) {
+      const res = await api.get<{ data: any }>('/v1/admin/auth/me')
+      const u = res.data
+      if (u) {
         setUser({
-          id: res.data.user.id,
-          email: res.data.user.email,
-          name: res.data.user.name,
-          role: res.data.user.role || { name: 'ADMIN', permissions: [] },
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          mustChangePassword: u.mustChangePassword,
+          role: u.role || { name: 'ADMIN', permissions: [] },
         })
       }
       return res
@@ -33,6 +37,11 @@ export function DashboardLayout() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  // Force password change if required
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
   }
 
   return (

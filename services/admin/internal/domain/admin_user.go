@@ -41,16 +41,17 @@ func (r *AdminRole) HasPermission(permission string) bool {
 
 // AdminUser represents a platform administrator.
 type AdminUser struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash string
-	Name         string
-	RoleID       uuid.UUID
-	Role         *AdminRole
-	IsActive     bool
-	LastLoginAt  *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                 uuid.UUID
+	Email              string
+	PasswordHash       string
+	Name               string
+	RoleID             uuid.UUID
+	Role               *AdminRole
+	IsActive           bool
+	MustChangePassword bool
+	LastLoginAt        *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // NewAdminUser creates a validated admin user.
@@ -72,14 +73,15 @@ func NewAdminUser(email, password, name string, roleID uuid.UUID) (*AdminUser, e
 
 	now := time.Now().UTC()
 	return &AdminUser{
-		ID:           uuid.New(),
-		Email:        email,
-		PasswordHash: string(hash),
-		Name:         name,
-		RoleID:       roleID,
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                 uuid.New(),
+		Email:              email,
+		PasswordHash:       string(hash),
+		Name:               name,
+		RoleID:             roleID,
+		IsActive:           true,
+		MustChangePassword: true,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}, nil
 }
 

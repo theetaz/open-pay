@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/services/admin/internal/adapter/postgres"
@@ -52,6 +54,7 @@ type AdminUserRepo interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.AdminUser, error)
 	Create(ctx context.Context, user *domain.AdminUser) error
 	UpdateUser(ctx context.Context, user *domain.AdminUser) error
+	ChangePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
 	ListRoles(ctx context.Context) ([]*domain.AdminRole, error)
 	CreateRole(ctx context.Context, role *domain.AdminRole) error
 	UpdateRole(ctx context.Context, role *domain.AdminRole) error
@@ -86,6 +89,7 @@ func NewRouter(h *AdminHandler, jwtSecret string, uploadHandler ...*AdminUploadH
 		r.Use(auth.RequirePlatformAdmin())
 
 		r.Get("/v1/admin/auth/me", h.AdminMe)
+		r.Post("/v1/admin/auth/change-password", h.ChangePassword)
 		r.Get("/v1/audit-logs", h.ListAuditLogs)
 		r.Get("/v1/audit-logs/{id}", h.GetAuditLog)
 	})
@@ -217,6 +221,58 @@ func (h *AdminHandler) AdminMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": adminUserResponse(user)})
+}
+
+func (h *AdminHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "new password must be at least 8 characters")
+		return
+	}
+
+	user, err := h.userRepo.GetByID(r.Context(), claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+		return
+	}
+
+	if !user.VerifyPassword(req.CurrentPassword) {
+		writeError(w, http.StatusBadRequest, "INVALID_PASSWORD", "current password is incorrect")
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to hash password")
+		return
+	}
+
+	if err := h.userRepo.ChangePassword(r.Context(), user.ID, string(hash)); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to change password")
+		return
+	}
+
+	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		ActorID: claims.UserID, ActorType: "ADMIN", Action: "admin_user.password_changed",
+		ResourceType: "admin_user", ResourceID: &user.ID,
+		IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
+	})
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "password_changed"}})
 }
 
 // --- Audit Handlers ---
@@ -363,10 +419,11 @@ func adminAuthResponse(r *service.AdminLoginResult) map[string]any {
 
 func adminUserResponse(u *domain.AdminUser) map[string]any {
 	resp := map[string]any{
-		"id":       u.ID.String(),
-		"email":    u.Email,
-		"name":     u.Name,
-		"isActive": u.IsActive,
+		"id":                 u.ID.String(),
+		"email":              u.Email,
+		"name":               u.Name,
+		"isActive":           u.IsActive,
+		"mustChangePassword": u.MustChangePassword,
 	}
 	if u.Role != nil {
 		resp["role"] = map[string]any{
@@ -682,7 +739,7 @@ func (h *AdminHandler) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Send invite email to the new admin user
+	// Send invite email to the new admin user with temporary password
 	if h.notifier != nil {
 		h.notifier.SendEmail(r.Context(), notification.SendEmailInput{
 			MerchantID: uuid.Nil,
@@ -691,10 +748,14 @@ func (h *AdminHandler) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
 			Body: fmt.Sprintf(
 				`<p>Hi <strong>%s</strong>,</p>
 				<p>You've been invited as an administrator on the Open Pay platform.</p>
-				<p>You can log in using your email address and the temporary password provided by your administrator.</p>
-				<p><strong>Please change your password after your first login.</strong></p>
+				<p>Here are your login credentials:</p>
+				<div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+					<p style="margin: 4px 0;"><strong>Email:</strong> %s</p>
+					<p style="margin: 4px 0;"><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">%s</code></p>
+				</div>
+				<p><strong>You will be required to change your password on first login.</strong></p>
 				<p>If you did not expect this invitation, please ignore this email.</p>`,
-				req.Name,
+				req.Name, req.Email, req.Password,
 			),
 			EventType: "admin.invite",
 		})

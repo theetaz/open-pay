@@ -14,11 +14,13 @@ import { SettingsLegalDocumentsPage } from '#/pages/settings/legal-documents'
 import { SettingsEmailTemplatesPage } from '#/pages/settings/email-templates'
 import { SettingsTeamPage } from '#/pages/settings/team'
 import { SettingsRolesPage } from '#/pages/settings/roles'
+import { ChangePasswordPage } from '#/pages/change-password'
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route element={<DashboardLayout />}>
         <Route index element={<DashboardIndex />} />
         <Route path="merchants" element={<MerchantsPage />} />

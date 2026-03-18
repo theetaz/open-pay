@@ -5,6 +5,7 @@ interface AdminUser {
   id: string
   email: string
   name: string
+  mustChangePassword?: boolean
   role: {
     name: string
     permissions: string[]

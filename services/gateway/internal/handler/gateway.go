@@ -128,6 +128,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Admin protected routes → admin service
 	r.Get("/v1/admin/auth/me", p.ProxyToAdmin)
+	r.Post("/v1/admin/auth/change-password", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs/{id}", p.ProxyToAdmin)
 
