@@ -31,6 +31,9 @@ type MerchantServiceInterface interface {
 	Reject(ctx context.Context, id uuid.UUID, reason string) error
 	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
+	Freeze(ctx context.Context, id uuid.UUID, reason string) error
+	Unfreeze(ctx context.Context, id uuid.UUID) error
+	Terminate(ctx context.Context, id uuid.UUID, reason string) error
 	SendDirectorVerification(ctx context.Context, merchantID uuid.UUID, email string) error
 }
 
@@ -39,15 +42,12 @@ type MerchantHandler struct {
 	svc       MerchantServiceInterface
 	jwtSecret string
 	auditLog  *audit.Client
+	docRepo   DocumentRepository
 }
 
 // NewMerchantHandler creates a new MerchantHandler.
-func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient ...*audit.Client) *MerchantHandler {
-	h := &MerchantHandler{svc: svc, jwtSecret: jwtSecret}
-	if len(auditClient) > 0 {
-		h.auditLog = auditClient[0]
-	}
-	return h
+func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient *audit.Client, docRepo DocumentRepository) *MerchantHandler {
+	return &MerchantHandler{svc: svc, jwtSecret: jwtSecret, auditLog: auditClient, docRepo: docRepo}
 }
 
 // NewRouter creates a chi router with merchant routes.
@@ -73,6 +73,10 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Post("/v1/merchants/{id}/directors/verify", h.SendDirectorVerification)
 		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
 		r.Post("/v1/merchants/{id}/deactivate", h.DeactivateMerchant)
+		r.Post("/v1/merchants/{id}/freeze", h.FreezeMerchant)
+		r.Post("/v1/merchants/{id}/unfreeze", h.UnfreezeMerchant)
+		r.Post("/v1/merchants/{id}/terminate", h.TerminateMerchant)
+		r.Get("/v1/merchants/{id}/documents", h.GetMerchantDocuments)
 	})
 
 	// Branch routes
@@ -432,6 +436,151 @@ func (h *MerchantHandler) DeactivateMerchant(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deactivated"}})
 }
 
+// FreezeMerchant handles POST /v1/merchants/{id}/freeze.
+func (h *MerchantHandler) FreezeMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Reason == "" {
+		req.Reason = "Frozen by admin"
+	}
+
+	if err := h.svc.Freeze(r.Context(), id, req.Reason); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to freeze merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.frozen",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "frozen"}})
+}
+
+// UnfreezeMerchant handles POST /v1/merchants/{id}/unfreeze.
+func (h *MerchantHandler) UnfreezeMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if err := h.svc.Unfreeze(r.Context(), id); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to unfreeze merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.unfrozen",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "active"}})
+}
+
+// TerminateMerchant handles POST /v1/merchants/{id}/terminate.
+func (h *MerchantHandler) TerminateMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Reason == "" {
+		req.Reason = "Terminated by admin"
+	}
+
+	if err := h.svc.Terminate(r.Context(), id, req.Reason); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to terminate merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.terminated",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "terminated"}})
+}
+
+// GetMerchantDocuments handles GET /v1/merchants/{id}/documents.
+func (h *MerchantHandler) GetMerchantDocuments(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if h.docRepo == nil {
+		writeJSON(w, http.StatusOK, envelope{"data": []any{}})
+		return
+	}
+
+	docs, err := h.docRepo.ListByMerchant(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list documents")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(docs))
+	for _, d := range docs {
+		items = append(items, map[string]any{
+			"id": d.ID.String(), "category": d.Category,
+			"filename": d.Filename, "contentType": d.ContentType,
+			"fileSize": d.FileSize, "objectKey": d.ObjectKey,
+		})
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
+}
+
 // SendDirectorVerification handles POST /v1/merchants/{id}/directors/verify.
 func (h *MerchantHandler) SendDirectorVerification(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
@@ -559,7 +708,7 @@ func meResponse(u *domain.User, m *domain.Merchant) map[string]any {
 }
 
 func merchantResponse(m *domain.Merchant) map[string]any {
-	return map[string]any{
+	resp := map[string]any{
 		"id":              m.ID.String(),
 		"businessName":    m.BusinessName,
 		"businessType":    m.BusinessType,
@@ -575,14 +724,27 @@ func merchantResponse(m *domain.Merchant) map[string]any {
 		"postalCode":      m.PostalCode,
 		"country":         m.Country,
 		"kycStatus":       string(m.KYCStatus),
+		"kycRejectionReason": m.KYCRejectionReason,
+		"kycReviewNotes":  m.KYCReviewNotes,
 		"bankName":        m.BankName,
 		"bankBranch":      m.BankBranch,
 		"bankAccountNo":   m.BankAccountNo,
 		"bankAccountName": m.BankAccountName,
 		"defaultCurrency": m.DefaultCurrency,
 		"status":          string(m.Status),
+		"statusReason":    m.StatusReason,
 		"createdAt":       m.CreatedAt.Format(time.RFC3339),
 	}
+	if m.KYCSubmittedAt != nil {
+		resp["kycSubmittedAt"] = m.KYCSubmittedAt.Format(time.RFC3339)
+	}
+	if m.KYCReviewedAt != nil {
+		resp["kycReviewedAt"] = m.KYCReviewedAt.Format(time.RFC3339)
+	}
+	if m.StatusChangedAt != nil {
+		resp["statusChangedAt"] = m.StatusChangedAt.Format(time.RFC3339)
+	}
+	return resp
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

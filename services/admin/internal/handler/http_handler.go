@@ -67,10 +67,10 @@ type AdminHandler struct {
 	legalDocs LegalDocRepo
 	settings  SettingsRepo
 	userRepo  AdminUserRepo
-	notifier  *notification.Client
+	notifier  notification.Notifier
 }
 
-func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo, settings SettingsRepo, userRepo AdminUserRepo, notifier *notification.Client) *AdminHandler {
+func NewAdminHandler(auditSvc AuditServiceInterface, authSvc AdminAuthServiceInterface, legalDocs LegalDocRepo, settings SettingsRepo, userRepo AdminUserRepo, notifier notification.Notifier) *AdminHandler {
 	return &AdminHandler{auditSvc: auditSvc, authSvc: authSvc, legalDocs: legalDocs, settings: settings, userRepo: userRepo, notifier: notifier}
 }
 

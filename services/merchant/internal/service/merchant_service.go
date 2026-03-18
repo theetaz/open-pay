@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/pkg/notification"
+
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
 )
 
@@ -116,7 +117,7 @@ type MerchantService struct {
 	apiKeys    APIKeyRepository
 	users      UserRepository
 	events     EventPublisher
-	notifier   *notification.Client
+	notifier   notification.Notifier
 	jwtSecret  string
 	adminEmail string
 	tokenTTL   time.Duration
@@ -130,7 +131,7 @@ func NewMerchantService(
 	users UserRepository,
 	events EventPublisher,
 	jwtSecret string,
-	notifier *notification.Client,
+	notifier notification.Notifier,
 	adminEmail string,
 ) *MerchantService {
 	return &MerchantService{
@@ -555,6 +556,110 @@ func (s *MerchantService) ValidateAPIKey(ctx context.Context, keyID, secret stri
 	}
 
 	return merchant, nil
+}
+
+// Freeze freezes a merchant's funds due to unauthorized activity.
+func (s *MerchantService) Freeze(ctx context.Context, id uuid.UUID, reason string) error {
+	merchant, err := s.merchants.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := merchant.TransitionStatus(domain.MerchantFrozen, reason); err != nil {
+		return err
+	}
+
+	if err := s.merchants.Update(ctx, merchant); err != nil {
+		return err
+	}
+
+	_ = s.events.Publish(ctx, "merchant.frozen", merchant)
+
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "Account Frozen — Open Pay",
+			Body: fmt.Sprintf(
+				`<p>Your merchant account for <strong>%s</strong> has been frozen.</p>
+				<p><strong>Reason:</strong> %s</p>
+				<p>All payment processing and withdrawals have been temporarily suspended. Please contact our support team for further assistance.</p>`,
+				merchant.BusinessName, reason,
+			),
+			EventType: "merchant.frozen",
+		})
+	}
+
+	return nil
+}
+
+// Unfreeze releases a frozen merchant account.
+func (s *MerchantService) Unfreeze(ctx context.Context, id uuid.UUID) error {
+	merchant, err := s.merchants.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := merchant.TransitionStatus(domain.MerchantActive, ""); err != nil {
+		return err
+	}
+
+	if err := s.merchants.Update(ctx, merchant); err != nil {
+		return err
+	}
+
+	_ = s.events.Publish(ctx, "merchant.unfrozen", merchant)
+
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "Account Restored — Open Pay",
+			Body: fmt.Sprintf(
+				`<p>Your merchant account for <strong>%s</strong> has been restored.</p>
+				<p>Payment processing and withdrawals have been re-enabled. Thank you for your cooperation.</p>`,
+				merchant.BusinessName,
+			),
+			EventType: "merchant.unfrozen",
+		})
+	}
+
+	return nil
+}
+
+// Terminate permanently terminates a merchant account for terms violation.
+func (s *MerchantService) Terminate(ctx context.Context, id uuid.UUID, reason string) error {
+	merchant, err := s.merchants.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := merchant.TransitionStatus(domain.MerchantTerminated, reason); err != nil {
+		return err
+	}
+
+	if err := s.merchants.Update(ctx, merchant); err != nil {
+		return err
+	}
+
+	_ = s.events.Publish(ctx, "merchant.terminated", merchant)
+
+	if s.notifier != nil {
+		s.notifier.SendEmail(ctx, notification.SendEmailInput{
+			MerchantID: merchant.ID,
+			Recipient:  merchant.ContactEmail,
+			Subject:    "Account Terminated — Open Pay",
+			Body: fmt.Sprintf(
+				`<p>Your merchant account for <strong>%s</strong> has been permanently terminated.</p>
+				<p><strong>Reason:</strong> %s</p>
+				<p>If you believe this is an error, please contact our support team.</p>`,
+				merchant.BusinessName, reason,
+			),
+			EventType: "merchant.terminated",
+		})
+	}
+
+	return nil
 }
 
 // SendDirectorVerification sends a verification email to a director.

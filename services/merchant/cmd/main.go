@@ -10,6 +10,7 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/messaging"
 	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/merchant/internal/adapter/postgres"
@@ -44,13 +45,24 @@ func main() {
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
-	// Notification client
-	notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
-	notifClient := notification.NewClient(notifServiceURL)
+	// Notification client — prefer NATS, fallback to HTTP
+	var notifier notification.Notifier
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	if natsClient, natsErr := messaging.NewClient(natsURL); natsErr == nil {
+		if nc, err := notification.NewNATSClient(natsClient); err == nil {
+			notifier = nc
+			logger.Info().Msg("using NATS for notifications")
+		}
+	}
+	if notifier == nil {
+		notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
+		notifier = notification.NewClient(notifServiceURL)
+		logger.Info().Msg("using HTTP for notifications (NATS unavailable)")
+	}
 
 	// Service
 	adminEmail := getEnv("ADMIN_NOTIFICATION_EMAIL", "admin@openlankapay.lk")
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifClient, adminEmail)
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifier, adminEmail)
 
 	// Document repository
 	docRepo := pgadapter.NewDocumentRepository(pool)
@@ -80,7 +92,7 @@ func main() {
 	auditClient := audit.NewClient(adminServiceURL)
 
 	// HTTP Handler
-	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient)
+	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient, docRepo)
 	router := handler.NewRouter(h, branchRepo, paymentLinkRepo, uploadHandler)
 
 	// Server

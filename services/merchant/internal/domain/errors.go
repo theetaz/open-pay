@@ -4,7 +4,8 @@ import "errors"
 
 var (
 	ErrInvalidMerchant      = errors.New("invalid merchant data")
-	ErrInvalidKYCTransition = errors.New("invalid KYC status transition")
+	ErrInvalidKYCTransition    = errors.New("invalid KYC status transition")
+	ErrInvalidStatusTransition = errors.New("invalid merchant status transition")
 	ErrInvalidBranch        = errors.New("invalid branch data")
 	ErrInvalidUser          = errors.New("invalid user data")
 	ErrWeakPassword         = errors.New("password must be at least 8 characters with 1 uppercase and 1 number")
