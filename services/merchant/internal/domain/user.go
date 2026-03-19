@@ -26,17 +26,20 @@ var validRoles = map[string]bool{
 
 // User represents a dashboard user within a merchant organization.
 type User struct {
-	ID           uuid.UUID
-	MerchantID   uuid.UUID
-	Email        string
-	PasswordHash string
-	Name         string
-	Role         Role
-	BranchID     *uuid.UUID
-	IsActive     bool
-	LastLoginAt  *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              uuid.UUID
+	MerchantID      uuid.UUID
+	Email           string
+	PasswordHash    string
+	Name            string
+	Role            Role
+	BranchID        *uuid.UUID
+	IsActive        bool
+	TOTPSecret      string
+	TOTPEnabled     bool
+	TOTPBackupCodes []string
+	LastLoginAt     *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // NewUser creates a validated User entity with a hashed password.
@@ -77,6 +80,11 @@ func NewUser(merchantID uuid.UUID, email, password, name string, role Role, bran
 func (u *User) VerifyPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
 	return err == nil
+}
+
+// ValidatePassword checks password strength requirements.
+func ValidatePassword(password string) error {
+	return validatePassword(password)
 }
 
 func validatePassword(password string) error {

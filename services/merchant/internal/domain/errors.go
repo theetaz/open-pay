@@ -25,4 +25,6 @@ var (
 	ErrTokenExpired         = errors.New("verification token has expired")
 	ErrDirectorsNotVerified = errors.New("not all directors have been verified")
 	ErrDuplicateDirector    = errors.New("director email already exists for this merchant")
+	ErrInvalidCredentials   = errors.New("invalid credentials")
+	ErrInvalidTOTP          = errors.New("invalid 2FA code")
 )

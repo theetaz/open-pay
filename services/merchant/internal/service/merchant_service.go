@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/pkg/notification"
 
@@ -326,6 +329,121 @@ func (s *MerchantService) RefreshToken(ctx context.Context, refreshTokenStr stri
 // GetUserByID returns a user by ID.
 func (s *MerchantService) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	return s.users.GetByID(ctx, id)
+}
+
+// ChangePassword changes a user's password after verifying the current one.
+func (s *MerchantService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !user.VerifyPassword(currentPassword) {
+		return domain.ErrInvalidCredentials
+	}
+	if err := domain.ValidatePassword(newPassword); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+	user.PasswordHash = string(hash)
+	user.UpdatedAt = time.Now().UTC()
+	return s.users.Update(ctx, user)
+}
+
+// SetupTOTP generates a new TOTP secret for a user and returns the provisioning URI.
+func (s *MerchantService) SetupTOTP(ctx context.Context, userID uuid.UUID) (secret, uri string, err error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if user.TOTPEnabled {
+		return "", "", fmt.Errorf("2FA is already enabled")
+	}
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "OpenLankaPay",
+		AccountName: user.Email,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("generating TOTP: %w", err)
+	}
+	user.TOTPSecret = key.Secret()
+	user.UpdatedAt = time.Now().UTC()
+	if err := s.users.Update(ctx, user); err != nil {
+		return "", "", err
+	}
+	return key.Secret(), key.URL(), nil
+}
+
+// VerifyAndEnableTOTP verifies a TOTP code and enables 2FA for the user.
+func (s *MerchantService) VerifyAndEnableTOTP(ctx context.Context, userID uuid.UUID, code string) ([]string, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.TOTPSecret == "" {
+		return nil, fmt.Errorf("2FA not set up — call setup first")
+	}
+	if user.TOTPEnabled {
+		return nil, fmt.Errorf("2FA is already enabled")
+	}
+	if !totp.Validate(code, user.TOTPSecret) {
+		return nil, domain.ErrInvalidTOTP
+	}
+	codes := make([]string, 8)
+	for i := range codes {
+		codes[i] = uuid.New().String()[:8]
+	}
+	user.TOTPEnabled = true
+	user.TOTPBackupCodes = codes
+	user.UpdatedAt = time.Now().UTC()
+	if err := s.users.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+// DisableTOTP disables 2FA after verifying a TOTP code.
+func (s *MerchantService) DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !user.TOTPEnabled {
+		return fmt.Errorf("2FA is not enabled")
+	}
+	if !totp.Validate(code, user.TOTPSecret) {
+		return domain.ErrInvalidTOTP
+	}
+	user.TOTPEnabled = false
+	user.TOTPSecret = ""
+	user.TOTPBackupCodes = nil
+	user.UpdatedAt = time.Now().UTC()
+	return s.users.Update(ctx, user)
+}
+
+// ValidateTOTP checks if a TOTP code or backup code is valid for login.
+func (s *MerchantService) ValidateTOTP(ctx context.Context, userID uuid.UUID, code string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !user.TOTPEnabled {
+		return nil
+	}
+	if totp.Validate(code, user.TOTPSecret) {
+		return nil
+	}
+	for i, bc := range user.TOTPBackupCodes {
+		if bc == code {
+			user.TOTPBackupCodes = append(user.TOTPBackupCodes[:i], user.TOTPBackupCodes[i+1:]...)
+			user.UpdatedAt = time.Now().UTC()
+			_ = s.users.Update(ctx, user)
+			return nil
+		}
+	}
+	return domain.ErrInvalidTOTP
 }
 
 // UpdateMerchantProfile updates merchant profile and optionally submits KYC.

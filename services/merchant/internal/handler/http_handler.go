@@ -41,6 +41,10 @@ type MerchantServiceInterface interface {
 	RemoveDirector(ctx context.Context, merchantID, directorID uuid.UUID) error
 	GetDirectorByToken(ctx context.Context, token string) (*domain.Director, *domain.Merchant, error)
 	SubmitDirectorVerification(ctx context.Context, token string, input service.SubmitDirectorInput) (*domain.Director, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
+	SetupTOTP(ctx context.Context, userID uuid.UUID) (secret, uri string, err error)
+	VerifyAndEnableTOTP(ctx context.Context, userID uuid.UUID, code string) ([]string, error)
+	DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
@@ -85,6 +89,10 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Use(auth.JWTMiddleware(h.jwtSecret))
 
 		r.Get("/v1/auth/me", h.GetMe)
+		r.Post("/v1/auth/change-password", h.ChangePassword)
+		r.Post("/v1/auth/2fa/setup", h.SetupTOTP)
+		r.Post("/v1/auth/2fa/verify", h.VerifyTOTP)
+		r.Post("/v1/auth/2fa/disable", h.DisableTOTP)
 		r.Get("/v1/merchants", h.ListMerchants)
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
@@ -233,6 +241,119 @@ func (h *MerchantHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": meResponse(user, merchant)})
+}
+
+// ChangePassword handles POST /v1/auth/change-password.
+func (h *MerchantHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	if err := h.svc.ChangePassword(r.Context(), claims.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			writeError(w, http.StatusBadRequest, "INVALID_PASSWORD", "current password is incorrect")
+			return
+		}
+		if errors.Is(err, domain.ErrWeakPassword) {
+			writeError(w, http.StatusBadRequest, "WEAK_PASSWORD", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to change password")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "password_changed"}})
+}
+
+// SetupTOTP handles POST /v1/auth/2fa/setup.
+func (h *MerchantHandler) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	secret, uri, err := h.svc.SetupTOTP(r.Context(), claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "SETUP_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{
+		"secret": secret,
+		"uri":    uri,
+	}})
+}
+
+// VerifyTOTP handles POST /v1/auth/2fa/verify.
+func (h *MerchantHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	backupCodes, err := h.svc.VerifyAndEnableTOTP(r.Context(), claims.UserID, req.Code)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidTOTP) {
+			writeError(w, http.StatusBadRequest, "INVALID_CODE", "invalid 2FA code")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "VERIFY_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{
+		"enabled":     true,
+		"backupCodes": backupCodes,
+	}})
+}
+
+// DisableTOTP handles POST /v1/auth/2fa/disable.
+func (h *MerchantHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	if err := h.svc.DisableTOTP(r.Context(), claims.UserID, req.Code); err != nil {
+		if errors.Is(err, domain.ErrInvalidTOTP) {
+			writeError(w, http.StatusBadRequest, "INVALID_CODE", "invalid 2FA code")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "DISABLE_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "2fa_disabled"}})
 }
 
 // UpdateProfile handles PUT /v1/merchants/{id}.
