@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/services/gateway/internal/middleware"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/proxy"
 )
 
@@ -16,6 +17,7 @@ type GatewayConfig struct {
 	JWTSecret          string
 	ServiceProxy       *proxy.ServiceProxy
 	RateLimitPerMinute int
+	RateLimiter        middleware.RateLimiter
 	GatewayPort        string
 	PlatformFeePct     string
 	ExchangeFeePct     string
@@ -32,6 +34,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Use(corsMiddleware)
 	r.Use(chimw.RealIP)
 
+	// Apply rate limiting
+	if cfg.RateLimiter != nil {
+		r.Use(middleware.RateLimit(cfg.RateLimiter))
+	}
+
 	// Health endpoints
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz)
@@ -47,6 +54,10 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Merchant routes → merchant service (auth handled by merchant service)
 	r.Get("/v1/auth/me", p.ProxyToMerchant)
+	r.Post("/v1/auth/change-password", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/setup", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/verify", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/disable", p.ProxyToMerchant)
 	r.Get("/v1/merchants", p.ProxyToMerchant)
 	r.Put("/v1/merchants/{id}", p.ProxyToMerchant)
 	r.Get("/v1/merchants/{id}", p.ProxyToMerchant)
@@ -114,6 +125,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Webhook routes → webhook service (auth handled by webhook service)
 	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)
+	r.Post("/v1/webhooks/test", p.ProxyToWebhook)
 
 	// Subscription routes → subscription service
 	r.Post("/v1/subscription-plans", p.ProxyToSubscription)
