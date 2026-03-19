@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
 	"github.com/openlankapay/openlankapay/services/payment/internal/service"
+	"github.com/shopspring/decimal"
 )
 
 // PaymentRepository is the PostgreSQL implementation for payment persistence.
@@ -23,6 +25,11 @@ func NewPaymentRepository(pool *pgxpool.Pool) *PaymentRepository {
 }
 
 func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error {
+	goodsJSON, _ := json.Marshal(p.Goods)
+	if p.Goods == nil {
+		goodsJSON = nil
+	}
+
 	query := `
 		INSERT INTO payments (
 			id, merchant_id, branch_id, payment_no, merchant_trade_no,
@@ -30,8 +37,11 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			exchange_fee_pct, exchange_fee_usdt, platform_fee_pct, platform_fee_usdt,
 			total_fees_usdt, net_amount_usdt,
 			provider, provider_pay_id, qr_content, checkout_link, deep_link,
-			status, customer_email, webhook_url,
+			status, customer_email, customer_first_name, customer_last_name,
+			customer_phone, customer_address, goods,
+			webhook_url, success_url, cancel_url,
 			tx_hash, block_number, wallet_address,
+			lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
 			expire_time, paid_at, failed_at, idempotency_key,
 			created_at, updated_at
 		) VALUES (
@@ -40,10 +50,13 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			$10, $11, $12, $13,
 			$14, $15,
 			$16, $17, $18, $19, $20,
-			$21, $22, $23,
-			$24, $25, $26,
-			$27, $28, $29, $30,
-			$31, $32
+			$21, $22, $23, $24,
+			$25, $26, $27,
+			$28, $29, $30,
+			$31, $32, $33,
+			$34, $35, $36, $37, $38,
+			$39, $40, $41, $42,
+			$43, $44
 		)`
 
 	_, err := r.pool.Exec(ctx, query,
@@ -52,8 +65,11 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 		p.ExchangeFeePct, p.ExchangeFeeUSDT, p.PlatformFeePct, p.PlatformFeeUSDT,
 		p.TotalFeesUSDT, p.NetAmountUSDT,
 		p.Provider, p.ProviderPayID, p.QRContent, p.CheckoutLink, p.DeepLink,
-		string(p.Status), p.CustomerEmail, p.WebhookURL,
+		string(p.Status), p.CustomerEmail, p.CustomerFirstName, p.CustomerLastName,
+		p.CustomerPhone, p.CustomerAddress, goodsJSON,
+		p.WebhookURL, p.SuccessURL, p.CancelURL,
 		p.TxHash, p.BlockNumber, p.WalletAddress,
+		p.LKRAmount, p.LKRExchangeFee, p.LKRPlatformFee, p.LKRTotalFees, p.LKRNetAmount,
 		p.ExpireTime, p.PaidAt, p.FailedAt, nilIfEmpty(p.IdempotencyKey),
 		p.CreatedAt, p.UpdatedAt,
 	)
@@ -68,8 +84,11 @@ const paymentSelectCols = `id, merchant_id, branch_id, payment_no, COALESCE(merc
 	COALESCE(exchange_fee_pct,0), COALESCE(exchange_fee_usdt,0), COALESCE(platform_fee_pct,0), COALESCE(platform_fee_usdt,0),
 	COALESCE(total_fees_usdt,0), COALESCE(net_amount_usdt,0),
 	provider, COALESCE(provider_pay_id,''), COALESCE(qr_content,''), COALESCE(checkout_link,''), COALESCE(deep_link,''),
-	status, COALESCE(customer_email,''), COALESCE(webhook_url,''),
+	status, COALESCE(customer_email,''), COALESCE(customer_first_name,''), COALESCE(customer_last_name,''),
+	COALESCE(customer_phone,''), COALESCE(customer_address,''), goods,
+	COALESCE(webhook_url,''), COALESCE(success_url,''), COALESCE(cancel_url,''),
 	COALESCE(tx_hash,''), COALESCE(block_number,0), COALESCE(wallet_address,''),
+	lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
 	expire_time, paid_at, failed_at, COALESCE(idempotency_key,''),
 	created_at, updated_at, deleted_at`
 
@@ -149,6 +168,32 @@ func (r *PaymentRepository) List(ctx context.Context, merchantID uuid.UUID, para
 		argIdx++
 	}
 
+	if params.BranchID != nil {
+		conditions = append(conditions, fmt.Sprintf("branch_id = $%d", argIdx))
+		args = append(args, *params.BranchID)
+		argIdx++
+	}
+
+	if params.Search != "" {
+		conditions = append(conditions, fmt.Sprintf(
+			"(payment_no ILIKE $%d OR merchant_trade_no ILIKE $%d OR customer_email ILIKE $%d)",
+			argIdx, argIdx, argIdx))
+		args = append(args, "%"+params.Search+"%")
+		argIdx++
+	}
+
+	if params.DateFrom != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIdx))
+		args = append(args, *params.DateFrom)
+		argIdx++
+	}
+
+	if params.DateTo != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIdx))
+		args = append(args, *params.DateTo)
+		argIdx++
+	}
+
 	where := strings.Join(conditions, " AND ")
 
 	// Count
@@ -199,6 +244,7 @@ func (r *PaymentRepository) scanOne(ctx context.Context, query string, args ...a
 func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
 	var p domain.Payment
 	var status string
+	var goodsJSON []byte
 
 	err := rows.Scan(
 		&p.ID, &p.MerchantID, &p.BranchID, &p.PaymentNo, &p.MerchantTradeNo,
@@ -206,8 +252,11 @@ func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
 		&p.ExchangeFeePct, &p.ExchangeFeeUSDT, &p.PlatformFeePct, &p.PlatformFeeUSDT,
 		&p.TotalFeesUSDT, &p.NetAmountUSDT,
 		&p.Provider, &p.ProviderPayID, &p.QRContent, &p.CheckoutLink, &p.DeepLink,
-		&status, &p.CustomerEmail, &p.WebhookURL,
+		&status, &p.CustomerEmail, &p.CustomerFirstName, &p.CustomerLastName,
+		&p.CustomerPhone, &p.CustomerAddress, &goodsJSON,
+		&p.WebhookURL, &p.SuccessURL, &p.CancelURL,
 		&p.TxHash, &p.BlockNumber, &p.WalletAddress,
+		&p.LKRAmount, &p.LKRExchangeFee, &p.LKRPlatformFee, &p.LKRTotalFees, &p.LKRNetAmount,
 		&p.ExpireTime, &p.PaidAt, &p.FailedAt, &p.IdempotencyKey,
 		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 	)
@@ -216,6 +265,11 @@ func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
 	}
 
 	p.Status = domain.PaymentStatus(status)
+
+	if len(goodsJSON) > 0 {
+		_ = json.Unmarshal(goodsJSON, &p.Goods)
+	}
+
 	return &p, nil
 }
 
@@ -225,3 +279,6 @@ func nilIfEmpty(s string) *string {
 	}
 	return &s
 }
+
+// suppress unused import
+var _ = decimal.Zero
