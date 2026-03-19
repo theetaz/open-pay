@@ -43,6 +43,7 @@ func NewRouter(h *WebhookHandler, jwtSecret string) http.Handler {
 
 		r.Post("/v1/webhooks/configure", h.Configure)
 		r.Get("/v1/webhooks/public-key", h.GetPublicKey)
+		r.Post("/v1/webhooks/test", h.TestWebhook)
 	})
 
 	// Internal endpoint for delivering webhooks (called by other services)
@@ -124,6 +125,43 @@ func (h *WebhookHandler) Deliver(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{
 		"deliveryId": delivery.ID.String(),
 		"status":     string(delivery.Status),
+	}})
+}
+
+// TestWebhook handles POST /v1/webhooks/test — sends a test webhook to verify merchant integration.
+func (h *WebhookHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	testPayload, _ := json.Marshal(map[string]any{
+		"event": "test.webhook",
+		"data": map[string]string{
+			"message": "This is a test webhook from OpenLankaPay",
+		},
+	})
+
+	start := time.Now()
+	delivery, err := h.svc.Deliver(r.Context(), claims.MerchantID, "test.webhook", testPayload, nil)
+	deliveryTime := time.Since(start).Milliseconds()
+	if err != nil {
+		if errors.Is(err, domain.ErrWebhookConfigNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_CONFIGURED", "webhook not configured — call POST /v1/webhooks/configure first")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "DELIVERY_FAILED", "failed to deliver test webhook")
+		return
+	}
+
+	success := delivery.Status == domain.DeliveryDelivered
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{
+		"success":      success,
+		"deliveryId":   delivery.ID.String(),
+		"status":       string(delivery.Status),
+		"deliveryTime": deliveryTime,
+		"message":      "Test webhook delivered",
 	}})
 }
 
