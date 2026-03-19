@@ -89,13 +89,10 @@ func NewPaymentLink(merchantID uuid.UUID, name, slug, currency string, amount de
 // Validate performs additional validation after all fields are set.
 func (pl *PaymentLink) Validate() error {
 	if pl.AllowCustomAmount {
-		if pl.MinAmount == nil || pl.MaxAmount == nil {
-			return fmt.Errorf("%w: minAmount and maxAmount are required when allowCustomAmount is true", ErrInvalidPaymentLink)
-		}
-		if pl.MinAmount.LessThanOrEqual(decimal.Zero) {
+		if pl.MinAmount != nil && pl.MinAmount.LessThanOrEqual(decimal.Zero) {
 			return fmt.Errorf("%w: minAmount must be greater than zero", ErrInvalidPaymentLink)
 		}
-		if pl.MaxAmount.LessThanOrEqual(*pl.MinAmount) {
+		if pl.MinAmount != nil && pl.MaxAmount != nil && pl.MaxAmount.LessThanOrEqual(*pl.MinAmount) {
 			return fmt.Errorf("%w: maxAmount must be greater than minAmount", ErrInvalidPaymentLink)
 		}
 	}

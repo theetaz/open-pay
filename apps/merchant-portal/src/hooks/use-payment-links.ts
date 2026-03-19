@@ -13,6 +13,10 @@ export interface PaymentLink {
   currency: string
   amount: string
   allowCustomAmount: boolean
+  minAmount?: string
+  maxAmount?: string
+  allowQuantityBuy: boolean
+  maxQuantity: number
   isReusable: boolean
   showOnQrPage: boolean
   usageCount: number
@@ -63,6 +67,10 @@ export function useCreatePaymentLink() {
       currency: string
       amount: string
       allowCustomAmount?: boolean
+      minAmount?: string
+      maxAmount?: string
+      allowQuantityBuy?: boolean
+      maxQuantity?: number
       isReusable?: boolean
       showOnQrPage?: boolean
       expireAt?: string

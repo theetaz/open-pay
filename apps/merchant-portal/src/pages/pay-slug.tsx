@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usePublicPaymentLink } from '#/hooks/use-payment-links'
 import { api } from '#/lib/api'
-import { Loader2, XCircle, CreditCard } from 'lucide-react'
+import { Loader2, XCircle, CreditCard, Minus, Plus } from 'lucide-react'
 
 interface CreatePaymentResponse {
   data: {
@@ -20,6 +20,7 @@ export function PaymentLinkCheckout() {
   const [email, setEmail] = useState('')
   const [provider, setProvider] = useState('TEST')
   const [customAmount, setCustomAmount] = useState('')
+  const [quantity, setQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,12 +49,21 @@ export function PaymentLinkCheckout() {
     )
   }
 
-  const displayAmount = paymentLink.allowCustomAmount
-    ? customAmount || '0.00'
-    : paymentLink.amount
+  const minAmount = paymentLink.minAmount ? parseFloat(paymentLink.minAmount) : 0
+  const maxAmount = paymentLink.maxAmount ? parseFloat(paymentLink.maxAmount) : Infinity
+  const maxQty = paymentLink.allowQuantityBuy && paymentLink.maxQuantity > 0 ? paymentLink.maxQuantity : Infinity
 
-  const canSubmit = !submitting &&
-    (paymentLink.allowCustomAmount ? parseFloat(customAmount) > 0 : true)
+  const unitAmount = paymentLink.allowCustomAmount
+    ? parseFloat(customAmount) || 0
+    : parseFloat(paymentLink.amount)
+
+  const totalAmount = unitAmount * quantity
+
+  const amountInRange = paymentLink.allowCustomAmount
+    ? unitAmount >= minAmount && unitAmount <= maxAmount
+    : true
+
+  const canSubmit = !submitting && unitAmount > 0 && amountInRange && quantity >= 1
 
   const handlePay = async () => {
     setSubmitting(true)
@@ -62,7 +72,7 @@ export function PaymentLinkCheckout() {
     try {
       const res = await api.post<CreatePaymentResponse>('/v1/public/payments', {
         merchantId: paymentLink.merchantId,
-        amount: paymentLink.allowCustomAmount ? customAmount : paymentLink.amount,
+        amount: String(totalAmount),
         currency: paymentLink.currency,
         provider,
         merchantTradeNo: `PL-${paymentLink.slug}`,
@@ -96,24 +106,38 @@ export function PaymentLinkCheckout() {
           <div className="text-center mb-6">
             <h2 className="text-xl font-semibold">{paymentLink.name}</h2>
             {paymentLink.description && (
-              <p className="text-sm text-muted-foreground mt-1">{paymentLink.description}</p>
+              <div
+                className="text-sm text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none [&>p]:my-1"
+                dangerouslySetInnerHTML={{ __html: paymentLink.description }}
+              />
             )}
           </div>
 
           {/* Amount */}
-          <div className="rounded-lg border border-border p-4 text-center mb-6">
+          <div className="rounded-lg border border-border p-4 text-center mb-4">
             {paymentLink.allowCustomAmount ? (
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Enter Amount ({paymentLink.currency})</p>
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
+                  min={minAmount || 0}
+                  max={maxAmount < Infinity ? maxAmount : undefined}
                   placeholder="0.00"
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
                   className="w-full text-center text-2xl font-bold bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
+                {minAmount > 0 && maxAmount < Infinity && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Min: {minAmount.toLocaleString()} — Max: {maxAmount.toLocaleString()} {paymentLink.currency}
+                  </p>
+                )}
+                {customAmount && !amountInRange && (
+                  <p className="text-xs text-red-500 mt-1">
+                    Amount must be between {minAmount.toLocaleString()} and {maxAmount.toLocaleString()} {paymentLink.currency}
+                  </p>
+                )}
               </div>
             ) : (
               <div>
@@ -124,6 +148,38 @@ export function PaymentLinkCheckout() {
               </div>
             )}
           </div>
+
+          {/* Quantity Selector */}
+          {paymentLink.allowQuantityBuy && (
+            <div className="rounded-lg border border-border p-4 mb-4">
+              <p className="text-sm font-medium mb-3">Quantity</p>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                  className="rounded-md border border-border p-2 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(Math.min(maxQty, quantity + 1))}
+                  disabled={quantity >= maxQty}
+                  className="rounded-md border border-border p-2 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+              {maxQty < Infinity && (
+                <p className="text-xs text-muted-foreground text-center mt-2">Max: {maxQty}</p>
+              )}
+              {quantity > 1 && (
+                <p className="text-sm text-muted-foreground text-center mt-2">
+                  Total: {totalAmount.toLocaleString()} {paymentLink.currency}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-4">
             {/* Email */}
@@ -179,7 +235,7 @@ export function PaymentLinkCheckout() {
               )}
               {submitting
                 ? 'Creating payment...'
-                : `Pay ${parseFloat(displayAmount).toLocaleString()} ${paymentLink.currency}`}
+                : `Pay ${totalAmount.toLocaleString()} ${paymentLink.currency}`}
             </button>
           </div>
         </div>

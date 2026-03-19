@@ -4,12 +4,13 @@ import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import { Textarea } from '#/components/ui/textarea'
 import { Switch } from '#/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '#/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Separator } from '#/components/ui/separator'
+import { DatePicker } from '#/components/ui/date-picker'
+import { RichTextEditor } from '#/components/ui/rich-text-editor'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
@@ -245,9 +246,13 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [currency, setCurrency] = useState('LKR')
   const [amount, setAmount] = useState('')
   const [allowCustomAmount, setAllowCustomAmount] = useState(false)
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
+  const [allowQuantityBuy, setAllowQuantityBuy] = useState(false)
+  const [maxQuantity, setMaxQuantity] = useState('')
   const [isReusable, setIsReusable] = useState(false)
   const [showOnQrPage, setShowOnQrPage] = useState(false)
-  const [expireAt, setExpireAt] = useState('')
+  const [expireAt, setExpireAt] = useState<Date | undefined>(undefined)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -260,9 +265,13 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
     setCurrency('LKR')
     setAmount('')
     setAllowCustomAmount(false)
+    setMinAmount('')
+    setMaxAmount('')
+    setAllowQuantityBuy(false)
+    setMaxQuantity('')
     setIsReusable(false)
     setShowOnQrPage(false)
-    setExpireAt('')
+    setExpireAt(undefined)
   }, [])
 
   // Auto-generate slug from name
@@ -307,10 +316,13 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
     setSlug(value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
   }
 
+  const minMaxValid = !minAmount || !maxAmount || parseFloat(maxAmount) > parseFloat(minAmount)
+
   const canSubmit =
     name.trim() &&
     slug.trim() &&
     (allowCustomAmount || (amount && parseFloat(amount) > 0)) &&
+    minMaxValid &&
     slugStatus !== 'taken' &&
     slugStatus !== 'invalid' &&
     slugStatus !== 'checking' &&
@@ -323,13 +335,19 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
       {
         name: name.trim(),
         slug: slug.trim(),
-        description: description.trim(),
+        description: description === '<p></p>' ? '' : description,
         currency,
-        amount: allowCustomAmount ? '0.01' : amount,
+        amount: allowCustomAmount ? (minAmount || '0.01') : amount,
         allowCustomAmount,
+        ...(allowCustomAmount && {
+          minAmount,
+          maxAmount,
+        }),
+        allowQuantityBuy,
+        ...(allowQuantityBuy && maxQuantity && { maxQuantity: parseInt(maxQuantity) }),
         isReusable,
         showOnQrPage,
-        expireAt: expireAt ? new Date(expireAt).toISOString() : undefined,
+        expireAt: expireAt ? expireAt.toISOString() : undefined,
       },
       {
         onSuccess: () => {
@@ -405,13 +423,11 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="link-desc">Description</Label>
-            <Textarea
-              id="link-desc"
-              placeholder="Item Description (supports Markdown)"
-              rows={3}
+            <Label>Description</Label>
+            <RichTextEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
+              placeholder="Describe your product or service..."
             />
           </div>
 
@@ -441,7 +457,37 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
             <Switch checked={allowCustomAmount} onCheckedChange={setAllowCustomAmount} />
           </div>
 
-          {!allowCustomAmount && (
+          {allowCustomAmount ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="link-min-amount">Minimum Amount *</Label>
+                <Input
+                  id="link-min-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="link-max-amount">Maximum Amount *</Label>
+                <Input
+                  id="link-max-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(e.target.value)}
+                />
+              </div>
+              {minAmount && maxAmount && parseFloat(maxAmount) <= parseFloat(minAmount) && (
+                <p className="col-span-2 text-xs text-destructive">Maximum amount must be greater than minimum amount.</p>
+              )}
+            </div>
+          ) : (
             <div className="space-y-2">
               <Label htmlFor="link-amount">Amount *</Label>
               <Input
@@ -456,13 +502,50 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
             </div>
           )}
 
+          <Separator />
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Quantity & Options
+          </p>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Allow quantity selection</Label>
+              <p className="text-xs text-muted-foreground">Let customers purchase multiple quantities</p>
+            </div>
+            <Switch checked={allowQuantityBuy} onCheckedChange={setAllowQuantityBuy} />
+          </div>
+
+          {allowQuantityBuy && (
+            <div className="space-y-2">
+              <Label htmlFor="link-max-qty">Maximum Quantity</Label>
+              <Input
+                id="link-max-qty"
+                type="number"
+                step="1"
+                min="1"
+                placeholder="Leave empty for unlimited"
+                value={maxQuantity}
+                onChange={(e) => setMaxQuantity(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {maxQuantity ? `Customers can select up to ${maxQuantity} items` : 'No limit — customers can select any quantity'}
+              </p>
+            </div>
+          )}
+
+          <Separator />
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Link Settings
+          </p>
+
           <div className="space-y-2">
-            <Label htmlFor="link-expiry">Expiration Date</Label>
-            <Input
-              id="link-expiry"
-              type="datetime-local"
+            <Label>Expiration Date</Label>
+            <DatePicker
               value={expireAt}
-              onChange={(e) => setExpireAt(e.target.value)}
+              onChange={setExpireAt}
+              placeholder="Pick an expiration date"
+              fromYear={new Date().getFullYear()}
+              toYear={new Date().getFullYear() + 5}
             />
           </div>
 
