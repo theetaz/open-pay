@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/payment/internal/adapter/provider"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
@@ -32,11 +34,16 @@ type PaymentServiceInterface interface {
 type PaymentHandler struct {
 	svc          PaymentServiceInterface
 	mockProvider *provider.MockProvider
+	auditLog     *audit.Client
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
-func NewPaymentHandler(svc PaymentServiceInterface, mockProvider *provider.MockProvider) *PaymentHandler {
-	return &PaymentHandler{svc: svc, mockProvider: mockProvider}
+func NewPaymentHandler(svc PaymentServiceInterface, mockProvider *provider.MockProvider, auditClient ...*audit.Client) *PaymentHandler {
+	h := &PaymentHandler{svc: svc, mockProvider: mockProvider}
+	if len(auditClient) > 0 {
+		h.auditLog = auditClient[0]
+	}
+	return h
 }
 
 // NewRouter creates a chi router with payment routes.
@@ -99,7 +106,7 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		currency = "USDT"
 	}
 
-	payment, err := h.svc.CreatePayment(r.Context(), service.CreatePaymentInput{
+	input := service.CreatePaymentInput{
 		MerchantID:      claims.MerchantID,
 		BranchID:        req.BranchID,
 		Amount:          amount,
@@ -107,8 +114,29 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		Provider:        prov,
 		MerchantTradeNo: req.MerchantTradeNo,
 		WebhookURL:      req.WebhookURL,
+		SuccessURL:      req.SuccessURL,
+		CancelURL:       req.CancelURL,
 		CustomerEmail:   req.CustomerEmail,
-	})
+	}
+	if req.CustomerBilling != nil {
+		input.CustomerFirstName = req.CustomerBilling.FirstName
+		input.CustomerLastName = req.CustomerBilling.LastName
+		input.CustomerPhone = req.CustomerBilling.Phone
+		input.CustomerAddress = req.CustomerBilling.Address
+		if input.CustomerEmail == "" {
+			input.CustomerEmail = req.CustomerBilling.Email
+		}
+	}
+	for _, g := range req.Goods {
+		input.Goods = append(input.Goods, domain.GoodItem{Name: g.Name, Description: g.Description, MccCode: g.MccCode})
+	}
+	if req.OrderExpireTime != "" {
+		if t, err := time.Parse(time.RFC3339, req.OrderExpireTime); err == nil {
+			input.ExpireTime = &t
+		}
+	}
+
+	payment, err := h.svc.CreatePayment(r.Context(), input)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidPayment) {
 			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -116,6 +144,16 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create payment")
 		return
+	}
+
+	if h.auditLog != nil {
+		merchantID := claims.MerchantID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			Action: "payment.initiated", ResourceType: "payment", ResourceID: &payment.ID,
+			IPAddress:  stripPort(r.RemoteAddr),
+			Metadata:   map[string]string{"amount": payment.Amount.String(), "currency": payment.Currency, "provider": payment.Provider},
+		})
 	}
 
 	writeJSON(w, http.StatusCreated, envelope{"data": paymentResponse(payment)})
@@ -185,6 +223,14 @@ func (h *PaymentHandler) CreatePublicPayment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if h.auditLog != nil {
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorType: "SYSTEM", MerchantID: &merchantID,
+			Action: "payment.initiated", ResourceType: "payment", ResourceID: &payment.ID,
+			Metadata: map[string]string{"amount": payment.Amount.String(), "currency": payment.Currency, "provider": payment.Provider, "merchantTradeNo": req.MerchantTradeNo},
+		})
+	}
+
 	writeJSON(w, http.StatusCreated, envelope{"data": paymentResponse(payment)})
 }
 
@@ -231,11 +277,27 @@ func (h *PaymentHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 	params := service.ListParams{
 		Page:    intQuery(r, "page", 1),
 		PerPage: intQuery(r, "perPage", 20),
+		Search:  r.URL.Query().Get("search"),
 	}
 
 	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
 		status := domain.PaymentStatus(statusStr)
 		params.Status = &status
+	}
+	if bid := r.URL.Query().Get("branchId"); bid != "" {
+		if id, err := uuid.Parse(bid); err == nil {
+			params.BranchID = &id
+		}
+	}
+	if df := r.URL.Query().Get("dateFrom"); df != "" {
+		if t, err := time.Parse(time.RFC3339, df); err == nil {
+			params.DateFrom = &t
+		}
+	}
+	if dt := r.URL.Query().Get("dateTo"); dt != "" {
+		if t, err := time.Parse(time.RFC3339, dt); err == nil {
+			params.DateTo = &t
+		}
 	}
 
 	payments, total, err := h.svc.ListPayments(r.Context(), claims.MerchantID, params)
@@ -277,6 +339,15 @@ func (h *PaymentHandler) GetCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.auditLog != nil {
+		merchantID := payment.MerchantID
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorType: "SYSTEM", MerchantID: &merchantID,
+			Action: "payment.checkout_viewed", ResourceType: "payment", ResourceID: &payment.ID,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": checkoutResponse(payment)})
 }
 
@@ -297,6 +368,28 @@ func (h *PaymentHandler) HandleCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if h.auditLog != nil {
+		if payment, err := h.svc.GetPayment(r.Context(), id); err == nil {
+			action := "payment.paid"
+			switch payment.Status {
+			case domain.StatusExpired:
+				action = "payment.expired"
+			case domain.StatusFailed:
+				action = "payment.failed"
+			}
+			merchantID := payment.MerchantID
+			meta := map[string]string{"status": string(payment.Status)}
+			if payment.TxHash != "" {
+				meta["txHash"] = payment.TxHash
+			}
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorType: "SYSTEM", MerchantID: &merchantID,
+				Action: action, ResourceType: "payment", ResourceID: &payment.ID,
+				Metadata: meta,
+			})
+		}
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "processed"}})
 }
 
@@ -306,6 +399,14 @@ func (h *PaymentHandler) ExpireStalePayments(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to expire payments")
 		return
+	}
+
+	if h.auditLog != nil && count > 0 {
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorType: "SYSTEM",
+			Action:    "payment.expired", ResourceType: "payment",
+			Metadata: map[string]string{"expiredCount": strconv.Itoa(count)},
+		})
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{"expired": count}})
@@ -326,18 +427,54 @@ func (h *PaymentHandler) SimulatePayment(w http.ResponseWriter, r *http.Request)
 // --- Request/Response types ---
 
 type createPaymentRequest struct {
-	Amount          string     `json:"amount"`
-	Currency        string     `json:"currency"`
-	Provider        string     `json:"provider"`
-	MerchantTradeNo string     `json:"merchantTradeNo"`
-	WebhookURL      string     `json:"webhookUrl"`
-	CustomerEmail   string     `json:"customerEmail"`
-	BranchID        *uuid.UUID `json:"branchId"`
+	Amount            string              `json:"amount"`
+	Currency          string              `json:"currency"`
+	Provider          string              `json:"provider"`
+	MerchantTradeNo   string              `json:"merchantTradeNo"`
+	WebhookURL        string              `json:"webhookUrl"`
+	SuccessURL        string              `json:"successUrl"`
+	CancelURL         string              `json:"cancelUrl"`
+	CustomerEmail     string              `json:"customerEmail"`
+	BranchID          *uuid.UUID          `json:"branchId"`
+	OrderExpireTime   string              `json:"orderExpireTime"`
+	CustomerBilling   *customerBillingReq `json:"customerBilling"`
+	Goods             []goodItemReq       `json:"goods"`
+}
+
+type customerBillingReq struct {
+	FirstName  string `json:"firstName"`
+	LastName   string `json:"lastName"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Address    string `json:"address"`
+}
+
+type goodItemReq struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	MccCode     string `json:"mccCode"`
 }
 
 type envelope map[string]any
 
 func paymentResponse(p *domain.Payment) map[string]any {
+	feeBreakdown := map[string]any{
+		"grossAmountUSDT":       p.AmountUSDT.String(),
+		"exchangeFeePercentage": p.ExchangeFeePct.String(),
+		"exchangeFeeAmountUSDT": p.ExchangeFeeUSDT.String(),
+		"ceypayFeePercentage":   p.PlatformFeePct.String(),
+		"ceypayFeeAmountUSDT":   p.PlatformFeeUSDT.String(),
+		"totalFeesUSDT":         p.TotalFeesUSDT.String(),
+		"netAmountUSDT":         p.NetAmountUSDT.String(),
+	}
+	if p.LKRAmount != nil {
+		feeBreakdown["grossAmountLKR"] = p.LKRAmount.String()
+		feeBreakdown["exchangeFeeAmountLKR"] = p.LKRExchangeFee.String()
+		feeBreakdown["ceypayFeeAmountLKR"] = p.LKRPlatformFee.String()
+		feeBreakdown["totalFeesLKR"] = p.LKRTotalFees.String()
+		feeBreakdown["netAmountLKR"] = p.LKRNetAmount.String()
+	}
+
 	resp := map[string]any{
 		"id":              p.ID.String(),
 		"merchantId":      p.MerchantID.String(),
@@ -346,12 +483,6 @@ func paymentResponse(p *domain.Payment) map[string]any {
 		"amount":          p.Amount.String(),
 		"currency":        p.Currency,
 		"amountUsdt":      p.AmountUSDT.String(),
-		"exchangeFeePct":  p.ExchangeFeePct.String(),
-		"exchangeFeeUsdt": p.ExchangeFeeUSDT.String(),
-		"platformFeePct":  p.PlatformFeePct.String(),
-		"platformFeeUsdt": p.PlatformFeeUSDT.String(),
-		"totalFeesUsdt":   p.TotalFeesUSDT.String(),
-		"netAmountUsdt":   p.NetAmountUSDT.String(),
 		"provider":        p.Provider,
 		"providerPayId":   p.ProviderPayID,
 		"qrContent":       p.QRContent,
@@ -360,6 +491,7 @@ func paymentResponse(p *domain.Payment) map[string]any {
 		"status":          string(p.Status),
 		"customerEmail":   p.CustomerEmail,
 		"txHash":          p.TxHash,
+		"feeBreakdown":    feeBreakdown,
 		"expireTime":      p.ExpireTime.Format(time.RFC3339),
 		"createdAt":       p.CreatedAt.Format(time.RFC3339),
 	}
@@ -371,6 +503,24 @@ func paymentResponse(p *domain.Payment) map[string]any {
 	}
 	if p.PaidAt != nil {
 		resp["paidAt"] = p.PaidAt.Format(time.RFC3339)
+	}
+	if p.CustomerFirstName != "" || p.CustomerLastName != "" {
+		resp["customerBilling"] = map[string]string{
+			"firstName": p.CustomerFirstName,
+			"lastName":  p.CustomerLastName,
+			"email":     p.CustomerEmail,
+			"phone":     p.CustomerPhone,
+			"address":   p.CustomerAddress,
+		}
+	}
+	if len(p.Goods) > 0 {
+		resp["goods"] = p.Goods
+	}
+	if p.SuccessURL != "" {
+		resp["successUrl"] = p.SuccessURL
+	}
+	if p.CancelURL != "" {
+		resp["cancelUrl"] = p.CancelURL
 	}
 	return resp
 }
@@ -422,4 +572,12 @@ func intQuery(r *http.Request, key string, defaultVal int) int {
 		return defaultVal
 	}
 	return v
+}
+
+func stripPort(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }

@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -29,23 +32,40 @@ type EventPublisher interface {
 	Publish(ctx context.Context, subject string, data any) error
 }
 
-// ListParams holds pagination parameters.
+// MerchantClient defines the contract for calling the merchant service.
+type MerchantClient interface {
+	IncrementPaymentLinkUsage(ctx context.Context, slug string) error
+}
+
+// ListParams holds pagination and filter parameters.
 type ListParams struct {
-	Page    int
-	PerPage int
-	Status  *domain.PaymentStatus
+	Page     int
+	PerPage  int
+	Status   *domain.PaymentStatus
+	BranchID *uuid.UUID
+	Search   string
+	DateFrom *time.Time
+	DateTo   *time.Time
 }
 
 // CreatePaymentInput holds the data needed to create a payment.
 type CreatePaymentInput struct {
-	MerchantID      uuid.UUID
-	BranchID        *uuid.UUID
-	Amount          decimal.Decimal
-	Currency        string
-	Provider        string
-	MerchantTradeNo string
-	WebhookURL      string
-	CustomerEmail   string
+	MerchantID        uuid.UUID
+	BranchID          *uuid.UUID
+	Amount            decimal.Decimal
+	Currency          string
+	Provider          string
+	MerchantTradeNo   string
+	WebhookURL        string
+	SuccessURL        string
+	CancelURL         string
+	CustomerEmail     string
+	CustomerFirstName string
+	CustomerLastName  string
+	CustomerPhone     string
+	CustomerAddress   string
+	Goods             []domain.GoodItem
+	ExpireTime        *time.Time
 }
 
 // PaymentService orchestrates payment operations.
@@ -54,16 +74,21 @@ type PaymentService struct {
 	providers  map[string]domain.PaymentProvider
 	exchange   ExchangeClient
 	events     EventPublisher
+	merchant   MerchantClient
 }
 
 // NewPaymentService creates a new PaymentService.
-func NewPaymentService(repo PaymentRepository, providers map[string]domain.PaymentProvider, exchange ExchangeClient, events EventPublisher) *PaymentService {
-	return &PaymentService{
+func NewPaymentService(repo PaymentRepository, providers map[string]domain.PaymentProvider, exchange ExchangeClient, events EventPublisher, merchant ...MerchantClient) *PaymentService {
+	s := &PaymentService{
 		repo:      repo,
 		providers: providers,
 		exchange:  exchange,
 		events:    events,
 	}
+	if len(merchant) > 0 {
+		s.merchant = merchant[0]
+	}
+	return s
 }
 
 // CreatePayment creates a new payment and initiates it with the provider.
@@ -74,14 +99,22 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 	}
 
 	payment, err := domain.NewPayment(domain.CreatePaymentInput{
-		MerchantID:      input.MerchantID,
-		BranchID:        input.BranchID,
-		Amount:          input.Amount,
-		Currency:        input.Currency,
-		Provider:        input.Provider,
-		MerchantTradeNo: input.MerchantTradeNo,
-		WebhookURL:      input.WebhookURL,
-		CustomerEmail:   input.CustomerEmail,
+		MerchantID:        input.MerchantID,
+		BranchID:          input.BranchID,
+		Amount:            input.Amount,
+		Currency:          input.Currency,
+		Provider:          input.Provider,
+		MerchantTradeNo:   input.MerchantTradeNo,
+		WebhookURL:        input.WebhookURL,
+		SuccessURL:        input.SuccessURL,
+		CancelURL:         input.CancelURL,
+		CustomerEmail:     input.CustomerEmail,
+		CustomerFirstName: input.CustomerFirstName,
+		CustomerLastName:  input.CustomerLastName,
+		CustomerPhone:     input.CustomerPhone,
+		CustomerAddress:   input.CustomerAddress,
+		Goods:             input.Goods,
+		ExpireTime:        input.ExpireTime,
 	})
 	if err != nil {
 		return nil, err
@@ -119,6 +152,14 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 	}
 
 	_ = s.events.Publish(ctx, "payment.initiated", payment)
+
+	// Increment payment link usage count if this payment was created from a payment link
+	if s.merchant != nil && strings.HasPrefix(input.MerchantTradeNo, "PL-") {
+		slug := strings.TrimPrefix(input.MerchantTradeNo, "PL-")
+		if err := s.merchant.IncrementPaymentLinkUsage(ctx, slug); err != nil {
+			fmt.Fprintf(os.Stderr, "payment: failed to increment usage for slug %s: %v\n", slug, err)
+		}
+	}
 
 	return payment, nil
 }

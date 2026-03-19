@@ -8,9 +8,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	exchangeclient "github.com/openlankapay/openlankapay/services/payment/internal/adapter/exchange"
+	merchantclient "github.com/openlankapay/openlankapay/services/payment/internal/adapter/merchant"
 	pgadapter "github.com/openlankapay/openlankapay/services/payment/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/payment/internal/adapter/provider"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
@@ -51,11 +53,19 @@ func main() {
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
+	// Merchant client (for incrementing payment link usage)
+	merchantServiceURL := getEnv("MERCHANT_SERVICE_URL", "http://localhost:8082")
+	merchClient := merchantclient.NewClient(merchantServiceURL)
+
+	// Audit client
+	adminServiceURL := getEnv("ADMIN_SERVICE_URL", "http://localhost:8088")
+	auditClient := audit.NewClient(adminServiceURL)
+
 	// Service
-	svc := service.NewPaymentService(paymentRepo, providers, exchClient, eventPub)
+	svc := service.NewPaymentService(paymentRepo, providers, exchClient, eventPub, merchClient)
 
 	// HTTP Handler
-	h := handler.NewPaymentHandler(svc, mockProv)
+	h := handler.NewPaymentHandler(svc, mockProv, auditClient)
 	router := handler.NewRouter(h, jwtSecret)
 
 	// Server

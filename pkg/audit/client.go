@@ -26,16 +26,24 @@ func NewClient(adminServiceURL string) *Client {
 	}
 }
 
+// Change tracks an old and new value for a field.
+type Change struct {
+	Old string `json:"old"`
+	New string `json:"new"`
+}
+
 // LogEntry represents an audit log entry to create.
 type LogEntry struct {
-	ActorID      uuid.UUID  `json:"actorId"`
-	ActorType    string     `json:"actorType"` // ADMIN, MERCHANT_USER, SYSTEM
-	MerchantID   *uuid.UUID `json:"merchantId,omitempty"`
-	Action       string     `json:"action"`
-	ResourceType string     `json:"resourceType"`
-	ResourceID   *uuid.UUID `json:"resourceId,omitempty"`
-	IPAddress    string     `json:"ipAddress,omitempty"`
-	UserAgent    string     `json:"userAgent,omitempty"`
+	ActorID      uuid.UUID         `json:"actorId"`
+	ActorType    string            `json:"actorType"` // ADMIN, MERCHANT_USER, SYSTEM
+	MerchantID   *uuid.UUID        `json:"merchantId,omitempty"`
+	Action       string            `json:"action"`
+	ResourceType string            `json:"resourceType"`
+	ResourceID   *uuid.UUID        `json:"resourceId,omitempty"`
+	Changes      map[string]Change `json:"changes,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	IPAddress    string            `json:"ipAddress,omitempty"`
+	UserAgent    string            `json:"userAgent,omitempty"`
 }
 
 // Log sends an audit log entry to the admin service. Non-blocking — errors are logged to stderr.

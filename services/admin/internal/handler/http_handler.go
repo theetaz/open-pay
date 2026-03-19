@@ -383,6 +383,8 @@ func (h *AdminHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		Action:       req.Action,
 		ResourceType: req.ResourceType,
 		ResourceID:   resourceID,
+		Changes:      req.Changes,
+		Metadata:     req.Metadata,
 		IPAddress:    req.IPAddress,
 		UserAgent:    req.UserAgent,
 	})
@@ -397,14 +399,16 @@ func (h *AdminHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 // --- Request/Response types ---
 
 type createAuditRequest struct {
-	ActorID      string `json:"actorId"`
-	ActorType    string `json:"actorType"`
-	MerchantID   string `json:"merchantId"`
-	Action       string `json:"action"`
-	ResourceType string `json:"resourceType"`
-	ResourceID   string `json:"resourceId"`
-	IPAddress    string `json:"ipAddress"`
-	UserAgent    string `json:"userAgent"`
+	ActorID      string                     `json:"actorId"`
+	ActorType    string                     `json:"actorType"`
+	MerchantID   string                     `json:"merchantId"`
+	Action       string                     `json:"action"`
+	ResourceType string                     `json:"resourceType"`
+	ResourceID   string                     `json:"resourceId"`
+	Changes      map[string]domain.Change   `json:"changes,omitempty"`
+	Metadata     map[string]string          `json:"metadata,omitempty"`
+	IPAddress    string                     `json:"ipAddress"`
+	UserAgent    string                     `json:"userAgent"`
 }
 
 type envelope map[string]any
