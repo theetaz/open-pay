@@ -42,6 +42,38 @@ func main() {
 	providers := map[string]domain.PaymentProvider{
 		"TEST": mockProv,
 	}
+	logger.Info().Msg("registered provider: TEST")
+
+	if apiKey := os.Getenv("BYBIT_API_KEY"); apiKey != "" {
+		bp := provider.NewBybitProvider(provider.BybitConfig{
+			BaseURL:   getEnv("BYBIT_BASE_URL", "https://api-testnet.bybit.com"),
+			APIKey:    apiKey,
+			APISecret: os.Getenv("BYBIT_API_SECRET"),
+		})
+		providers["BYBIT"] = bp
+		logger.Info().Msg("registered provider: BYBIT")
+	}
+
+	if apiKey := os.Getenv("BINANCE_API_KEY"); apiKey != "" {
+		bp := provider.NewBinanceProvider(provider.BinanceConfig{
+			BaseURL:   getEnv("BINANCE_BASE_URL", "https://bpay.binanceapi.com"),
+			APIKey:    apiKey,
+			APISecret: os.Getenv("BINANCE_API_SECRET"),
+		})
+		providers["BINANCE"] = bp
+		logger.Info().Msg("registered provider: BINANCE")
+	}
+
+	if apiKey := os.Getenv("KUCOIN_API_KEY"); apiKey != "" {
+		kp := provider.NewKuCoinProvider(provider.KuCoinConfig{
+			BaseURL:    getEnv("KUCOIN_BASE_URL", "https://api.kucoin.com"),
+			APIKey:     apiKey,
+			APISecret:  os.Getenv("KUCOIN_API_SECRET"),
+			Passphrase: os.Getenv("KUCOIN_PASSPHRASE"),
+		})
+		providers["KUCOIN"] = kp
+		logger.Info().Msg("registered provider: KUCOIN")
+	}
 
 	// Repository
 	paymentRepo := pgadapter.NewPaymentRepository(pool)
