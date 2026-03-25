@@ -80,6 +80,7 @@ type ListParams struct {
 	PerPage   int
 	KYCStatus *domain.KYCStatus
 	Status    *domain.MerchantStatus
+	Search    string
 }
 
 // RegisterInput holds the data required to register a new merchant.
@@ -133,8 +134,11 @@ type UpdateProfileInput struct {
 }
 
 var (
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrAccountInactive    = errors.New("account is inactive")
+	ErrInvalidCredentials  = errors.New("invalid email or password")
+	ErrAccountInactive     = errors.New("account is inactive")
+	ErrAccountTerminated   = errors.New("account has been terminated")
+	ErrAccountFrozen       = errors.New("account has been frozen")
+	ErrAccountNotActive    = errors.New("merchant account is not active")
 )
 
 // MerchantService orchestrates merchant domain operations.
@@ -265,6 +269,16 @@ func (s *MerchantService) Login(ctx context.Context, email, password string) (*L
 		return nil, fmt.Errorf("fetching merchant: %w", err)
 	}
 
+	// Block login for non-active merchant accounts
+	switch merchant.Status {
+	case domain.MerchantTerminated:
+		return nil, ErrAccountTerminated
+	case domain.MerchantFrozen:
+		return nil, ErrAccountFrozen
+	case domain.MerchantInactive:
+		return nil, ErrAccountNotActive
+	}
+
 	now := time.Now().UTC()
 	user.LastLoginAt = &now
 	_ = s.users.Update(ctx, user)
@@ -306,6 +320,16 @@ func (s *MerchantService) RefreshToken(ctx context.Context, refreshTokenStr stri
 	merchant, err := s.merchants.GetByID(ctx, user.MerchantID)
 	if err != nil {
 		return nil, fmt.Errorf("fetching merchant: %w", err)
+	}
+
+	// Block token refresh for non-active merchant accounts
+	switch merchant.Status {
+	case domain.MerchantTerminated:
+		return nil, ErrAccountTerminated
+	case domain.MerchantFrozen:
+		return nil, ErrAccountFrozen
+	case domain.MerchantInactive:
+		return nil, ErrAccountNotActive
 	}
 
 	accessToken, err := auth.GenerateToken(user.ID, merchant.ID, user.Role, user.BranchID, s.jwtSecret, s.tokenTTL)

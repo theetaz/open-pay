@@ -11,8 +11,9 @@ import { StatusBadge } from '#/components/dashboard/status-badge'
 import { EmptyState } from '#/components/dashboard/empty-state'
 import {
   CheckCircle2, XCircle, Eye, MoreHorizontal, ChevronLeft, ChevronRight,
-  Snowflake, Ban, Unlock, FileText, Download,
+  Snowflake, Ban, Unlock, FileText, Download, Search, X,
 } from 'lucide-react'
+import { Input } from '#/components/ui/input'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
 import {
@@ -35,10 +36,29 @@ export function MerchantsPage() {
   const [actionDialog, setActionDialog] = React.useState<{ type: string; merchant: any } | null>(null)
   const [reason, setReason] = React.useState('')
   const [page, setPage] = React.useState(1)
+  const [search, setSearch] = React.useState('')
+  const [kycFilter, setKycFilter] = React.useState('')
+  const [statusFilter, setStatusFilter] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const queryParams = new URLSearchParams()
+  queryParams.set('page', String(page))
+  queryParams.set('perPage', String(PER_PAGE))
+  if (debouncedSearch) queryParams.set('search', debouncedSearch)
+  if (kycFilter) queryParams.set('kycStatus', kycFilter)
+  if (statusFilter) queryParams.set('status', statusFilter)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'merchants', { page, perPage: PER_PAGE }],
-    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>(`/v1/merchants?page=${page}&perPage=${PER_PAGE}`),
+    queryKey: ['admin', 'merchants', { page, perPage: PER_PAGE, search: debouncedSearch, kycFilter, statusFilter }],
+    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>(`/v1/merchants?${queryParams}`),
     retry: false,
   })
 
@@ -92,6 +112,46 @@ export function MerchantsPage() {
   return (
     <>
       <PageHeader title="Merchants" description="Manage merchant accounts and KYC approvals" />
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          value={kycFilter}
+          onChange={(e) => { setKycFilter(e.target.value); setPage(1) }}
+        >
+          <option value="">All KYC Status</option>
+          <option value="PENDING">Pending</option>
+          <option value="UNDER_REVIEW">Under Review</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="INSTANT_ACCESS">Instant Access</option>
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+        >
+          <option value="">All Account Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+          <option value="FROZEN">Frozen</option>
+          <option value="TERMINATED">Terminated</option>
+        </select>
+        {(search || kycFilter || statusFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setKycFilter(''); setStatusFilter(''); setPage(1) }}>
+            <X className="size-4 mr-1" /> Clear
+          </Button>
+        )}
+      </div>
 
       <Card>
         <CardContent className="p-0">
