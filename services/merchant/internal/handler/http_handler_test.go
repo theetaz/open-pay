@@ -110,7 +110,7 @@ func (s *stubMerchantService) UpdateMerchantProfile(_ context.Context, id uuid.U
 	return m, nil
 }
 
-func (s *stubMerchantService) Approve(_ context.Context, id uuid.UUID) error {
+func (s *stubMerchantService) Approve(_ context.Context, id uuid.UUID, _ bool, _ string) error {
 	m, ok := s.merchants[id]
 	if !ok {
 		return domain.ErrMerchantNotFound
@@ -119,7 +119,7 @@ func (s *stubMerchantService) Approve(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *stubMerchantService) Reject(_ context.Context, id uuid.UUID, reason string) error {
+func (s *stubMerchantService) Reject(_ context.Context, id uuid.UUID, _ string) error {
 	_, ok := s.merchants[id]
 	if !ok {
 		return domain.ErrMerchantNotFound
@@ -144,9 +144,43 @@ func (s *stubMerchantService) List(_ context.Context, _ service.ListParams) ([]*
 	return result, len(result), nil
 }
 
+func (s *stubMerchantService) Freeze(_ context.Context, _ uuid.UUID, _ string) error { return nil }
+func (s *stubMerchantService) Unfreeze(_ context.Context, _ uuid.UUID) error          { return nil }
+func (s *stubMerchantService) Terminate(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+func (s *stubMerchantService) CreateDirector(_ context.Context, _ uuid.UUID, _ string) (*domain.Director, error) {
+	return nil, nil
+}
+func (s *stubMerchantService) ListDirectors(_ context.Context, _ uuid.UUID) ([]*domain.Director, error) {
+	return nil, nil
+}
+func (s *stubMerchantService) ResendDirectorVerification(_ context.Context, _, _ uuid.UUID) error {
+	return nil
+}
+func (s *stubMerchantService) RemoveDirector(_ context.Context, _, _ uuid.UUID) error { return nil }
+func (s *stubMerchantService) GetDirectorByToken(_ context.Context, _ string) (*domain.Director, *domain.Merchant, error) {
+	return nil, nil, nil
+}
+func (s *stubMerchantService) SubmitDirectorVerification(_ context.Context, _ string, _ service.SubmitDirectorInput) (*domain.Director, error) {
+	return nil, nil
+}
+func (s *stubMerchantService) ChangePassword(_ context.Context, _ uuid.UUID, _, _ string) error {
+	return nil
+}
+func (s *stubMerchantService) SetupTOTP(_ context.Context, _ uuid.UUID) (string, string, error) {
+	return "", "", nil
+}
+func (s *stubMerchantService) VerifyAndEnableTOTP(_ context.Context, _ uuid.UUID, _ string) ([]string, error) {
+	return nil, nil
+}
+func (s *stubMerchantService) DisableTOTP(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 func TestRegisterWithUserHandler(t *testing.T) {
 	svc := newStubService()
-	h := handler.NewMerchantHandler(svc, testJWTSecret)
+	h := handler.NewMerchantHandler(svc, testJWTSecret, nil, nil, nil, "")
 	router := handler.NewRouter(h, nil, nil)
 
 	t.Run("successful registration", func(t *testing.T) {
@@ -199,7 +233,7 @@ func TestRegisterWithUserHandler(t *testing.T) {
 
 func TestLoginHandler(t *testing.T) {
 	svc := newStubService()
-	h := handler.NewMerchantHandler(svc, testJWTSecret)
+	h := handler.NewMerchantHandler(svc, testJWTSecret, nil, nil, nil, "")
 	router := handler.NewRouter(h, nil, nil)
 
 	// Register a user first
