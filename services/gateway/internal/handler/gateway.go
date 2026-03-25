@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/middleware"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/proxy"
 )
@@ -183,6 +185,35 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Put("/v1/admin/legal-documents/{id}", p.ProxyToAdmin)
 	r.Post("/v1/admin/legal-documents/{id}/activate", p.ProxyToAdmin)
 
+	// Admin-scoped routes to non-admin services (gateway validates admin JWT)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware(cfg.JWTSecret))
+		r.Use(auth.RequirePlatformAdmin())
+
+		// Merchant management → merchant service
+		r.Get("/v1/admin/merchants", rewritePath("/v1/merchants", p.ProxyToMerchant))
+		r.Get("/v1/admin/merchants/{id}", rewritePath("/v1/merchants/{id}", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/approve", rewritePath("/v1/merchants/{id}/approve", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/reject", rewritePath("/v1/merchants/{id}/reject", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/deactivate", rewritePath("/v1/merchants/{id}/deactivate", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/freeze", rewritePath("/v1/merchants/{id}/freeze", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/unfreeze", rewritePath("/v1/merchants/{id}/unfreeze", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/terminate", rewritePath("/v1/merchants/{id}/terminate", p.ProxyToMerchant))
+		r.Get("/v1/admin/merchants/{id}/documents", rewritePath("/v1/merchants/{id}/documents", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/directors", rewritePath("/v1/merchants/{id}/directors", p.ProxyToMerchant))
+		r.Get("/v1/admin/merchants/{id}/directors", rewritePath("/v1/merchants/{id}/directors", p.ProxyToMerchant))
+		r.Post("/v1/admin/merchants/{id}/directors/{directorId}/resend", rewritePath("/v1/merchants/{id}/directors/{directorId}/resend", p.ProxyToMerchant))
+		r.Delete("/v1/admin/merchants/{id}/directors/{directorId}", rewritePath("/v1/merchants/{id}/directors/{directorId}", p.ProxyToMerchant))
+
+		// Settlement/withdrawal management → settlement service
+		r.Get("/v1/admin/settlements/balance", rewritePath("/v1/settlements/balance", p.ProxyToSettlement))
+		r.Get("/v1/admin/withdrawals", rewritePath("/v1/withdrawals", p.ProxyToSettlement))
+		r.Get("/v1/admin/withdrawals/{id}", rewritePath("/v1/withdrawals/{id}", p.ProxyToSettlement))
+		r.Post("/v1/admin/withdrawals/{id}/approve", rewritePath("/v1/withdrawals/{id}/approve", p.ProxyToSettlement))
+		r.Post("/v1/admin/withdrawals/{id}/reject", rewritePath("/v1/withdrawals/{id}/reject", p.ProxyToSettlement))
+		r.Post("/v1/admin/withdrawals/{id}/complete", rewritePath("/v1/withdrawals/{id}/complete", p.ProxyToSettlement))
+	})
+
 	return r
 }
 
@@ -279,6 +310,24 @@ func requestID(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// rewritePath returns a handler that rewrites the request URL path before proxying.
+// The template can contain chi URL params like {id} which are replaced from the route context.
+func rewritePath(template string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		newPath := template
+		rctx := chi.RouteContext(r.Context())
+		if rctx != nil {
+			for i, key := range rctx.URLParams.Keys {
+				if i < len(rctx.URLParams.Values) {
+					newPath = strings.Replace(newPath, "{"+key+"}", rctx.URLParams.Values[i], 1)
+				}
+			}
+		}
+		r.URL.Path = newPath
+		next.ServeHTTP(w, r)
+	}
 }
 
 // corsMiddleware handles CORS preflight and response headers.
