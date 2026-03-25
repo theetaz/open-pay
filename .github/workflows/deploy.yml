@@ -19,7 +19,11 @@ jobs:
           host: ${{ secrets.DROPLET_IP }}
           username: root
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: /opt/openpay/deploy.sh
+          script: |
+            cd /opt/openpay
+            git fetch origin main
+            git reset --hard origin/main
+            ./deploy.sh
           script_stop: true
           command_timeout: 15m
 
@@ -28,6 +32,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: apps/merchant-portal/pnpm-lock.yaml
 
       - name: Install Vercel CLI
         run: npm install -g vercel
@@ -47,6 +61,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: apps/admin-dashboard/pnpm-lock.yaml
 
       - name: Install Vercel CLI
         run: npm install -g vercel
