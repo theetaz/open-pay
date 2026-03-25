@@ -20,6 +20,7 @@ type GatewayConfig struct {
 	ServiceProxy       *proxy.ServiceProxy
 	RateLimitPerMinute int
 	RateLimiter        middleware.RateLimiter
+	KeyValidator       middleware.KeyValidator
 	GatewayPort        string
 	PlatformFeePct     string
 	ExchangeFeePct     string
@@ -82,6 +83,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/merchants/{id}/directors", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/directors/{directorId}/resend", p.ProxyToMerchant)
 	r.Delete("/v1/merchants/{id}/directors/{directorId}", p.ProxyToMerchant)
+
+	// API key management routes → merchant service (JWT auth)
+	r.Post("/v1/api-keys", p.ProxyToMerchant)
+	r.Get("/v1/api-keys", p.ProxyToMerchant)
+	r.Delete("/v1/api-keys/{id}", p.ProxyToMerchant)
 
 	// File upload routes → merchant service
 	r.Post("/v1/uploads", p.ProxyToMerchant)
@@ -221,6 +227,23 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 		r.Post("/v1/admin/withdrawals/{id}/reject", rewritePath("/v1/withdrawals/{id}/reject", p.ProxyToSettlement))
 		r.Post("/v1/admin/withdrawals/{id}/complete", rewritePath("/v1/withdrawals/{id}/complete", p.ProxyToSettlement))
 	})
+
+	// SDK routes — HMAC-authenticated for API key users
+	if cfg.KeyValidator != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.HMACAuth(cfg.KeyValidator))
+
+			// Payment operations via SDK
+			r.Post("/v1/sdk/payments", p.ProxyToPayment)
+			r.Get("/v1/sdk/payments/{id}", p.ProxyToPayment)
+			r.Get("/v1/sdk/payments", p.ProxyToPayment)
+
+			// Webhook configuration via SDK
+			r.Post("/v1/sdk/webhooks/configure", p.ProxyToWebhook)
+			r.Get("/v1/sdk/webhooks/public-key", p.ProxyToWebhook)
+			r.Post("/v1/sdk/webhooks/test", p.ProxyToWebhook)
+		})
+	}
 
 	return r
 }
