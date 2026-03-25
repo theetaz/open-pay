@@ -36,6 +36,8 @@ func main() {
 		handleConfig()
 	case "payments":
 		handlePayments()
+	case "checkout":
+		handleCheckout()
 	case "apikeys":
 		handleAPIKeys()
 	case "webhooks":
@@ -271,6 +273,52 @@ func handlePayments() {
 func handleAPIKeys() {
 	fmt.Println("API key management requires JWT auth (use the merchant portal).")
 	fmt.Println("To use the CLI, set your API key: openpay config set-key <key>")
+}
+
+// ─── Checkout ───
+
+func handleCheckout() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: openpay checkout create-session --amount <amt> [--currency LKR] [--success-url URL] [--cancel-url URL]")
+		return
+	}
+
+	client := getClient()
+	ctx := context.Background()
+
+	switch os.Args[2] {
+	case "create-session":
+		amount, currency, successURL, cancelURL := "", "LKR", "", ""
+		for i := 3; i < len(os.Args); i++ {
+			switch os.Args[i] {
+			case "--amount":
+				i++; amount = os.Args[i]
+			case "--currency":
+				i++; currency = os.Args[i]
+			case "--success-url":
+				i++; successURL = os.Args[i]
+			case "--cancel-url":
+				i++; cancelURL = os.Args[i]
+			}
+		}
+		if amount == "" {
+			fatal("--amount is required")
+		}
+
+		session, err := client.Checkout.CreateSession(ctx, openpay.CheckoutSessionInput{
+			Amount:    amount,
+			Currency:  currency,
+			SuccessURL: successURL,
+			CancelURL:  cancelURL,
+		})
+		if err != nil {
+			fatal("Failed: %v", err)
+		}
+		printJSON(session)
+		fmt.Printf("\nCheckout URL: %s\n", session.URL)
+	default:
+		fmt.Println("Usage: openpay checkout create-session --amount <amt>")
+	}
 }
 
 // ─── Webhooks ───

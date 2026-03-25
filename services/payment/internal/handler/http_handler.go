@@ -61,6 +61,9 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/payments/{id}", h.GetPayment)
 	})
 
+	// Checkout sessions (SDK — uses X-Merchant-ID header from gateway)
+	r.Post("/v1/checkout/sessions", h.CreateCheckoutSession)
+
 	// Public routes
 	r.Post("/v1/public/payments", h.CreatePublicPayment)
 	r.Get("/v1/payments/{id}/checkout", h.GetCheckout)
