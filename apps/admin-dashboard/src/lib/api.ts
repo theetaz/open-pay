@@ -26,7 +26,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const error = body.error as { code: string; message: string } | undefined
-    if (res.status === 401 && isBrowser) {
+    if (res.status === 401 && isBrowser && path.startsWith('/v1/admin/auth')) {
       localStorage.removeItem('admin_access_token')
       localStorage.removeItem('admin_refresh_token')
       window.location.href = '/login'

@@ -39,7 +39,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const error = body.error as ApiError | undefined
-    if (res.status === 401 && isBrowser) {
+    if (res.status === 401 && isBrowser && path.startsWith('/v1/auth')) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       window.location.href = '/login'
