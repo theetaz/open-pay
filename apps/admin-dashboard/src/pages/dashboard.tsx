@@ -41,7 +41,7 @@ function ServiceStatus({ name, health }: { name: string; health?: ServiceHealth 
 export function DashboardIndex() {
   const { data: merchantsData } = useQuery({
     queryKey: ['admin', 'merchants', 'dashboard'],
-    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/admin/merchants?perPage=5'),
+    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>('/v1/merchants?perPage=5'),
     retry: false,
   })
 
@@ -56,7 +56,7 @@ export function DashboardIndex() {
 
   const { data: withdrawalsData } = useQuery({
     queryKey: ['admin', 'withdrawals'],
-    queryFn: () => api.get<{ data: any[] }>('/v1/admin/withdrawals?status=REQUESTED'),
+    queryFn: () => api.get<{ data: any[] }>('/v1/withdrawals?status=REQUESTED'),
     retry: false,
   })
 

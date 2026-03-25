@@ -28,7 +28,7 @@ export function TreasuryPage() {
 
   const { data: balanceData } = useQuery({
     queryKey: ['admin', 'settlements-balance'],
-    queryFn: () => api.get<BalanceData>('/v1/admin/settlements/balance'),
+    queryFn: () => api.get<BalanceData>('/v1/settlements/balance'),
     retry: false,
   })
 

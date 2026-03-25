@@ -14,7 +14,7 @@ export function WithdrawalsPage() {
 
   const { data } = useQuery({
     queryKey: ['admin', 'withdrawals'],
-    queryFn: () => api.get<{ data: any[] }>('/v1/admin/withdrawals'),
+    queryFn: () => api.get<{ data: any[] }>('/v1/withdrawals'),
     retry: false,
   })
 
@@ -25,17 +25,17 @@ export function WithdrawalsPage() {
   const totalSettledLKR = completed.reduce((sum: number, w: any) => sum + parseFloat(w.amountLkr || '0'), 0)
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/v1/admin/withdrawals/${id}/approve`),
+    mutationFn: (id: string) => api.post(`/v1/withdrawals/${id}/approve`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'withdrawals'] }),
   })
 
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/v1/admin/withdrawals/${id}/reject`, { reason: 'Rejected by admin' }),
+    mutationFn: (id: string) => api.post(`/v1/withdrawals/${id}/reject`, { reason: 'Rejected by admin' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'withdrawals'] }),
   })
 
   const completeMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/v1/admin/withdrawals/${id}/complete`, { bankReference: `TXN${Date.now()}` }),
+    mutationFn: (id: string) => api.post(`/v1/withdrawals/${id}/complete`, { bankReference: `TXN${Date.now()}` }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'withdrawals'] }),
   })
 

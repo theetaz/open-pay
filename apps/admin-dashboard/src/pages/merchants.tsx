@@ -38,7 +38,7 @@ export function MerchantsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'merchants', { page, perPage: PER_PAGE }],
-    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>(`/v1/admin/merchants?page=${page}&perPage=${PER_PAGE}`),
+    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>(`/v1/merchants?page=${page}&perPage=${PER_PAGE}`),
     retry: false,
   })
 
@@ -48,7 +48,7 @@ export function MerchantsPage() {
 
   const doAction = useMutation({
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: any }) =>
-      api.post(`/v1/admin/merchants/${id}/${action}`, body),
+      api.post(`/v1/merchants/${id}/${action}`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'merchants'] })
       setSelectedMerchant(null)
@@ -255,13 +255,13 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
 
   const { data: docsData } = useQuery({
     queryKey: ['admin', 'merchant-documents', merchant?.id],
-    queryFn: () => api.get<{ data: MerchantDoc[] }>(`/v1/admin/merchants/${merchant?.id}/documents`),
+    queryFn: () => api.get<{ data: MerchantDoc[] }>(`/v1/merchants/${merchant?.id}/documents`),
     enabled: !!merchant,
   })
 
   const { data: directorsData } = useQuery({
     queryKey: ['admin', 'directors', merchant?.id],
-    queryFn: () => api.get<{ data: any[] }>(`/v1/admin/merchants/${merchant?.id}/directors`),
+    queryFn: () => api.get<{ data: any[] }>(`/v1/merchants/${merchant?.id}/directors`),
     enabled: !!merchant,
   })
 
@@ -273,7 +273,7 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
 
   const forceApproveMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: any }) =>
-      api.post(`/v1/admin/merchants/${id}/approve`, body),
+      api.post(`/v1/merchants/${id}/approve`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'merchants'] })
       setForceApproveOpen(false)
