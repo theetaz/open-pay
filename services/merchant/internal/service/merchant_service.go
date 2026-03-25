@@ -716,6 +716,11 @@ func (s *MerchantService) CreateAPIKey(ctx context.Context, merchantID uuid.UUID
 	return key, plainSecret, nil
 }
 
+// ListAPIKeys returns all API keys for a merchant.
+func (s *MerchantService) ListAPIKeys(ctx context.Context, merchantID uuid.UUID) ([]*domain.APIKey, error) {
+	return s.apiKeys.ListByMerchant(ctx, merchantID)
+}
+
 // ValidateAPIKey checks a key ID and secret, returning the associated merchant.
 func (s *MerchantService) ValidateAPIKey(ctx context.Context, keyID, secret string) (*domain.Merchant, error) {
 	key, err := s.apiKeys.GetByKeyID(ctx, keyID)
