@@ -258,7 +258,7 @@ func (h *PaymentHandler) CreatePublicPayment(w http.ResponseWriter, r *http.Requ
 
 // GetPayment handles GET /v1/payments/{id}.
 func (h *PaymentHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
-	claims, ok := auth.ClaimsFromContext(r.Context())
+	merchantID, ok := merchantIDFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
 		return
@@ -280,7 +280,7 @@ func (h *PaymentHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payment.MerchantID != claims.MerchantID {
+	if payment.MerchantID != merchantID {
 		writeError(w, http.StatusForbidden, "FORBIDDEN", "cannot access another merchant's payment")
 		return
 	}
