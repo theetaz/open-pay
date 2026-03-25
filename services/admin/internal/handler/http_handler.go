@@ -163,7 +163,7 @@ func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
 			// Log failed login attempt
-			h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+			_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 				ActorType: "ADMIN", Action: "admin.login.failed",
 				ResourceType: "admin_user", IPAddress: stripPort(r.RemoteAddr),
 				UserAgent: r.UserAgent(),
@@ -180,7 +180,7 @@ func (h *AdminHandler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log successful login
-	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+	_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 		ActorID: result.User.ID, ActorType: "ADMIN", Action: "admin.login",
 		ResourceType: "admin_user", ResourceID: &result.User.ID,
 		IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
@@ -266,7 +266,7 @@ func (h *AdminHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+	_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 		ActorID: claims.UserID, ActorType: "ADMIN", Action: "admin_user.password_changed",
 		ResourceType: "admin_user", ResourceID: &user.ID,
 		IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
@@ -555,7 +555,7 @@ func (h *AdminHandler) CreateLegalDocument(w http.ResponseWriter, r *http.Reques
 	doc.IsActive = true
 
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: "legal_document.created",
 			ResourceType: "legal_document", ResourceID: &doc.ID,
 			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
@@ -610,7 +610,7 @@ func (h *AdminHandler) ActivateLegalDocument(w http.ResponseWriter, r *http.Requ
 	}
 
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: "legal_document.activated",
 			ResourceType: "legal_document", ResourceID: &id,
 			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
@@ -683,7 +683,7 @@ func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+	_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 		ActorID: claims.UserID, ActorType: "ADMIN", Action: "settings.updated",
 		ResourceType: "platform_settings", IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
 	})
@@ -747,7 +747,7 @@ func (h *AdminHandler) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: "admin_user.created",
 			ResourceType: "admin_user", ResourceID: &user.ID,
 			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),
@@ -846,7 +846,7 @@ func (h *AdminHandler) DeactivateAdminUser(w http.ResponseWriter, r *http.Reques
 	}
 
 	if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
-		h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
+		_, _ = h.auditSvc.CreateLog(r.Context(), domain.AuditInput{
 			ActorID: claims.UserID, ActorType: "ADMIN", Action: action,
 			ResourceType: "admin_user", ResourceID: &id,
 			IPAddress: stripPort(r.RemoteAddr), UserAgent: r.UserAgent(),

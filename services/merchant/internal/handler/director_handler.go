@@ -248,7 +248,7 @@ func (h *MerchantHandler) SubmitDirectorVerification(w http.ResponseWriter, r *h
 		writeError(w, http.StatusBadRequest, "MISSING_FILE", "document file is required")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExts := map[string]string{

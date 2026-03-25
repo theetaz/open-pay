@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/service"
 	"github.com/stretchr/testify/assert"
@@ -205,6 +206,30 @@ func (m *mockEventPublisher) Publish(_ context.Context, subject string, data any
 	return nil
 }
 
+type mockDirectorRepo struct{}
+
+func (m *mockDirectorRepo) Create(_ context.Context, _ *domain.Director) error {
+	return nil
+}
+func (m *mockDirectorRepo) GetByID(_ context.Context, _ uuid.UUID) (*domain.Director, error) {
+	return nil, nil
+}
+func (m *mockDirectorRepo) GetByToken(_ context.Context, _ string) (*domain.Director, error) {
+	return nil, nil
+}
+func (m *mockDirectorRepo) ListByMerchant(_ context.Context, _ uuid.UUID) ([]*domain.Director, error) {
+	return nil, nil
+}
+func (m *mockDirectorRepo) CountByMerchant(_ context.Context, _ uuid.UUID) (int, error) {
+	return 0, nil
+}
+func (m *mockDirectorRepo) Update(_ context.Context, _ *domain.Director) error { return nil }
+func (m *mockDirectorRepo) Delete(_ context.Context, _ uuid.UUID) error       { return nil }
+
+type mockNotifier struct{}
+
+func (m *mockNotifier) SendEmail(_ context.Context, _ notification.SendEmailInput) {}
+
 func newTestService() *service.MerchantService {
 	return service.NewMerchantService(
 		newMockMerchantRepo(),
@@ -212,6 +237,9 @@ func newTestService() *service.MerchantService {
 		newMockUserRepo(),
 		&mockEventPublisher{},
 		testJWTSecret,
+		&mockNotifier{},
+		"admin@test.com",
+		&mockDirectorRepo{},
 	)
 }
 
@@ -236,7 +264,7 @@ func TestRegisterMerchant(t *testing.T) {
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
-		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), &mockEventPublisher{}, testJWTSecret)
+		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), &mockEventPublisher{}, testJWTSecret, &mockNotifier{}, "admin@test.com", &mockDirectorRepo{})
 
 		_, err := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Shop 1",
@@ -254,7 +282,7 @@ func TestRegisterMerchant(t *testing.T) {
 
 	t.Run("publishes event", func(t *testing.T) {
 		pub := &mockEventPublisher{}
-		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret)
+		svc := service.NewMerchantService(newMockMerchantRepo(), newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret, &mockNotifier{}, "admin@test.com", &mockDirectorRepo{})
 
 		_, err := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -382,7 +410,7 @@ func TestApproveMerchant(t *testing.T) {
 	t.Run("approve under review merchant", func(t *testing.T) {
 		repo := newMockMerchantRepo()
 		pub := &mockEventPublisher{}
-		svc := service.NewMerchantService(repo, newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret)
+		svc := service.NewMerchantService(repo, newMockAPIKeyRepo(), newMockUserRepo(), pub, testJWTSecret, &mockNotifier{}, "admin@test.com", &mockDirectorRepo{})
 
 		merchant, _ := svc.Register(ctx, service.RegisterInput{
 			BusinessName: "Test Shop",
@@ -393,7 +421,7 @@ func TestApproveMerchant(t *testing.T) {
 		merchant.KYCStatus = domain.KYCUnderReview
 		_ = repo.Update(ctx, merchant)
 
-		err := svc.Approve(ctx, merchant.ID)
+		err := svc.Approve(ctx, merchant.ID, false, "")
 		require.NoError(t, err)
 
 		updated, _ := repo.GetByID(ctx, merchant.ID)
@@ -408,7 +436,7 @@ func TestApproveMerchant(t *testing.T) {
 			ContactEmail: "pending@example.com",
 		})
 
-		err := svc.Approve(ctx, merchant.ID)
+		err := svc.Approve(ctx, merchant.ID, false, "")
 		require.Error(t, err)
 	})
 }

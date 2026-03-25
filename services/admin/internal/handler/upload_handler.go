@@ -76,7 +76,7 @@ func (h *AdminUploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "MISSING_FILE", "file field is required")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExts := map[string]string{
@@ -134,7 +134,7 @@ func (h *AdminUploadHandler) ServeAsset(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "asset not found")
 		return
 	}
-	defer obj.Close()
+	defer func() { _ = obj.Close() }()
 
 	info, err := obj.Stat()
 	if err != nil {

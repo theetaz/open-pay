@@ -112,7 +112,7 @@ func (p *BybitProvider) doRequest(ctx context.Context, url string, body []byte) 
 	if err != nil {
 		return nil, fmt.Errorf("bybit: http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

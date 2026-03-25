@@ -144,7 +144,9 @@ func (r *PaymentLinkRepository) List(ctx context.Context, params PaymentLinkList
 	}
 
 	offset := (params.Page - 1) * params.PerPage
-	listArgs := append(args, params.PerPage, offset)
+	listArgs := make([]any, len(args), len(args)+2)
+	copy(listArgs, args)
+	listArgs = append(listArgs, params.PerPage, offset)
 	rows, err := r.pool.Query(ctx,
 		fmt.Sprintf("SELECT %s FROM payment_links WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
 			paymentLinkSelectCols, where, argIdx, argIdx+1),

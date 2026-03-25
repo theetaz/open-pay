@@ -40,7 +40,7 @@ func (c *Client) IncrementPaymentLinkUsage(ctx context.Context, slug string) err
 	if err != nil {
 		return fmt.Errorf("calling merchant service: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("merchant service returned %d", resp.StatusCode)
