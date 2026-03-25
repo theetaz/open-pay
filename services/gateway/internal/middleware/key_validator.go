@@ -87,3 +87,11 @@ func (v *RemoteKeyValidator) GetSecretByKeyID(keyID string) (string, error) {
 
 	return result.Data.HMACKey, nil
 }
+
+// GetMerchantID returns the cached merchant ID for a previously validated key.
+func (v *RemoteKeyValidator) GetMerchantID(keyID string) string {
+	if cached, ok := v.cache.Load(keyID); ok {
+		return cached.(cachedKey).merchantID
+	}
+	return ""
+}

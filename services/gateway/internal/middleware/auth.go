@@ -70,6 +70,11 @@ func HMACAuth(validator KeyValidator) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Pass merchant info to downstream services via headers
+			if rv, ok := validator.(interface{ GetMerchantID(string) string }); ok {
+				r.Header.Set("X-Merchant-ID", rv.GetMerchantID(apiKey))
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}

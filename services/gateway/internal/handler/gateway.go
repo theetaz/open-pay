@@ -234,14 +234,14 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 			r.Use(middleware.HMACAuth(cfg.KeyValidator))
 
 			// Payment operations via SDK
-			r.Post("/v1/sdk/payments", rewritePath("/v1/payments", p.ProxyToPayment))
-			r.Get("/v1/sdk/payments/{id}", rewritePath("/v1/payments/{id}", p.ProxyToPayment))
-			r.Get("/v1/sdk/payments", rewritePath("/v1/payments", p.ProxyToPayment))
+			r.Post("/v1/sdk/payments", rewritePathSDK("/v1/payments", p.ProxyToPayment))
+			r.Get("/v1/sdk/payments/{id}", rewritePathSDK("/v1/payments/{id}", p.ProxyToPayment))
+			r.Get("/v1/sdk/payments", rewritePathSDK("/v1/payments", p.ProxyToPayment))
 
 			// Webhook configuration via SDK
-			r.Post("/v1/sdk/webhooks/configure", rewritePath("/v1/webhooks/configure", p.ProxyToWebhook))
-			r.Get("/v1/sdk/webhooks/public-key", rewritePath("/v1/webhooks/public-key", p.ProxyToWebhook))
-			r.Post("/v1/sdk/webhooks/test", rewritePath("/v1/webhooks/test", p.ProxyToWebhook))
+			r.Post("/v1/sdk/webhooks/configure", rewritePathSDK("/v1/webhooks/configure", p.ProxyToWebhook))
+			r.Get("/v1/sdk/webhooks/public-key", rewritePathSDK("/v1/webhooks/public-key", p.ProxyToWebhook))
+			r.Post("/v1/sdk/webhooks/test", rewritePathSDK("/v1/webhooks/test", p.ProxyToWebhook))
 		})
 	}
 
@@ -348,6 +348,26 @@ func requestID(next http.Handler) http.Handler {
 // The Authorization header is removed because the gateway already validated the admin JWT;
 // downstream services may use a different JWT secret and would reject it.
 func rewritePath(template string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		newPath := template
+		rctx := chi.RouteContext(r.Context())
+		if rctx != nil {
+			for i, key := range rctx.URLParams.Keys {
+				if i < len(rctx.URLParams.Values) {
+					newPath = strings.Replace(newPath, "{"+key+"}", rctx.URLParams.Values[i], 1)
+				}
+			}
+		}
+		r.URL.Path = newPath
+		r.Header.Del("Authorization")
+		r.Header.Set("X-Internal-Admin", "true")
+		next.ServeHTTP(w, r)
+	}
+}
+
+// rewritePathSDK rewrites the URL path for SDK routes.
+// Sets X-Internal-Admin to bypass downstream JWT middleware (gateway already validated HMAC).
+func rewritePathSDK(template string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		newPath := template
 		rctx := chi.RouteContext(r.Context())
