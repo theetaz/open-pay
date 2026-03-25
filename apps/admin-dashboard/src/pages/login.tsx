@@ -29,9 +29,9 @@ export function LoginPage() {
       } : undefined
       useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken, adminUser)
       if (adminUser?.mustChangePassword) {
-        navigate('/change-password')
+        window.location.href = '/change-password'
       } else {
-        navigate('/')
+        window.location.href = '/'
       }
     },
   })

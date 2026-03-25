@@ -47,7 +47,7 @@ export function useLogin() {
       useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
       toast.success('Welcome back!')
-      navigate('/')
+      window.location.href = '/'
     },
     onError: (err) => {
       toast.error(err.message)
@@ -56,7 +56,6 @@ export function useLogin() {
 }
 
 export function useRegister() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -66,7 +65,7 @@ export function useRegister() {
       useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
       queryClient.setQueryData(['auth', 'me'], { data: { user: res.data.user, merchant: res.data.merchant } })
       toast.success('Account created! You can explore the portal and complete KYC when ready.')
-      navigate('/')
+      window.location.href = '/'
     },
     onError: (err) => {
       toast.error(err.message)
