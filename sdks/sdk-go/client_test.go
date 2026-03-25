@@ -13,6 +13,8 @@ func TestNewClient(t *testing.T) {
 		client, err := openpay.NewClient("ak_live_testid.sk_live_testsecret", openpay.WithBaseURL("https://api.example.com"))
 		require.NoError(t, err)
 		assert.NotNil(t, client)
+		assert.NotNil(t, client.Payments)
+		assert.NotNil(t, client.Webhooks)
 	})
 
 	t.Run("empty API key", func(t *testing.T) {
@@ -55,4 +57,15 @@ func TestVerifyWebhook(t *testing.T) {
 		err := openpay.VerifyWebhookSignature("bad-pub-key", "12345", []byte("payload"), "bad-sig")
 		assert.Error(t, err)
 	})
+}
+
+func TestAPIError(t *testing.T) {
+	err := &openpay.APIError{Code: "NOT_FOUND", Message: "payment not found", Status: 404}
+	assert.Contains(t, err.Error(), "payment not found")
+	assert.True(t, openpay.IsNotFound(err))
+	assert.False(t, openpay.IsAuthError(err))
+
+	authErr := &openpay.APIError{Code: "UNAUTHORIZED", Message: "bad key", Status: 401}
+	assert.True(t, openpay.IsAuthError(authErr))
+	assert.False(t, openpay.IsNotFound(authErr))
 }
