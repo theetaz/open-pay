@@ -177,6 +177,18 @@ func (s *stubMerchantService) VerifyAndEnableTOTP(_ context.Context, _ uuid.UUID
 func (s *stubMerchantService) DisableTOTP(_ context.Context, _ uuid.UUID, _ string) error {
 	return nil
 }
+func (s *stubMerchantService) CreateAPIKey(_ context.Context, _ uuid.UUID, _, _ string) (*domain.APIKey, string, error) {
+	return nil, "", nil
+}
+func (s *stubMerchantService) RevokeAPIKey(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+func (s *stubMerchantService) ListAPIKeys(_ context.Context, _ uuid.UUID) ([]*domain.APIKey, error) {
+	return nil, nil
+}
+func (s *stubMerchantService) ValidateAPIKey(_ context.Context, _, _ string) (*domain.Merchant, error) {
+	return nil, nil
+}
 
 func TestRegisterWithUserHandler(t *testing.T) {
 	svc := newStubService()

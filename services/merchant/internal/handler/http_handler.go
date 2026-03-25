@@ -45,6 +45,10 @@ type MerchantServiceInterface interface {
 	SetupTOTP(ctx context.Context, userID uuid.UUID) (secret, uri string, err error)
 	VerifyAndEnableTOTP(ctx context.Context, userID uuid.UUID, code string) ([]string, error)
 	DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error
+	CreateAPIKey(ctx context.Context, merchantID uuid.UUID, env, name string) (*domain.APIKey, string, error)
+	RevokeAPIKey(ctx context.Context, id uuid.UUID, reason string) error
+	ListAPIKeys(ctx context.Context, merchantID uuid.UUID) ([]*domain.APIKey, error)
+	ValidateAPIKey(ctx context.Context, keyID, secret string) (*domain.Merchant, error)
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
@@ -107,6 +111,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Get("/v1/merchants/{id}/directors", h.ListDirectors)
 		r.Post("/v1/merchants/{id}/directors/{directorId}/resend", h.ResendDirectorVerification)
 		r.Delete("/v1/merchants/{id}/directors/{directorId}", h.RemoveDirector)
+
+		// API key management
+		r.Post("/v1/api-keys", h.CreateAPIKey)
+		r.Get("/v1/api-keys", h.ListAPIKeys)
+		r.Delete("/v1/api-keys/{id}", h.RevokeAPIKey)
 	})
 
 	// Branch routes
@@ -125,6 +134,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 	}
 
 	return r
+}
+
+// RegisterInternalRoutes adds internal service-to-service endpoints (no auth).
+func RegisterInternalRoutes(r chi.Router, ih *InternalHandler) {
+	r.Post("/internal/api-keys/validate", ih.ValidateAPIKey)
 }
 
 // RegisterWithUser handles POST /v1/auth/register.

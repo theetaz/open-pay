@@ -2,6 +2,8 @@ package domain
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"time"
@@ -16,6 +18,7 @@ type APIKey struct {
 	MerchantID    uuid.UUID
 	KeyID         string // ak_live_xxx or ak_test_xxx (public)
 	SecretHash    string // bcrypt hash of the secret
+	SecretHMACKey string // SHA256 hex of the secret (for gateway HMAC verification)
 	Name          string
 	Environment   string // "live" or "test"
 	IsActive      bool
@@ -49,15 +52,20 @@ func NewAPIKey(merchantID uuid.UUID, env, name string) (*APIKey, string, error) 
 		return nil, "", fmt.Errorf("hashing secret: %w", err)
 	}
 
+	// SHA256 of the secret for gateway-side HMAC signature verification
+	hmacKeyBytes := sha256.Sum256([]byte(plainSecret))
+	hmacKey := hex.EncodeToString(hmacKeyBytes[:])
+
 	return &APIKey{
-		ID:          uuid.New(),
-		MerchantID:  merchantID,
-		KeyID:       keyID,
-		SecretHash:  string(hash),
-		Name:        name,
-		Environment: env,
-		IsActive:    true,
-		CreatedAt:   time.Now().UTC(),
+		ID:            uuid.New(),
+		MerchantID:    merchantID,
+		KeyID:         keyID,
+		SecretHash:    string(hash),
+		SecretHMACKey: hmacKey,
+		Name:          name,
+		Environment:   env,
+		IsActive:      true,
+		CreatedAt:     time.Now().UTC(),
 	}, plainSecret, nil
 }
 
