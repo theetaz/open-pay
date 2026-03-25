@@ -187,6 +187,18 @@ func (h *MerchantHandler) Login(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "ACCOUNT_INACTIVE", "account is inactive")
 			return
 		}
+		if errors.Is(err, service.ErrAccountTerminated) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_TERMINATED", "your merchant account has been terminated")
+			return
+		}
+		if errors.Is(err, service.ErrAccountFrozen) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_FROZEN", "your merchant account has been frozen, please contact support")
+			return
+		}
+		if errors.Is(err, service.ErrAccountNotActive) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "your merchant account is not active")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
 		return
 	}
@@ -237,6 +249,19 @@ func (h *MerchantHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	merchant, err := h.svc.GetByID(r.Context(), claims.MerchantID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+		return
+	}
+
+	// Force logout if merchant account is no longer active
+	switch merchant.Status {
+	case domain.MerchantTerminated:
+		writeError(w, http.StatusForbidden, "ACCOUNT_TERMINATED", "your merchant account has been terminated")
+		return
+	case domain.MerchantFrozen:
+		writeError(w, http.StatusForbidden, "ACCOUNT_FROZEN", "your merchant account has been frozen")
+		return
+	case domain.MerchantInactive:
+		writeError(w, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "your merchant account is not active")
 		return
 	}
 
@@ -455,6 +480,15 @@ func (h *MerchantHandler) ListMerchants(w http.ResponseWriter, r *http.Request) 
 	params := service.ListParams{
 		Page:    intQuery(r, "page", 1),
 		PerPage: intQuery(r, "perPage", 20),
+		Search:  r.URL.Query().Get("search"),
+	}
+	if v := r.URL.Query().Get("kycStatus"); v != "" {
+		s := domain.KYCStatus(v)
+		params.KYCStatus = &s
+	}
+	if v := r.URL.Query().Get("status"); v != "" {
+		s := domain.MerchantStatus(v)
+		params.Status = &s
 	}
 
 	merchants, total, err := h.svc.List(r.Context(), params)

@@ -62,10 +62,10 @@ func (s *Sender) SendEmail(to, subject, htmlBody string) error {
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// STARTTLS for port 587
 	if ok, _ := client.Extension("STARTTLS"); ok {
@@ -112,10 +112,10 @@ func (s *Sender) sendTLS(addr, to string, msg []byte) error {
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if s.cfg.Username != "" {
 		auth := smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
