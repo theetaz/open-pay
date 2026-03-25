@@ -1,19 +1,16 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent } from '#/components/ui/card'
+import type { ColumnDef } from '@tanstack/react-table'
+import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import { Badge } from '#/components/ui/badge'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatusBadge } from '#/components/dashboard/status-badge'
-import { EmptyState } from '#/components/dashboard/empty-state'
 import {
-  CheckCircle2, XCircle, Eye, MoreHorizontal, ChevronLeft, ChevronRight,
-  Snowflake, Ban, Unlock, FileText, Download, Search, X,
+  CheckCircle2, XCircle, Eye, MoreHorizontal,
+  Snowflake, Ban, Unlock, FileText, Download,
 } from 'lucide-react'
-import { Input } from '#/components/ui/input'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
 import {
@@ -23,12 +20,47 @@ import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '#/components/ui/dropdown-menu'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 
 const PER_PAGE = 10
+
+interface Merchant {
+  id: string
+  businessName: string
+  contactEmail: string
+  contactName: string
+  contactPhone: string
+  kycStatus: string
+  status: string
+  createdAt: string
+  [key: string]: any
+}
 
 interface MerchantDoc {
   id: string; category: string; filename: string; contentType: string; fileSize: number; objectKey: string
 }
+
+const KYC_OPTIONS = [
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Under Review', value: 'UNDER_REVIEW' },
+  { label: 'Approved', value: 'APPROVED' },
+  { label: 'Rejected', value: 'REJECTED' },
+  { label: 'Instant Access', value: 'INSTANT_ACCESS' },
+]
+
+const STATUS_OPTIONS = [
+  { label: 'Active', value: 'ACTIVE' },
+  { label: 'Inactive', value: 'INACTIVE' },
+  { label: 'Frozen', value: 'FROZEN' },
+  { label: 'Terminated', value: 'TERMINATED' },
+]
+
+const MERCHANT_FILTERS: FilterConfig[] = [
+  { id: 'kycStatus', label: 'KYC Status', type: 'select', options: KYC_OPTIONS },
+  { id: 'status', label: 'Account Status', type: 'select', options: STATUS_OPTIONS },
+  { id: 'contactName', label: 'Contact Name', type: 'search', placeholder: 'Search by name...' },
+  { id: 'contactEmail', label: 'Email', type: 'search', placeholder: 'Search by email...' },
+]
 
 export function MerchantsPage() {
   const queryClient = useQueryClient()
@@ -37,9 +69,8 @@ export function MerchantsPage() {
   const [reason, setReason] = React.useState('')
   const [page, setPage] = React.useState(1)
   const [search, setSearch] = React.useState('')
-  const [kycFilter, setKycFilter] = React.useState('')
-  const [statusFilter, setStatusFilter] = React.useState('')
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<Record<string, string | string[]>>({})
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -49,22 +80,38 @@ export function MerchantsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const queryParams = new URLSearchParams()
-  queryParams.set('page', String(page))
-  queryParams.set('perPage', String(PER_PAGE))
-  if (debouncedSearch) queryParams.set('search', debouncedSearch)
-  if (kycFilter) queryParams.set('kycStatus', kycFilter)
-  if (statusFilter) queryParams.set('status', statusFilter)
+  // Build query params from filters
+  const queryParams = React.useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('page', String(page))
+    params.set('perPage', String(PER_PAGE))
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    for (const [key, value] of Object.entries(filterValues)) {
+      if (typeof value === 'string' && value) params.set(key, value)
+      if (Array.isArray(value) && value.length) params.set(key, value.join(','))
+    }
+    return params.toString()
+  }, [page, debouncedSearch, filterValues])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'merchants', { page, perPage: PER_PAGE, search: debouncedSearch, kycFilter, statusFilter }],
-    queryFn: () => api.get<{ data: any[]; meta: { total: number } }>(`/v1/merchants?${queryParams}`),
+    queryKey: ['admin', 'merchants', queryParams],
+    queryFn: () => api.get<{ data: Merchant[]; meta: { total: number } }>(`/v1/merchants?${queryParams}`),
     retry: false,
   })
 
   const merchants = data?.data || []
   const total = data?.meta?.total || 0
-  const totalPages = Math.ceil(total / PER_PAGE)
+
+  const handleFilterChange = (id: string, value: string | string[]) => {
+    setFilterValues((prev) => ({ ...prev, [id]: value }))
+    setPage(1)
+  }
+
+  const handleClearFilters = () => {
+    setFilterValues({})
+    setSearch('')
+    setPage(1)
+  }
 
   const doAction = useMutation({
     mutationFn: ({ id, action, body }: { id: string; action: string; body?: any }) =>
@@ -109,153 +156,122 @@ export function MerchantsPage() {
     deactivate: { title: 'Deactivate Account', desc: 'Temporarily deactivate this merchant account.', btn: 'Deactivate', variant: 'destructive' },
   }
 
+  const columns: ColumnDef<Merchant>[] = [
+    {
+      accessorKey: 'businessName',
+      header: 'Business Name',
+      cell: ({ row }) => <span className="font-medium">{row.original.businessName}</span>,
+    },
+    {
+      accessorKey: 'contactEmail',
+      header: 'Email',
+      cell: ({ row }) => <span className="text-sm">{row.original.contactEmail}</span>,
+    },
+    {
+      accessorKey: 'contactName',
+      header: 'Contact',
+      cell: ({ row }) => <span className="text-sm">{row.original.contactName || '-'}</span>,
+    },
+    {
+      accessorKey: 'kycStatus',
+      header: 'KYC Status',
+      cell: ({ row }) => <StatusBadge status={row.original.kycStatus} />,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Account Status',
+      cell: ({ row }) => {
+        const s = row.original.status
+        return (
+          <Badge className={
+            s === 'ACTIVE' ? 'bg-green-500/10 text-green-600' :
+            s === 'FROZEN' ? 'bg-blue-500/10 text-blue-600' :
+            s === 'TERMINATED' ? 'bg-red-500/10 text-red-600' :
+            'bg-muted text-muted-foreground'
+          }>{s}</Badge>
+        )
+      },
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Registered',
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {new Date(row.original.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      enableHiding: false,
+      cell: ({ row }) => {
+        const m = row.original
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+              <MoreHorizontal className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => setSelectedMerchant(m)}>
+                <Eye className="size-4 mr-2" /> View & Review
+              </DropdownMenuItem>
+              {(m.kycStatus === 'UNDER_REVIEW' || m.kycStatus === 'INSTANT_ACCESS') && (
+                <>
+                  <DropdownMenuItem onClick={() => openAction('approve', m)}>
+                    <CheckCircle2 className="size-4 mr-2" /> Approve KYC
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAction('reject', m)}>
+                    <XCircle className="size-4 mr-2" /> Reject KYC
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuSeparator />
+              {m.status === 'ACTIVE' && (
+                <>
+                  <DropdownMenuItem onClick={() => openAction('freeze', m)}>
+                    <Snowflake className="size-4 mr-2" /> Freeze Funds
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAction('terminate', m)} className="text-destructive focus:text-destructive">
+                    <Ban className="size-4 mr-2" /> Terminate
+                  </DropdownMenuItem>
+                </>
+              )}
+              {m.status === 'FROZEN' && (
+                <>
+                  <DropdownMenuItem onClick={() => openAction('unfreeze', m)}>
+                    <Unlock className="size-4 mr-2" /> Unfreeze
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAction('terminate', m)} className="text-destructive focus:text-destructive">
+                    <Ban className="size-4 mr-2" /> Terminate
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ]
+
   return (
     <>
       <PageHeader title="Merchants" description="Manage merchant accounts and KYC approvals" />
 
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or email..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          value={kycFilter}
-          onChange={(e) => { setKycFilter(e.target.value); setPage(1) }}
-        >
-          <option value="">All KYC Status</option>
-          <option value="PENDING">Pending</option>
-          <option value="UNDER_REVIEW">Under Review</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="INSTANT_ACCESS">Instant Access</option>
-        </select>
-        <select
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-        >
-          <option value="">All Account Status</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
-          <option value="FROZEN">Frozen</option>
-          <option value="TERMINATED">Terminated</option>
-        </select>
-        {(search || kycFilter || statusFilter) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setKycFilter(''); setStatusFilter(''); setPage(1) }}>
-            <X className="size-4 mr-1" /> Clear
-          </Button>
-        )}
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Business Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>KYC Status</TableHead>
-                <TableHead>Account Status</TableHead>
-                <TableHead>Registered</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {merchants.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6}>
-                    <EmptyState message={isLoading ? 'Loading merchants...' : 'No merchants registered yet.'} />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                merchants.map((m: any) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.businessName}</TableCell>
-                    <TableCell className="text-sm">{m.contactEmail}</TableCell>
-                    <TableCell><StatusBadge status={m.kycStatus} /></TableCell>
-                    <TableCell>
-                      <Badge className={
-                        m.status === 'ACTIVE' ? 'bg-green-500/10 text-green-600' :
-                        m.status === 'FROZEN' ? 'bg-blue-500/10 text-blue-600' :
-                        m.status === 'TERMINATED' ? 'bg-red-500/10 text-red-600' :
-                        'bg-muted text-muted-foreground'
-                      }>{m.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(m.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-                          <MoreHorizontal className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[180px]">
-                          <DropdownMenuItem onClick={() => setSelectedMerchant(m)}>
-                            <Eye className="size-4 mr-2" /> View & Review
-                          </DropdownMenuItem>
-                          {(m.kycStatus === 'UNDER_REVIEW' || m.kycStatus === 'INSTANT_ACCESS') && (
-                            <>
-                              <DropdownMenuItem onClick={() => openAction('approve', m)}>
-                                <CheckCircle2 className="size-4 mr-2" /> Approve KYC
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openAction('reject', m)}>
-                                <XCircle className="size-4 mr-2" /> Reject KYC
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          <DropdownMenuSeparator />
-                          {m.status === 'ACTIVE' && (
-                            <>
-                              <DropdownMenuItem onClick={() => openAction('freeze', m)}>
-                                <Snowflake className="size-4 mr-2" /> Freeze Funds
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openAction('terminate', m)} className="text-destructive focus:text-destructive">
-                                <Ban className="size-4 mr-2" /> Terminate
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          {m.status === 'FROZEN' && (
-                            <>
-                              <DropdownMenuItem onClick={() => openAction('unfreeze', m)}>
-                                <Unlock className="size-4 mr-2" /> Unfreeze
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openAction('terminate', m)} className="text-destructive focus:text-destructive">
-                                <Ban className="size-4 mr-2" /> Terminate
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
-              </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-                  <ChevronLeft className="size-4" /> Previous
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                  Next <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={merchants}
+        filters={MERCHANT_FILTERS}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search merchants..."
+        pagination={{ page, perPage: PER_PAGE, total }}
+        onPageChange={setPage}
+        isLoading={isLoading}
+      />
 
       {/* Merchant Detail / KYC Review Panel */}
       <MerchantDetailDialog
@@ -421,7 +437,7 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => window.open(`http://localhost:8080/v1/assets/${doc.objectKey}`, '_blank')}>
+                    <Button variant="ghost" size="sm" onClick={() => window.open(`/v1/assets/${doc.objectKey}`, '_blank')}>
                       <Download className="size-4 mr-1" /> View
                     </Button>
                   </div>
@@ -460,7 +476,7 @@ function MerchantDetailDialog({ merchant, onClose, onAction }: {
                         {d.documentFilename && (
                           <div className="col-span-2">
                             <span className="text-muted-foreground">Document:</span>{' '}
-                            <button className="text-primary underline" onClick={() => window.open(`http://localhost:8080/v1/assets/${d.documentObjectKey}`, '_blank')}>
+                            <button className="text-primary underline" onClick={() => window.open(`/v1/assets/${d.documentObjectKey}`, '_blank')}>
                               {d.documentFilename}
                             </button>
                           </div>
