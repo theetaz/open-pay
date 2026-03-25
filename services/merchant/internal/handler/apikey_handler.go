@@ -61,7 +61,7 @@ func (h *MerchantHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 	keys, err := h.svc.ListAPIKeys(r.Context(), claims.MerchantID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list API keys")
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list API keys: "+err.Error())
 		return
 	}
 

@@ -65,7 +65,7 @@ func HMACAuth(validator KeyValidator) func(http.Handler) http.Handler {
 				path = path + "?" + r.URL.RawQuery
 			}
 
-			if !auth.VerifySignature(secret, timestamp, method, path, body, signature) {
+			if !auth.VerifySignatureWithHMACKey(secret, timestamp, method, path, body, signature) {
 				writeAuthError(w, "invalid signature")
 				return
 			}

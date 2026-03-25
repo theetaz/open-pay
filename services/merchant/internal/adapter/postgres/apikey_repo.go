@@ -19,8 +19,8 @@ func NewAPIKeyRepository(pool *pgxpool.Pool) *APIKeyRepository {
 	return &APIKeyRepository{pool: pool}
 }
 
-const apiKeySelectCols = `id, merchant_id, key_id, secret_hash, COALESCE(secret_hmac_key, ''), name, environment,
-	is_active, revoked_at, revoked_reason, last_used_at, created_at`
+const apiKeySelectCols = `id, merchant_id, key_id, secret_hash, COALESCE(secret_hmac_key, ''), COALESCE(name, ''), environment,
+	is_active, revoked_at, COALESCE(revoked_reason, ''), last_used_at, created_at`
 
 func scanAPIKey(scan func(dest ...any) error) (*domain.APIKey, error) {
 	var key domain.APIKey

@@ -85,6 +85,22 @@ func VerifySignature(secret, timestamp, method, path, body, signature string) bo
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
+// VerifySignatureWithHMACKey verifies a signature using a pre-computed HMAC key (hex-encoded SHA256 of secret).
+// Use this when the signing key has already been derived (e.g., stored in DB as SHA256 hex).
+func VerifySignatureWithHMACKey(hmacKeyHex, timestamp, method, path, body, signature string) bool {
+	signingKey, err := hex.DecodeString(hmacKeyHex)
+	if err != nil {
+		return false
+	}
+
+	message := timestamp + strings.ToUpper(method) + path + body
+	mac := hmac.New(sha256.New, signingKey)
+	mac.Write([]byte(message))
+	expected := hex.EncodeToString(mac.Sum(nil))
+
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
 // CurrentTimestamp returns the current time as Unix milliseconds string.
 func CurrentTimestamp() string {
 	return strconv.FormatInt(time.Now().UnixMilli(), 10)

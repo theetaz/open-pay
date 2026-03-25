@@ -1,6 +1,8 @@
 package middleware_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,15 +15,19 @@ import (
 func TestHMACAuthMiddleware(t *testing.T) {
 	secret := "sk_live_test_secret_for_middleware"
 
+	// Pre-compute the HMAC key (SHA256 hex of the secret) as stored in DB
+	h := sha256.Sum256([]byte(secret))
+	hmacKeyHex := hex.EncodeToString(h[:])
+
 	// A simple handler that returns 200 if auth passes
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Mock key validator that recognizes our test key
+	// Mock key validator that returns the pre-computed HMAC key
 	validator := &mockKeyValidator{
 		keys: map[string]string{
-			"ak_live_testkey": secret,
+			"ak_live_testkey": hmacKeyHex,
 		},
 	}
 
@@ -30,6 +36,7 @@ func TestHMACAuthMiddleware(t *testing.T) {
 
 	t.Run("valid signature passes", func(t *testing.T) {
 		timestamp := auth.CurrentTimestamp()
+		// Client signs with the plaintext secret (SDK behavior)
 		signature := auth.SignRequest(secret, timestamp, "GET", "/v1/payments", "")
 
 		req := httptest.NewRequest(http.MethodGet, "/v1/payments", nil)
@@ -109,7 +116,7 @@ func TestHMACAuthMiddleware(t *testing.T) {
 
 // mockKeyValidator implements middleware.KeyValidator for testing.
 type mockKeyValidator struct {
-	keys map[string]string // keyID -> secret
+	keys map[string]string // keyID -> hmacKeyHex
 }
 
 func (m *mockKeyValidator) GetSecretByKeyID(keyID string) (string, error) {
