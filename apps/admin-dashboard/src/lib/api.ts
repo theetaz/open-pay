@@ -40,10 +40,40 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body
 }
 
+async function uploadFile<T>(path: string, file: File, category: string): Promise<T> {
+  const token = isBrowser ? localStorage.getItem('admin_access_token') : null
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('category', category)
+
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  const body = await res.json()
+  if (!res.ok) {
+    const error = body.error as { code: string; message: string } | undefined
+    throw new ApiRequestError(
+      error?.code || 'UPLOAD_FAILED',
+      error?.message || 'Failed to upload file',
+      res.status,
+    )
+  }
+  return body
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
   put: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
+  upload: <T>(file: File, category: string) => uploadFile<T>('/v1/admin/uploads', file, category),
 }

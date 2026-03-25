@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/openlankapay/openlankapay/services/gateway/internal/middleware"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/proxy"
 )
 
@@ -16,6 +17,7 @@ type GatewayConfig struct {
 	JWTSecret          string
 	ServiceProxy       *proxy.ServiceProxy
 	RateLimitPerMinute int
+	RateLimiter        middleware.RateLimiter
 	GatewayPort        string
 	PlatformFeePct     string
 	ExchangeFeePct     string
@@ -32,6 +34,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Use(corsMiddleware)
 	r.Use(chimw.RealIP)
 
+	// Apply rate limiting
+	if cfg.RateLimiter != nil {
+		r.Use(middleware.RateLimit(cfg.RateLimiter))
+	}
+
 	// Health endpoints
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz)
@@ -47,12 +54,24 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Merchant routes → merchant service (auth handled by merchant service)
 	r.Get("/v1/auth/me", p.ProxyToMerchant)
+	r.Post("/v1/auth/change-password", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/setup", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/verify", p.ProxyToMerchant)
+	r.Post("/v1/auth/2fa/disable", p.ProxyToMerchant)
 	r.Get("/v1/merchants", p.ProxyToMerchant)
 	r.Put("/v1/merchants/{id}", p.ProxyToMerchant)
 	r.Get("/v1/merchants/{id}", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/approve", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/reject", p.ProxyToMerchant)
 	r.Post("/v1/merchants/{id}/deactivate", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/freeze", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/unfreeze", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/terminate", p.ProxyToMerchant)
+	r.Get("/v1/merchants/{id}/documents", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/directors", p.ProxyToMerchant)
+	r.Get("/v1/merchants/{id}/directors", p.ProxyToMerchant)
+	r.Post("/v1/merchants/{id}/directors/{directorId}/resend", p.ProxyToMerchant)
+	r.Delete("/v1/merchants/{id}/directors/{directorId}", p.ProxyToMerchant)
 
 	// File upload routes → merchant service
 	r.Post("/v1/uploads", p.ProxyToMerchant)
@@ -83,6 +102,10 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Get("/v1/payments/{id}/checkout", p.ProxyToPayment)
 	r.Post("/v1/payments/{id}/callback", p.ProxyToPayment)
 
+	// Public director verification routes → merchant service (no auth)
+	r.Get("/v1/public/directors/verify/{token}", p.ProxyToMerchant)
+	r.Post("/v1/public/directors/verify/{token}", p.ProxyToMerchant)
+
 	// Sandbox routes → payment service (no auth, dev only)
 	r.Post("/test/simulate/{providerPayID}", p.ProxyToPayment)
 
@@ -102,6 +125,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	// Webhook routes → webhook service (auth handled by webhook service)
 	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)
+	r.Post("/v1/webhooks/test", p.ProxyToWebhook)
 
 	// Subscription routes → subscription service
 	r.Post("/v1/subscription-plans", p.ProxyToSubscription)
@@ -115,6 +139,9 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Notification routes → notification service
 	r.Get("/v1/notifications", p.ProxyToNotification)
+	r.Get("/v1/admin/email-templates", p.ProxyToNotification)
+	r.Post("/v1/admin/email-templates", p.ProxyToNotification)
+	r.Put("/v1/admin/email-templates/{id}", p.ProxyToNotification)
 
 	// Merchant audit logs → admin service (merchant JWT)
 	r.Get("/v1/merchant/audit-logs", p.ProxyToAdmin)
@@ -125,8 +152,36 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 
 	// Admin protected routes → admin service
 	r.Get("/v1/admin/auth/me", p.ProxyToAdmin)
+	r.Post("/v1/admin/auth/change-password", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs", p.ProxyToAdmin)
 	r.Get("/v1/audit-logs/{id}", p.ProxyToAdmin)
+
+	// Admin uploads and assets → admin service
+	r.Post("/v1/admin/uploads", p.ProxyToAdmin)
+	r.Get("/v1/assets/*", p.ProxyToAdmin)
+
+	// Platform settings → admin service
+	r.Get("/v1/admin/settings", p.ProxyToAdmin)
+	r.Put("/v1/admin/settings", p.ProxyToAdmin)
+	r.Get("/v1/admin/settings/{category}", p.ProxyToAdmin)
+
+	// Admin user management → admin service
+	r.Get("/v1/admin/users", p.ProxyToAdmin)
+	r.Post("/v1/admin/users", p.ProxyToAdmin)
+	r.Put("/v1/admin/users/{id}", p.ProxyToAdmin)
+	r.Post("/v1/admin/users/{id}/deactivate", p.ProxyToAdmin)
+
+	// Admin role management → admin service
+	r.Get("/v1/admin/roles", p.ProxyToAdmin)
+	r.Post("/v1/admin/roles", p.ProxyToAdmin)
+	r.Put("/v1/admin/roles/{id}", p.ProxyToAdmin)
+
+	// Legal documents → admin service
+	r.Get("/v1/legal-documents/active", p.ProxyToAdmin)
+	r.Get("/v1/admin/legal-documents", p.ProxyToAdmin)
+	r.Post("/v1/admin/legal-documents", p.ProxyToAdmin)
+	r.Put("/v1/admin/legal-documents/{id}", p.ProxyToAdmin)
+	r.Post("/v1/admin/legal-documents/{id}/activate", p.ProxyToAdmin)
 
 	return r
 }
@@ -175,12 +230,15 @@ func serviceHealthCheck(serviceURL string) map[string]any {
 func systemHealth(cfg GatewayConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		services := map[string]string{
-			"gateway":    "http://localhost:" + cfg.GatewayPort,
-			"payment":    cfg.ServiceProxy.PaymentURL,
-			"merchant":   cfg.ServiceProxy.MerchantURL,
-			"settlement": cfg.ServiceProxy.SettlementURL,
-			"webhook":    cfg.ServiceProxy.WebhookURL,
-			"exchange":   cfg.ServiceProxy.ExchangeURL,
+			"gateway":      "http://localhost:" + cfg.GatewayPort,
+			"payment":      cfg.ServiceProxy.PaymentURL,
+			"merchant":     cfg.ServiceProxy.MerchantURL,
+			"settlement":   cfg.ServiceProxy.SettlementURL,
+			"webhook":      cfg.ServiceProxy.WebhookURL,
+			"exchange":     cfg.ServiceProxy.ExchangeURL,
+			"subscription": cfg.ServiceProxy.SubscriptionURL,
+			"notification": cfg.ServiceProxy.NotificationURL,
+			"admin":        cfg.ServiceProxy.AdminURL,
 		}
 
 		results := make(map[string]any, len(services))

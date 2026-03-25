@@ -66,6 +66,7 @@ const merchantSelectCols = `id, business_name, COALESCE(business_type,''), COALE
 	COALESCE(instant_access_remaining, 0),
 	COALESCE(bank_name,''), COALESCE(bank_branch,''), COALESCE(bank_account_no,''), COALESCE(bank_account_name,''),
 	COALESCE(default_currency,'LKR'), COALESCE(default_provider,''), status,
+	COALESCE(status_reason,''), status_changed_at, COALESCE(kyc_review_notes,''),
 	created_at, updated_at, deleted_at`
 
 func (r *MerchantRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Merchant, error) {
@@ -88,7 +89,8 @@ func (r *MerchantRepository) Update(ctx context.Context, m *domain.Merchant) err
 			kyc_rejection_reason = $18,
 			bank_name = $19, bank_branch = $20, bank_account_no = $21, bank_account_name = $22,
 			default_currency = $23, default_provider = $24, status = $25,
-			updated_at = $26
+			status_reason = $26, status_changed_at = $27, kyc_review_notes = $28,
+			updated_at = $29
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	result, err := r.pool.Exec(ctx, query,
@@ -100,6 +102,7 @@ func (r *MerchantRepository) Update(ctx context.Context, m *domain.Merchant) err
 		m.KYCRejectionReason,
 		m.BankName, m.BankBranch, m.BankAccountNo, m.BankAccountName,
 		m.DefaultCurrency, m.DefaultProvider, string(m.Status),
+		m.StatusReason, m.StatusChangedAt, m.KYCReviewNotes,
 		m.UpdatedAt,
 	)
 	if err != nil {
@@ -184,6 +187,7 @@ func scanMerchant(rows pgx.Rows) (*domain.Merchant, error) {
 		&m.InstantAccessRemaining,
 		&m.BankName, &m.BankBranch, &m.BankAccountNo, &m.BankAccountName,
 		&m.DefaultCurrency, &m.DefaultProvider, &status,
+		&m.StatusReason, &m.StatusChangedAt, &m.KYCReviewNotes,
 		&m.CreatedAt, &m.UpdatedAt, &m.DeletedAt,
 	)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/admin/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/admin/internal/handler"
@@ -32,12 +33,34 @@ func main() {
 
 	auditRepo := pgadapter.NewAuditRepository(pool)
 	adminUserRepo := pgadapter.NewAdminUserRepository(pool)
+	legalDocRepo := pgadapter.NewLegalDocumentRepository(pool)
+	settingsRepo := pgadapter.NewSettingsRepository(pool)
 
 	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAdminAuthService(adminUserRepo, jwtSecret)
 
-	h := handler.NewAdminHandler(auditSvc, authSvc)
-	router := handler.NewRouter(h, jwtSecret)
+	// Notification client
+	notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
+	notifClient := notification.NewClient(notifServiceURL)
+
+	h := handler.NewAdminHandler(auditSvc, authSvc, legalDocRepo, settingsRepo, adminUserRepo, notifClient)
+
+	// Admin file upload handler (MinIO)
+	var uploadHandler *handler.AdminUploadHandler
+	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
+	uploadHandler, err = handler.NewAdminUploadHandler(handler.AdminUploadConfig{
+		Endpoint:  minioEndpoint,
+		AccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		SecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin123"),
+		Bucket:    getEnv("MINIO_BUCKET", "kyc-documents"),
+		UseSSL:    false,
+	})
+	if err != nil {
+		logger.Warn().Err(err).Msg("MinIO not available, admin uploads disabled")
+		uploadHandler = nil
+	}
+
+	router := handler.NewRouter(h, jwtSecret, uploadHandler)
 
 	port := getEnv("PORT", "8088")
 	srv := &http.Server{

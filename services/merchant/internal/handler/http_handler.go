@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	minio "github.com/minio/minio-go/v7"
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/auth"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
@@ -27,26 +28,45 @@ type MerchantServiceInterface interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Merchant, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateMerchantProfile(ctx context.Context, id uuid.UUID, input service.UpdateProfileInput) (*domain.Merchant, error)
-	Approve(ctx context.Context, id uuid.UUID) error
+	Approve(ctx context.Context, id uuid.UUID, force bool, forceReason string) error
 	Reject(ctx context.Context, id uuid.UUID, reason string) error
 	List(ctx context.Context, params service.ListParams) ([]*domain.Merchant, int, error)
 	Deactivate(ctx context.Context, id uuid.UUID) error
+	Freeze(ctx context.Context, id uuid.UUID, reason string) error
+	Unfreeze(ctx context.Context, id uuid.UUID) error
+	Terminate(ctx context.Context, id uuid.UUID, reason string) error
+	CreateDirector(ctx context.Context, merchantID uuid.UUID, email string) (*domain.Director, error)
+	ListDirectors(ctx context.Context, merchantID uuid.UUID) ([]*domain.Director, error)
+	ResendDirectorVerification(ctx context.Context, merchantID, directorID uuid.UUID) error
+	RemoveDirector(ctx context.Context, merchantID, directorID uuid.UUID) error
+	GetDirectorByToken(ctx context.Context, token string) (*domain.Director, *domain.Merchant, error)
+	SubmitDirectorVerification(ctx context.Context, token string, input service.SubmitDirectorInput) (*domain.Director, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
+	SetupTOTP(ctx context.Context, userID uuid.UUID) (secret, uri string, err error)
+	VerifyAndEnableTOTP(ctx context.Context, userID uuid.UUID, code string) ([]string, error)
+	DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
 type MerchantHandler struct {
-	svc       MerchantServiceInterface
-	jwtSecret string
-	auditLog  *audit.Client
+	svc         MerchantServiceInterface
+	jwtSecret   string
+	auditLog    *audit.Client
+	docRepo     DocumentRepository
+	minioClient *minio.Client
+	minioBucket string
 }
 
 // NewMerchantHandler creates a new MerchantHandler.
-func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient ...*audit.Client) *MerchantHandler {
-	h := &MerchantHandler{svc: svc, jwtSecret: jwtSecret}
-	if len(auditClient) > 0 {
-		h.auditLog = auditClient[0]
+func NewMerchantHandler(svc MerchantServiceInterface, jwtSecret string, auditClient *audit.Client, docRepo DocumentRepository, minioClient *minio.Client, minioBucket string) *MerchantHandler {
+	return &MerchantHandler{
+		svc:         svc,
+		jwtSecret:   jwtSecret,
+		auditLog:    auditClient,
+		docRepo:     docRepo,
+		minioClient: minioClient,
+		minioBucket: minioBucket,
 	}
-	return h
 }
 
 // NewRouter creates a chi router with merchant routes.
@@ -60,17 +80,33 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 	r.Post("/v1/auth/login", h.Login)
 	r.Post("/v1/auth/refresh", h.RefreshToken)
 
+	// Public director verification routes (no auth required)
+	r.Get("/v1/public/directors/verify/{token}", h.GetDirectorByToken)
+	r.Post("/v1/public/directors/verify/{token}", h.SubmitDirectorVerification)
+
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(h.jwtSecret))
 
 		r.Get("/v1/auth/me", h.GetMe)
+		r.Post("/v1/auth/change-password", h.ChangePassword)
+		r.Post("/v1/auth/2fa/setup", h.SetupTOTP)
+		r.Post("/v1/auth/2fa/verify", h.VerifyTOTP)
+		r.Post("/v1/auth/2fa/disable", h.DisableTOTP)
 		r.Get("/v1/merchants", h.ListMerchants)
 		r.Put("/v1/merchants/{id}", h.UpdateProfile)
 		r.Get("/v1/merchants/{id}", h.GetByID)
 		r.Post("/v1/merchants/{id}/approve", h.ApproveMerchant)
 		r.Post("/v1/merchants/{id}/reject", h.RejectMerchant)
 		r.Post("/v1/merchants/{id}/deactivate", h.DeactivateMerchant)
+		r.Post("/v1/merchants/{id}/freeze", h.FreezeMerchant)
+		r.Post("/v1/merchants/{id}/unfreeze", h.UnfreezeMerchant)
+		r.Post("/v1/merchants/{id}/terminate", h.TerminateMerchant)
+		r.Get("/v1/merchants/{id}/documents", h.GetMerchantDocuments)
+		r.Post("/v1/merchants/{id}/directors", h.CreateDirector)
+		r.Get("/v1/merchants/{id}/directors", h.ListDirectors)
+		r.Post("/v1/merchants/{id}/directors/{directorId}/resend", h.ResendDirectorVerification)
+		r.Delete("/v1/merchants/{id}/directors/{directorId}", h.RemoveDirector)
 	})
 
 	// Branch routes
@@ -207,6 +243,119 @@ func (h *MerchantHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, envelope{"data": meResponse(user, merchant)})
 }
 
+// ChangePassword handles POST /v1/auth/change-password.
+func (h *MerchantHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	if err := h.svc.ChangePassword(r.Context(), claims.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			writeError(w, http.StatusBadRequest, "INVALID_PASSWORD", "current password is incorrect")
+			return
+		}
+		if errors.Is(err, domain.ErrWeakPassword) {
+			writeError(w, http.StatusBadRequest, "WEAK_PASSWORD", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to change password")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "password_changed"}})
+}
+
+// SetupTOTP handles POST /v1/auth/2fa/setup.
+func (h *MerchantHandler) SetupTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	secret, uri, err := h.svc.SetupTOTP(r.Context(), claims.UserID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "SETUP_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{
+		"secret": secret,
+		"uri":    uri,
+	}})
+}
+
+// VerifyTOTP handles POST /v1/auth/2fa/verify.
+func (h *MerchantHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	backupCodes, err := h.svc.VerifyAndEnableTOTP(r.Context(), claims.UserID, req.Code)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidTOTP) {
+			writeError(w, http.StatusBadRequest, "INVALID_CODE", "invalid 2FA code")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "VERIFY_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{
+		"enabled":     true,
+		"backupCodes": backupCodes,
+	}})
+}
+
+// DisableTOTP handles POST /v1/auth/2fa/disable.
+func (h *MerchantHandler) DisableTOTP(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	if err := h.svc.DisableTOTP(r.Context(), claims.UserID, req.Code); err != nil {
+		if errors.Is(err, domain.ErrInvalidTOTP) {
+			writeError(w, http.StatusBadRequest, "INVALID_CODE", "invalid 2FA code")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "DISABLE_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "2fa_disabled"}})
+}
+
 // UpdateProfile handles PUT /v1/merchants/{id}.
 func (h *MerchantHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	claims, ok := auth.ClaimsFromContext(r.Context())
@@ -262,6 +411,18 @@ func (h *MerchantHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) 
 		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update profile")
 		return
+	}
+
+	if h.auditLog != nil {
+		action := "merchant.profile_updated"
+		if req.SubmitKYC {
+			action = "merchant.kyc_submitted"
+		}
+		h.auditLog.Log(r.Context(), audit.LogEntry{
+			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &id,
+			Action: action, ResourceType: "merchant", ResourceID: &id,
+			IPAddress: stripPort(r.RemoteAddr),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": merchantResponse(merchant)})
@@ -321,7 +482,13 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.svc.Approve(r.Context(), id); err != nil {
+	var req struct {
+		Force       bool   `json:"force"`
+		ForceReason string `json:"forceReason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if err := h.svc.Approve(r.Context(), id, req.Force, req.ForceReason); err != nil {
 		if errors.Is(err, domain.ErrMerchantNotFound) {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
 			return
@@ -330,8 +497,17 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
 			return
 		}
+		if errors.Is(err, domain.ErrDirectorsNotVerified) {
+			writeError(w, http.StatusUnprocessableEntity, "DIRECTORS_NOT_VERIFIED", "not all directors have been verified; use force=true to override")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to approve merchant")
 		return
+	}
+
+	action := "merchant.approved"
+	if req.Force {
+		action = "merchant.force_approved"
 	}
 
 	if h.auditLog != nil {
@@ -340,7 +516,7 @@ func (h *MerchantHandler) ApproveMerchant(w http.ResponseWriter, r *http.Request
 			actorID = claims.UserID
 		}
 		h.auditLog.Log(r.Context(), audit.LogEntry{
-			ActorID: actorID, ActorType: "ADMIN", Action: "merchant.approved",
+			ActorID: actorID, ActorType: "ADMIN", Action: action,
 			ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
 		})
 	}
@@ -416,6 +592,151 @@ func (h *MerchantHandler) DeactivateMerchant(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "deactivated"}})
+}
+
+// FreezeMerchant handles POST /v1/merchants/{id}/freeze.
+func (h *MerchantHandler) FreezeMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Reason == "" {
+		req.Reason = "Frozen by admin"
+	}
+
+	if err := h.svc.Freeze(r.Context(), id, req.Reason); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to freeze merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.frozen",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "frozen"}})
+}
+
+// UnfreezeMerchant handles POST /v1/merchants/{id}/unfreeze.
+func (h *MerchantHandler) UnfreezeMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if err := h.svc.Unfreeze(r.Context(), id); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to unfreeze merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.unfrozen",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "active"}})
+}
+
+// TerminateMerchant handles POST /v1/merchants/{id}/terminate.
+func (h *MerchantHandler) TerminateMerchant(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Reason == "" {
+		req.Reason = "Terminated by admin"
+	}
+
+	if err := h.svc.Terminate(r.Context(), id, req.Reason); err != nil {
+		if errors.Is(err, domain.ErrMerchantNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidStatusTransition) {
+			writeError(w, http.StatusBadRequest, "INVALID_TRANSITION", err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to terminate merchant")
+		return
+	}
+
+	if h.auditLog != nil {
+		if claims, ok := auth.ClaimsFromContext(r.Context()); ok {
+			h.auditLog.Log(r.Context(), audit.LogEntry{
+				ActorID: claims.UserID, ActorType: "ADMIN", Action: "merchant.terminated",
+				ResourceType: "merchant", ResourceID: &id, IPAddress: stripPort(r.RemoteAddr),
+			})
+		}
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "terminated"}})
+}
+
+// GetMerchantDocuments handles GET /v1/merchants/{id}/documents.
+func (h *MerchantHandler) GetMerchantDocuments(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid merchant ID")
+		return
+	}
+
+	if h.docRepo == nil {
+		writeJSON(w, http.StatusOK, envelope{"data": []any{}})
+		return
+	}
+
+	docs, err := h.docRepo.ListByMerchant(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list documents")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(docs))
+	for _, d := range docs {
+		items = append(items, map[string]any{
+			"id": d.ID.String(), "category": d.Category,
+			"filename": d.Filename, "contentType": d.ContentType,
+			"fileSize": d.FileSize, "objectKey": d.ObjectKey,
+		})
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
 }
 
 func stripPort(addr string) string {
@@ -510,7 +831,7 @@ func meResponse(u *domain.User, m *domain.Merchant) map[string]any {
 }
 
 func merchantResponse(m *domain.Merchant) map[string]any {
-	return map[string]any{
+	resp := map[string]any{
 		"id":              m.ID.String(),
 		"businessName":    m.BusinessName,
 		"businessType":    m.BusinessType,
@@ -526,14 +847,27 @@ func merchantResponse(m *domain.Merchant) map[string]any {
 		"postalCode":      m.PostalCode,
 		"country":         m.Country,
 		"kycStatus":       string(m.KYCStatus),
+		"kycRejectionReason": m.KYCRejectionReason,
+		"kycReviewNotes":  m.KYCReviewNotes,
 		"bankName":        m.BankName,
 		"bankBranch":      m.BankBranch,
 		"bankAccountNo":   m.BankAccountNo,
 		"bankAccountName": m.BankAccountName,
 		"defaultCurrency": m.DefaultCurrency,
 		"status":          string(m.Status),
+		"statusReason":    m.StatusReason,
 		"createdAt":       m.CreatedAt.Format(time.RFC3339),
 	}
+	if m.KYCSubmittedAt != nil {
+		resp["kycSubmittedAt"] = m.KYCSubmittedAt.Format(time.RFC3339)
+	}
+	if m.KYCReviewedAt != nil {
+		resp["kycReviewedAt"] = m.KYCReviewedAt.Format(time.RFC3339)
+	}
+	if m.StatusChangedAt != nil {
+		resp["statusChangedAt"] = m.StatusChangedAt.Format(time.RFC3339)
+	}
+	return resp
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

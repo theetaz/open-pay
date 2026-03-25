@@ -102,11 +102,14 @@ func (n *Notification) MarkFailed(reason string) {
 // RenderTemplate generates notification body from a template and variables.
 func RenderTemplate(eventType string, vars map[string]string) string {
 	templates := map[string]string{
-		"payment.paid": "Payment confirmed! Amount: {{amount}} {{currency}}. Payment No: {{paymentNo}}.",
-		"payment.expired": "Payment {{paymentNo}} has expired.",
-		"payment.failed": "Payment {{paymentNo}} has failed.",
-		"merchant.approved": "Your merchant account has been approved. You can now accept payments.",
-		"withdrawal.completed": "Your withdrawal of {{amount}} {{currency}} has been processed. Bank reference: {{bankRef}}.",
+		"payment.paid":             "Payment confirmed! Amount: {{amount}} {{currency}}. Payment No: {{paymentNo}}.",
+		"payment.expired":          "Payment {{paymentNo}} has expired.",
+		"payment.failed":           "Payment {{paymentNo}} has failed.",
+		"kyc.submitted":            "<p>Thank you for submitting your KYC application for <strong>{{businessName}}</strong>.</p><p>Our team will review your application and get back to you within 1-3 business days. You have been granted instant access with a limited transaction volume in the meantime.</p><p>If you have any questions, please contact our support team.</p>",
+		"kyc.approved":             "<p>Congratulations! Your KYC application for <strong>{{businessName}}</strong> has been approved.</p><p>You now have full access to all Open Pay features with no transaction limits. Start accepting payments today!</p>",
+		"kyc.rejected":             "<p>We regret to inform you that your KYC application for <strong>{{businessName}}</strong> was not approved.</p><p><strong>Reason:</strong> {{reason}}</p><p>Please review the feedback and resubmit your application with the required changes. If you have questions, contact our support team.</p>",
+		"merchant.approved":        "Your merchant account has been approved. You can now accept payments.",
+		"withdrawal.completed":     "Your withdrawal of {{amount}} {{currency}} has been processed. Bank reference: {{bankRef}}.",
 		"subscription.payment.due": "Your subscription payment of {{amount}} {{currency}} is due.",
 	}
 

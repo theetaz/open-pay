@@ -19,6 +19,46 @@ import type { KycFormData } from '#/lib/schemas/kyc'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
 
+const BUSINESS_NATURE_OPTIONS = [
+  { value: 'sole_proprietorship', label: 'Sole Proprietorship' },
+  { value: 'partnership', label: 'Partnership' },
+  { value: 'private_limited', label: 'Private Limited' },
+  { value: 'public_limited', label: 'Public Limited' },
+]
+
+const BUSINESS_CATEGORY_OPTIONS = [
+  { value: 'retail', label: 'Retail' },
+  { value: 'wholesale', label: 'Wholesale' },
+  { value: 'services', label: 'Services' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'technology', label: 'Technology' },
+]
+
+const ITEM_CATEGORY_OPTIONS = [
+  { value: 'physical_goods', label: 'Physical Goods' },
+  { value: 'digital_goods', label: 'Digital Goods' },
+  { value: 'services', label: 'Services' },
+  { value: 'subscriptions', label: 'Subscriptions' },
+]
+
+const ITEM_TYPE_OPTIONS = [
+  { value: 'electronics', label: 'Electronics' },
+  { value: 'clothing', label: 'Clothing' },
+  { value: 'food_beverage', label: 'Food & Beverage' },
+  { value: 'software', label: 'Software' },
+  { value: 'other', label: 'Other' },
+]
+
+const STORE_TYPE_OPTIONS = [
+  { value: 'online', label: 'Online' },
+  { value: 'physical', label: 'Physical' },
+  { value: 'both', label: 'Both' },
+]
+
+function getLabel(options: { value: string; label: string }[], value: string): string | undefined {
+  return options.find((o) => o.value === value)?.label
+}
+
 interface BusinessDetailsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<KycFormData, any, any>
@@ -78,20 +118,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field>
-              <FieldLabel>Nature of Business</FieldLabel>
+              <FieldLabel required>Nature of Business</FieldLabel>
               <Controller
                 name="businessNature"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select nature" />
+                      <SelectValue placeholder="Select nature">{getLabel(BUSINESS_NATURE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sole_proprietorship">Sole Proprietorship</SelectItem>
-                      <SelectItem value="partnership">Partnership</SelectItem>
-                      <SelectItem value="private_limited">Private Limited</SelectItem>
-                      <SelectItem value="public_limited">Public Limited</SelectItem>
+                      {BUSINESS_NATURE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -100,21 +137,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Business Category</FieldLabel>
+              <FieldLabel required>Business Category</FieldLabel>
               <Controller
                 name="businessCategory"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder="Select category">{getLabel(BUSINESS_CATEGORY_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="retail">Retail</SelectItem>
-                      <SelectItem value="wholesale">Wholesale</SelectItem>
-                      <SelectItem value="services">Services</SelectItem>
-                      <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                      <SelectItem value="technology">Technology</SelectItem>
+                      {BUSINESS_CATEGORY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -123,20 +156,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Item Category</FieldLabel>
+              <FieldLabel required>Item Category</FieldLabel>
               <Controller
                 name="itemCategory"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select item category" />
+                      <SelectValue placeholder="Select item category">{getLabel(ITEM_CATEGORY_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="physical_goods">Physical Goods</SelectItem>
-                      <SelectItem value="digital_goods">Digital Goods</SelectItem>
-                      <SelectItem value="services">Services</SelectItem>
-                      <SelectItem value="subscriptions">Subscriptions</SelectItem>
+                      {ITEM_CATEGORY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -147,21 +177,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel>Item Type</FieldLabel>
+              <FieldLabel required>Item Type</FieldLabel>
               <Controller
                 name="itemType"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select item type" />
+                      <SelectValue placeholder="Select item type">{getLabel(ITEM_TYPE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="electronics">Electronics</SelectItem>
-                      <SelectItem value="clothing">Clothing</SelectItem>
-                      <SelectItem value="food_beverage">Food & Beverage</SelectItem>
-                      <SelectItem value="software">Software</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      {ITEM_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -170,19 +196,17 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Store Type</FieldLabel>
+              <FieldLabel required>Store Type</FieldLabel>
               <Controller
                 name="storeType"
                 control={control}
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select store type" />
+                      <SelectValue placeholder="Select store type">{getLabel(STORE_TYPE_OPTIONS, field.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="physical">Physical</SelectItem>
-                      <SelectItem value="both">Both</SelectItem>
+                      {STORE_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -192,7 +216,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
           </div>
 
           <Field>
-            <FieldLabel htmlFor="registeredBusinessName">Registered Business Name</FieldLabel>
+            <FieldLabel htmlFor="registeredBusinessName" required>Registered Business Name</FieldLabel>
             <Input
               id="registeredBusinessName"
               placeholder="Enter registered business name"
@@ -202,7 +226,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="businessDescription">Business Description</FieldLabel>
+            <FieldLabel htmlFor="businessDescription" required>Business Description</FieldLabel>
             <Textarea
               id="businessDescription"
               placeholder="Describe your business activities"
@@ -213,7 +237,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="registrationNo">Registration No</FieldLabel>
+              <FieldLabel htmlFor="registrationNo" required>Registration No</FieldLabel>
               <Input
                 id="registrationNo"
                 placeholder="Enter registration number"
@@ -222,14 +246,20 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.registrationNo?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel>Registered Date</FieldLabel>
+              <FieldLabel required>Registered Date</FieldLabel>
               <Controller
                 name="registeredDate"
                 control={control}
                 render={({ field }) => (
                   <DatePicker
                     value={field.value ? new Date(field.value) : undefined}
-                    onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
+                    onChange={(date) => {
+                      if (!date) return field.onChange('')
+                      const y = date.getFullYear()
+                      const m = String(date.getMonth() + 1).padStart(2, '0')
+                      const d = String(date.getDate()).padStart(2, '0')
+                      field.onChange(`${y}-${m}-${d}`)
+                    }}
                     placeholder="Select date"
                   />
                 )}
@@ -249,7 +279,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel>Upload BR Copy</FieldLabel>
+              <FieldLabel required>Upload BR Copy</FieldLabel>
               {brCopyFile ? (
                 <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                   <FileText className="size-5 text-muted-foreground" />
@@ -296,7 +326,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Upload Form 01/20/40</FieldLabel>
+              <FieldLabel required>Upload Form 01/20/40</FieldLabel>
               {formDocFile ? (
                 <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                   <FileText className="size-5 text-muted-foreground" />
@@ -357,7 +387,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
         <FieldGroup>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessEmail">Business Email</FieldLabel>
+              <FieldLabel htmlFor="businessEmail" required>Business Email</FieldLabel>
               <Input
                 id="businessEmail"
                 type="email"
@@ -367,7 +397,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.businessEmail?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel htmlFor="businessPhone">Business Phone</FieldLabel>
+              <FieldLabel htmlFor="businessPhone" required>Business Phone</FieldLabel>
               <Input
                 id="businessPhone"
                 placeholder="Enter business phone"
@@ -384,7 +414,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessAddressLine1">Address Line 1</FieldLabel>
+              <FieldLabel htmlFor="businessAddressLine1" required>Address Line 1</FieldLabel>
               <Input
                 id="businessAddressLine1"
                 placeholder="Street address"
@@ -404,7 +434,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="businessCity">City</FieldLabel>
+              <FieldLabel htmlFor="businessCity" required>City</FieldLabel>
               <Input
                 id="businessCity"
                 placeholder="Enter city"
@@ -413,7 +443,7 @@ export function BusinessDetails({ form }: BusinessDetailsProps) {
               <FieldError>{errors.businessCity?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel htmlFor="businessPostalCode">Postal Code</FieldLabel>
+              <FieldLabel htmlFor="businessPostalCode" required>Postal Code</FieldLabel>
               <Input
                 id="businessPostalCode"
                 placeholder="Enter postal code"

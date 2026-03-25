@@ -47,17 +47,43 @@ var validTransitions = map[PaymentStatus][]PaymentStatus{
 // Default payment expiration.
 const DefaultExpiration = 15 * time.Minute
 
+// GoodItem represents a product or service in a payment.
+type GoodItem struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	MccCode     string `json:"mccCode,omitempty"`
+}
+
+// CustomerBilling holds customer billing details.
+type CustomerBilling struct {
+	FirstName  string `json:"firstName"`
+	LastName   string `json:"lastName"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Address    string `json:"address"`
+	City       string `json:"city,omitempty"`
+	PostalCode string `json:"postalCode,omitempty"`
+	Country    string `json:"country,omitempty"`
+}
+
 // CreatePaymentInput holds the data needed to create a payment.
 type CreatePaymentInput struct {
-	MerchantID     uuid.UUID
-	BranchID       *uuid.UUID
-	Amount         decimal.Decimal
-	Currency       string
-	Provider       string
-	MerchantTradeNo string
-	WebhookURL     string
-	ExpireTime     *time.Time
-	CustomerEmail  string
+	MerchantID        uuid.UUID
+	BranchID          *uuid.UUID
+	Amount            decimal.Decimal
+	Currency          string
+	Provider          string
+	MerchantTradeNo   string
+	WebhookURL        string
+	SuccessURL        string
+	CancelURL         string
+	ExpireTime        *time.Time
+	CustomerEmail     string
+	CustomerFirstName string
+	CustomerLastName  string
+	CustomerPhone     string
+	CustomerAddress   string
+	Goods             []GoodItem
 }
 
 // Payment represents a payment order.
@@ -83,11 +109,24 @@ type Payment struct {
 	CheckoutLink    string
 	DeepLink        string
 	Status          PaymentStatus
-	CustomerEmail   string
+	CustomerEmail     string
+	CustomerFirstName string
+	CustomerLastName  string
+	CustomerPhone     string
+	CustomerAddress   string
+	Goods             []GoodItem
 	WebhookURL      string
+	SuccessURL      string
+	CancelURL       string
 	TxHash          string
 	BlockNumber     int64
 	WalletAddress   string
+	// LKR-specific fee fields (populated when currency is LKR)
+	LKRAmount       *decimal.Decimal
+	LKRExchangeFee  *decimal.Decimal
+	LKRPlatformFee  *decimal.Decimal
+	LKRTotalFees    *decimal.Decimal
+	LKRNetAmount    *decimal.Decimal
 	ExpireTime      time.Time
 	PaidAt          *time.Time
 	FailedAt        *time.Time
@@ -119,21 +158,28 @@ func NewPayment(input CreatePaymentInput) (*Payment, error) {
 	}
 
 	return &Payment{
-		ID:              uuid.New(),
-		MerchantID:      input.MerchantID,
-		BranchID:        input.BranchID,
-		PaymentNo:       generatePaymentNo(now),
-		MerchantTradeNo: input.MerchantTradeNo,
-		Amount:          input.Amount,
-		Currency:        input.Currency,
-		AmountUSDT:      input.Amount, // Will be overwritten if LKR
-		Provider:        input.Provider,
-		Status:          StatusInitiated,
-		CustomerEmail:   input.CustomerEmail,
-		WebhookURL:      input.WebhookURL,
-		ExpireTime:      expireTime,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                uuid.New(),
+		MerchantID:        input.MerchantID,
+		BranchID:          input.BranchID,
+		PaymentNo:         generatePaymentNo(now),
+		MerchantTradeNo:   input.MerchantTradeNo,
+		Amount:            input.Amount,
+		Currency:          input.Currency,
+		AmountUSDT:        input.Amount, // Will be overwritten if LKR
+		Provider:          input.Provider,
+		Status:            StatusInitiated,
+		CustomerEmail:     input.CustomerEmail,
+		CustomerFirstName: input.CustomerFirstName,
+		CustomerLastName:  input.CustomerLastName,
+		CustomerPhone:     input.CustomerPhone,
+		CustomerAddress:   input.CustomerAddress,
+		Goods:             input.Goods,
+		WebhookURL:        input.WebhookURL,
+		SuccessURL:        input.SuccessURL,
+		CancelURL:         input.CancelURL,
+		ExpireTime:        expireTime,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}, nil
 }
 
@@ -186,6 +232,20 @@ func (p *Payment) SetFees(exchangeFeeRate, platformFeeRate decimal.Decimal) {
 	p.PlatformFeeUSDT = p.AmountUSDT.Mul(platformFeeRate).Div(hundred)
 	p.TotalFeesUSDT = p.ExchangeFeeUSDT.Add(p.PlatformFeeUSDT)
 	p.NetAmountUSDT = p.AmountUSDT.Sub(p.TotalFeesUSDT)
+
+	// Calculate LKR equivalents when currency is LKR
+	if p.Currency == "LKR" && p.ExchangeRateSnapshot != nil {
+		lkrAmount := p.Amount
+		lkrExchFee := lkrAmount.Mul(exchangeFeeRate).Div(hundred)
+		lkrPlatFee := lkrAmount.Mul(platformFeeRate).Div(hundred)
+		lkrTotalFees := lkrExchFee.Add(lkrPlatFee)
+		lkrNet := lkrAmount.Sub(lkrTotalFees)
+		p.LKRAmount = &lkrAmount
+		p.LKRExchangeFee = &lkrExchFee
+		p.LKRPlatformFee = &lkrPlatFee
+		p.LKRTotalFees = &lkrTotalFees
+		p.LKRNetAmount = &lkrNet
+	}
 }
 
 // SetExchangeRate sets the exchange rate and converts LKR to USDT.

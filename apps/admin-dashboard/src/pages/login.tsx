@@ -19,8 +19,20 @@ export function LoginPage() {
     mutationFn: (data: { email: string; password: string }) =>
       api.post<{ data: { accessToken: string; refreshToken: string; user: any } }>('/v1/admin/auth/login', data),
     onSuccess: (res) => {
-      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken)
-      navigate('/')
+      const user = res.data.user
+      const adminUser = user ? {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        mustChangePassword: user.mustChangePassword,
+        role: user.role || { name: 'ADMIN', permissions: [] },
+      } : undefined
+      useAuthStore.getState().login(res.data.accessToken, res.data.refreshToken, adminUser)
+      if (adminUser?.mustChangePassword) {
+        navigate('/change-password')
+      } else {
+        navigate('/')
+      }
     },
   })
 

@@ -23,6 +23,9 @@ type ServiceProxy struct {
 	ExchangeURL     string
 	SettlementURL   string
 	WebhookURL      string
+	SubscriptionURL string
+	NotificationURL string
+	AdminURL        string
 }
 
 // Config holds the URLs for downstream services.
@@ -53,6 +56,9 @@ func NewServiceProxy(cfg Config) *ServiceProxy {
 		ExchangeURL:       cfg.ExchangeServiceURL,
 		SettlementURL:     cfg.SettlementServiceURL,
 		WebhookURL:        cfg.WebhookServiceURL,
+		SubscriptionURL:   cfg.SubscriptionServiceURL,
+		NotificationURL:   cfg.NotificationServiceURL,
+		AdminURL:          cfg.AdminServiceURL,
 	}
 }
 

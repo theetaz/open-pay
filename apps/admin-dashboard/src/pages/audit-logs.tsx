@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '#/components/ui/card'
 import { Input } from '#/components/ui/input'
 import { Button } from '#/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatusBadge } from '#/components/dashboard/status-badge'
@@ -36,6 +37,9 @@ export function AuditLogsPage() {
   const [page, setPage] = React.useState(1)
   const [searchInput, setSearchInput] = React.useState('')
   const [debouncedAction, setDebouncedAction] = React.useState('')
+  const [actorTypeFilter, setActorTypeFilter] = React.useState('')
+  const [resourceTypeFilter, setResourceTypeFilter] = React.useState('')
+  const [actionFilter, setActionFilter] = React.useState('')
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -46,14 +50,15 @@ export function AuditLogsPage() {
   }, [searchInput])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'audit-logs', { page, perPage: PER_PAGE, action: debouncedAction }],
+    queryKey: ['admin', 'audit-logs', { page, perPage: PER_PAGE, action: actionFilter || debouncedAction, actorType: actorTypeFilter, resourceType: resourceTypeFilter }],
     queryFn: () => {
       const params = new URLSearchParams()
       params.set('page', String(page))
       params.set('perPage', String(PER_PAGE))
-      if (debouncedAction) {
-        params.set('action', debouncedAction)
-      }
+      if (actionFilter && actionFilter !== 'all') params.set('action', actionFilter)
+      else if (debouncedAction) params.set('action', debouncedAction)
+      if (actorTypeFilter && actorTypeFilter !== 'all') params.set('actorType', actorTypeFilter)
+      if (resourceTypeFilter && resourceTypeFilter !== 'all') params.set('resourceType', resourceTypeFilter)
       return api.get<AuditLogsResponse>(`/v1/audit-logs?${params.toString()}`)
     },
     retry: false,
@@ -70,8 +75,8 @@ export function AuditLogsPage() {
         description="Track all administrative actions and system events"
       />
 
-      <div className="flex gap-2 mb-4">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
           <Input
             type="text"
@@ -81,6 +86,49 @@ export function AuditLogsPage() {
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
+        <Select value={actionFilter} onValueChange={(v) => { if (v) { setActionFilter(v); setPage(1) } }}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All Actions" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Actions</SelectItem>
+            <SelectItem value="payment.initiated">Payment Initiated</SelectItem>
+            <SelectItem value="payment.paid">Payment Paid</SelectItem>
+            <SelectItem value="payment.expired">Payment Expired</SelectItem>
+            <SelectItem value="payment.failed">Payment Failed</SelectItem>
+            <SelectItem value="payment.checkout_viewed">Checkout Viewed</SelectItem>
+            <SelectItem value="payment_link.created">Link Created</SelectItem>
+            <SelectItem value="payment_link.updated">Link Updated</SelectItem>
+            <SelectItem value="payment_link.deleted">Link Deleted</SelectItem>
+            <SelectItem value="payment_link.used">Link Used</SelectItem>
+            <SelectItem value="merchant.registered">Merchant Registered</SelectItem>
+            <SelectItem value="merchant.approved">Merchant Approved</SelectItem>
+            <SelectItem value="merchant.login">Merchant Login</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={actorTypeFilter} onValueChange={(v) => { if (v) { setActorTypeFilter(v); setPage(1) } }}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All Actors" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Actors</SelectItem>
+            <SelectItem value="ADMIN">Admin</SelectItem>
+            <SelectItem value="MERCHANT_USER">Merchant User</SelectItem>
+            <SelectItem value="SYSTEM">System</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={resourceTypeFilter} onValueChange={(v) => { if (v) { setResourceTypeFilter(v); setPage(1) } }}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Resources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Resources</SelectItem>
+            <SelectItem value="payment">Payment</SelectItem>
+            <SelectItem value="payment_link">Payment Link</SelectItem>
+            <SelectItem value="merchant">Merchant</SelectItem>
+            <SelectItem value="admin_user">Admin User</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>

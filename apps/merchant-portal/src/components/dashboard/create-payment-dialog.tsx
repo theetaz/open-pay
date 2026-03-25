@@ -19,6 +19,8 @@ import {
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { Plus, Loader2, Copy, CheckCircle2 } from 'lucide-react'
 import { useCreatePayment } from '#/hooks/use-payments'
+import { useMe } from '#/hooks/use-auth'
+import { formatDualAmount } from '#/lib/currency'
 
 export function CreatePaymentDialog() {
   const [open, setOpen] = React.useState(false)
@@ -30,6 +32,8 @@ export function CreatePaymentDialog() {
   const [copied, setCopied] = React.useState(false)
 
   const createPayment = useCreatePayment()
+  const { data: meData } = useMe()
+  const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -83,7 +87,15 @@ export function CreatePaymentDialog() {
                 <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-4 text-center">
                   <CheckCircle2 className="size-8 text-green-500 mx-auto mb-2" />
                   <p className="font-medium">{createdPayment.paymentNo}</p>
-                  <p className="text-2xl font-bold mt-1">{createdPayment.amountUsdt} USDT</p>
+                  {(() => {
+                    const amt = formatDualAmount(createdPayment.amountUsdt, createdPayment.amount, createdPayment.currency, primaryCurrency, createdPayment.exchangeRate)
+                    return (
+                      <>
+                        <p className="text-2xl font-bold mt-1">{amt.primary}</p>
+                        {amt.secondary && <p className="text-sm text-muted-foreground">({amt.secondary})</p>}
+                      </>
+                    )
+                  })()}
                 </div>
 
                 <div className="rounded-md bg-muted/50 p-3 space-y-2 text-sm">

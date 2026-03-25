@@ -50,6 +50,7 @@ contracts/typechain-types/
 *.log
 tmp/
 .pids/
+.logs/
 
 # IDE Files (for JetBrains IDEs)
 .idea/

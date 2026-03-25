@@ -82,7 +82,7 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
       <FieldGroup>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel>Currency <span className="text-destructive">*</span></FieldLabel>
+            <FieldLabel required>Currency</FieldLabel>
             <Controller
               control={form.control}
               name="currency"
@@ -105,7 +105,7 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
           </Field>
 
           <Field>
-            <FieldLabel>Bank <span className="text-destructive">*</span></FieldLabel>
+            <FieldLabel required>Bank</FieldLabel>
             <Controller
               control={form.control}
               name="bank"
@@ -130,7 +130,7 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field>
-            <FieldLabel htmlFor="branch">Branch <span className="text-destructive">*</span></FieldLabel>
+            <FieldLabel htmlFor="branch" required>Branch</FieldLabel>
             <Input
               id="branch"
               placeholder="Enter branch name"
@@ -140,7 +140,7 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="accountName">Account Name <span className="text-destructive">*</span></FieldLabel>
+            <FieldLabel htmlFor="accountName" required>Account Name</FieldLabel>
             <Input
               id="accountName"
               placeholder="Enter account holder name"
@@ -151,7 +151,7 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
         </div>
 
         <Field>
-          <FieldLabel htmlFor="accountNumber">Account Number <span className="text-destructive">*</span></FieldLabel>
+          <FieldLabel htmlFor="accountNumber" required>Account Number</FieldLabel>
           <Input
             id="accountNumber"
             placeholder="Enter account number"
@@ -168,9 +168,8 @@ export function BankAccountDetails({ form }: BankAccountDetailsProps) {
 
         <FieldGroup>
           <Field>
-            <FieldLabel>
+            <FieldLabel required>
               Bank Statement (Last 3 Months in PDF Format)
-              <span className="text-destructive"> *</span>
             </FieldLabel>
 
             {uploadedFile ? (

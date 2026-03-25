@@ -2,7 +2,7 @@
 # Usage: docker build --build-arg SERVICE=payment -t openpay-payment .
 # Must be run from the project root directory
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG SERVICE
 

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,18 +27,30 @@ func (r *PaymentLinkRepository) Create(ctx context.Context, pl *domain.PaymentLi
 	query := `
 		INSERT INTO payment_links (
 			id, merchant_id, branch_id, name, slug, description, currency,
-			amount, allow_custom_amount, is_reusable, show_on_qr_page,
-			usage_count, status, expire_at, created_at, updated_at
+			amount, allow_custom_amount, min_amount, max_amount,
+			allow_quantity_buy, max_quantity,
+			is_reusable, show_on_qr_page,
+			usage_count, status, expire_at,
+			success_url, cancel_url, webhook_url, merchant_trade_no, order_expire_minutes,
+			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11,
-			$12, $13, $14, $15, $16
+			$12, $13,
+			$14, $15,
+			$16, $17, $18,
+			$19, $20, $21, $22, $23,
+			$24, $25
 		)`
 
 	_, err := r.pool.Exec(ctx, query,
 		pl.ID, pl.MerchantID, pl.BranchID, pl.Name, pl.Slug, pl.Description, pl.Currency,
-		pl.Amount, pl.AllowCustomAmount, pl.IsReusable, pl.ShowOnQRPage,
-		pl.UsageCount, string(pl.Status), pl.ExpireAt, pl.CreatedAt, pl.UpdatedAt,
+		pl.Amount, pl.AllowCustomAmount, pl.MinAmount, pl.MaxAmount,
+		pl.AllowQuantityBuy, pl.MaxQuantity,
+		pl.IsReusable, pl.ShowOnQRPage,
+		pl.UsageCount, string(pl.Status), pl.ExpireAt,
+		pl.SuccessURL, pl.CancelURL, pl.WebhookURL, pl.MerchantTradeNo, pl.OrderExpireMinutes,
+		pl.CreatedAt, pl.UpdatedAt,
 	)
 	if err != nil {
 		if isDuplicateKeyError(err) {
@@ -49,8 +62,12 @@ func (r *PaymentLinkRepository) Create(ctx context.Context, pl *domain.PaymentLi
 }
 
 const paymentLinkSelectCols = `id, merchant_id, branch_id, name, slug, COALESCE(description,''), currency,
-	amount, allow_custom_amount, is_reusable, show_on_qr_page,
-	usage_count, status, expire_at, created_at, updated_at, deleted_at`
+	amount, allow_custom_amount, COALESCE(min_amount, 0), COALESCE(max_amount, 0),
+	allow_quantity_buy, max_quantity,
+	is_reusable, show_on_qr_page,
+	usage_count, status, expire_at,
+	COALESCE(success_url,''), COALESCE(cancel_url,''), COALESCE(webhook_url,''), COALESCE(merchant_trade_no,''), order_expire_minutes,
+	created_at, updated_at, deleted_at`
 
 func (r *PaymentLinkRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.PaymentLink, error) {
 	return r.getOne(ctx, "SELECT "+paymentLinkSelectCols+" FROM payment_links WHERE id = $1 AND deleted_at IS NULL", id)
@@ -76,9 +93,12 @@ func (r *PaymentLinkRepository) SlugExists(ctx context.Context, merchantID uuid.
 	return exists, nil
 }
 
-// ListParams holds pagination parameters for payment links.
+// PaymentLinkListParams holds pagination and filter parameters for payment links.
 type PaymentLinkListParams struct {
 	MerchantID uuid.UUID
+	BranchID   *uuid.UUID
+	Search     string
+	Status     string
 	Page       int
 	PerPage    int
 }
@@ -91,19 +111,44 @@ func (r *PaymentLinkRepository) List(ctx context.Context, params PaymentLinkList
 		params.PerPage = 20
 	}
 
+	// Build dynamic WHERE clause
+	where := "merchant_id = $1 AND deleted_at IS NULL"
+	args := []any{params.MerchantID}
+	argIdx := 2
+
+	if params.BranchID != nil {
+		where += fmt.Sprintf(" AND branch_id = $%d", argIdx)
+		args = append(args, *params.BranchID)
+		argIdx++
+	}
+
+	if params.Search != "" {
+		where += fmt.Sprintf(" AND (name ILIKE $%d OR slug ILIKE $%d)", argIdx, argIdx)
+		args = append(args, "%"+params.Search+"%")
+		argIdx++
+	}
+
+	if params.Status != "" {
+		where += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, params.Status)
+		argIdx++
+	}
+
 	var total int
 	err := r.pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM payment_links WHERE merchant_id = $1 AND deleted_at IS NULL",
-		params.MerchantID,
+		"SELECT COUNT(*) FROM payment_links WHERE "+where,
+		args...,
 	).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting payment links: %w", err)
 	}
 
 	offset := (params.Page - 1) * params.PerPage
+	listArgs := append(args, params.PerPage, offset)
 	rows, err := r.pool.Query(ctx,
-		"SELECT "+paymentLinkSelectCols+" FROM payment_links WHERE merchant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT $2 OFFSET $3",
-		params.MerchantID, params.PerPage, offset,
+		fmt.Sprintf("SELECT %s FROM payment_links WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+			paymentLinkSelectCols, where, argIdx, argIdx+1),
+		listArgs...,
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("listing payment links: %w", err)
@@ -128,13 +173,19 @@ func (r *PaymentLinkRepository) Update(ctx context.Context, pl *domain.PaymentLi
 		UPDATE payment_links SET
 			name = $2, slug = $3, description = $4, currency = $5,
 			amount = $6, allow_custom_amount = $7, is_reusable = $8, show_on_qr_page = $9,
-			status = $10, expire_at = $11, usage_count = $12, updated_at = $13
+			status = $10, expire_at = $11, usage_count = $12,
+			min_amount = $13, max_amount = $14, allow_quantity_buy = $15, max_quantity = $16,
+			success_url = $17, cancel_url = $18, webhook_url = $19, merchant_trade_no = $20,
+			order_expire_minutes = $21, updated_at = $22
 		WHERE id = $1 AND deleted_at IS NULL`
 
 	result, err := r.pool.Exec(ctx, query,
 		pl.ID, pl.Name, pl.Slug, pl.Description, pl.Currency,
 		pl.Amount, pl.AllowCustomAmount, pl.IsReusable, pl.ShowOnQRPage,
-		string(pl.Status), pl.ExpireAt, pl.UsageCount, pl.UpdatedAt,
+		string(pl.Status), pl.ExpireAt, pl.UsageCount,
+		pl.MinAmount, pl.MaxAmount, pl.AllowQuantityBuy, pl.MaxQuantity,
+		pl.SuccessURL, pl.CancelURL, pl.WebhookURL, pl.MerchantTradeNo,
+		pl.OrderExpireMinutes, pl.UpdatedAt,
 	)
 	if err != nil {
 		if isDuplicateKeyError(err) {
@@ -169,6 +220,17 @@ func (r *PaymentLinkRepository) IncrementUsage(ctx context.Context, id uuid.UUID
 	return nil
 }
 
+// ExpireStale marks active payment links with past expiration as INACTIVE.
+func (r *PaymentLinkRepository) ExpireStale(ctx context.Context) (int, error) {
+	query := `UPDATE payment_links SET status = 'INACTIVE', updated_at = NOW()
+		WHERE status = 'ACTIVE' AND expire_at IS NOT NULL AND expire_at < NOW() AND deleted_at IS NULL`
+	result, err := r.pool.Exec(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("expiring stale payment links: %w", err)
+	}
+	return int(result.RowsAffected()), nil
+}
+
 func (r *PaymentLinkRepository) getOne(ctx context.Context, query string, args ...any) (*domain.PaymentLink, error) {
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -185,18 +247,31 @@ func (r *PaymentLinkRepository) getOne(ctx context.Context, query string, args .
 func scanPaymentLink(rows pgx.Rows) (*domain.PaymentLink, error) {
 	var pl domain.PaymentLink
 	var status string
-	var amount decimal.Decimal
+	var amount, minAmount, maxAmount decimal.Decimal
 
 	err := rows.Scan(
 		&pl.ID, &pl.MerchantID, &pl.BranchID, &pl.Name, &pl.Slug, &pl.Description, &pl.Currency,
-		&amount, &pl.AllowCustomAmount, &pl.IsReusable, &pl.ShowOnQRPage,
-		&pl.UsageCount, &status, &pl.ExpireAt, &pl.CreatedAt, &pl.UpdatedAt, &pl.DeletedAt,
+		&amount, &pl.AllowCustomAmount, &minAmount, &maxAmount,
+		&pl.AllowQuantityBuy, &pl.MaxQuantity,
+		&pl.IsReusable, &pl.ShowOnQRPage,
+		&pl.UsageCount, &status, &pl.ExpireAt,
+		&pl.SuccessURL, &pl.CancelURL, &pl.WebhookURL, &pl.MerchantTradeNo, &pl.OrderExpireMinutes,
+		&pl.CreatedAt, &pl.UpdatedAt, &pl.DeletedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scanning payment link: %w", err)
 	}
 
 	pl.Amount = amount
+	if !minAmount.IsZero() {
+		pl.MinAmount = &minAmount
+	}
+	if !maxAmount.IsZero() {
+		pl.MaxAmount = &maxAmount
+	}
 	pl.Status = domain.PaymentLinkStatus(status)
 	return &pl, nil
 }
+
+// suppress unused import
+var _ = strings.Contains

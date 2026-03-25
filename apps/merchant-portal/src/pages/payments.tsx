@@ -9,7 +9,8 @@ import { PageHeader } from '#/components/dashboard/page-header'
 import { DollarSign, CreditCard, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
-import { formatAmount, formatDualAmount } from '#/lib/currency'
+import { useExchangeRate } from '#/hooks/use-exchange-rate'
+import { formatDualAmount } from '#/lib/currency'
 
 const PER_PAGE = 20
 
@@ -19,16 +20,31 @@ export function PaymentsPage() {
   const { data: meData } = useMe()
   const { data: paymentsData, isLoading } = usePayments({ page, perPage: PER_PAGE, status: statusFilter || undefined })
 
+  const { data: rateData } = useExchangeRate()
   const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
+  const liveRate = rateData?.data?.effectiveRate || null
   const payments = paymentsData?.data || []
   const total = paymentsData?.meta?.total || 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Calculate stats from all fetched payments
   const paidPayments = payments.filter((p) => p.status === 'PAID')
-  const totalRevenue = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
-  const totalFees = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
+  const totalRevenueUsdt = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
+  const totalFeesUsdt = paidPayments.reduce((sum, p) => sum + parseFloat(p.totalFeesUsdt || '0'), 0)
   const unsettledPayments = payments.filter((p) => p.status === 'INITIATED' || p.status === 'USER_REVIEW')
+
+  // Sum LKR equivalents from each payment's own exchange rate, fallback to live rate
+  const totalRevenueLkr = paidPayments.reduce((sum, p) => {
+    const rate = parseFloat(p.exchangeRate || '0') || parseFloat(liveRate || '0')
+    return sum + parseFloat(p.netAmountUsdt || '0') * rate
+  }, 0)
+  const totalFeesLkr = paidPayments.reduce((sum, p) => {
+    const rate = parseFloat(p.exchangeRate || '0') || parseFloat(liveRate || '0')
+    return sum + parseFloat(p.totalFeesUsdt || '0') * rate
+  }, 0)
+
+  const revenueFmt = formatDualAmount(totalRevenueUsdt, totalRevenueLkr > 0 ? totalRevenueLkr : undefined, 'LKR', primaryCurrency, liveRate)
+  const feesFmt = formatDualAmount(totalFeesUsdt, totalFeesLkr > 0 ? totalFeesLkr : undefined, 'LKR', primaryCurrency, liveRate)
 
   const statuses = [
     { label: 'All', value: '' },
@@ -45,15 +61,15 @@ export function PaymentsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         <StatCard
           title="Total Revenue"
-          value={formatAmount(totalRevenue, 'USDT')}
-          description="From paid transactions"
+          value={revenueFmt.primary}
+          description={revenueFmt.secondary || 'From paid transactions'}
           icon={DollarSign}
         />
         <StatCard title="Total Payments" value={String(total)} description="All-time transactions" icon={CreditCard} />
         <StatCard
           title="Total Fees"
-          value={formatAmount(totalFees, 'USDT')}
-          description="Exchange + Platform"
+          value={feesFmt.primary}
+          description={feesFmt.secondary || 'Exchange + Platform'}
           icon={Clock}
           valueClassName="text-amber-500"
         />
@@ -107,6 +123,7 @@ export function PaymentsPage() {
               ) : (
                 payments.map((p) => {
                   const amt = formatDualAmount(p.amountUsdt, p.amount, p.currency, primaryCurrency, p.exchangeRate)
+                  const fee = formatDualAmount(p.totalFeesUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
                   const net = formatDualAmount(p.netAmountUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
 
                   return (
@@ -133,8 +150,11 @@ export function PaymentsPage() {
                           <p className="text-xs text-muted-foreground">@ {parseFloat(p.exchangeRate).toFixed(2)}</p>
                         )}
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {formatAmount(p.totalFeesUsdt, 'USDT')}
+                      <TableCell className="text-right">
+                        <p className="text-sm font-medium">{fee.primary}</p>
+                        {fee.secondary && (
+                          <p className="text-xs text-muted-foreground">({fee.secondary})</p>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <p className="text-sm font-medium">{net.primary}</p>

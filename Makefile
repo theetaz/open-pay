@@ -1,21 +1,34 @@
-.PHONY: help dev up down build test test-v test-coverage lint fmt generate migrate migrate-down migrate-create clean
+.PHONY: help start stop status dev up down build test test-v test-coverage lint fmt generate migrate migrate-down migrate-create clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # ─── Development ───
+start: ## Start everything (infra + Go services + frontends) with hot reload
+	@./scripts/start-dev.sh
+
+stop: ## Stop all running services
+	@./scripts/start-dev.sh stop
+
+status: ## Show status of all services
+	@./scripts/start-dev.sh status
+
 dev: up ## Start dev environment (infra only)
 	@echo ""
 	@echo "Infrastructure ready:"
-	@echo "  PostgreSQL:  localhost:5433"
-	@echo "  Redis:       localhost:6379"
-	@echo "  NATS:        localhost:4222"
-	@echo "  NATS Monitor:localhost:8222"
+	@echo "  PostgreSQL:    localhost:5433"
+	@echo "  Redis:         localhost:6379"
+	@echo "  NATS:          localhost:4222"
+	@echo "  NATS Monitor:  http://localhost:8222"
+	@echo "  MinIO Console: http://localhost:9001  (minioadmin / minioadmin123)"
+	@echo "  MinIO API:     http://localhost:9000"
+	@echo "  Mailpit UI:    http://localhost:8025"
+	@echo "  Mailpit SMTP:  localhost:1025"
 	@echo ""
 
 up: ## Start infrastructure containers
-	docker compose up -d postgres redis nats
+	docker compose up -d postgres redis nats minio minio-init mailpit
 	@echo "Waiting for services to be healthy..."
 	@docker compose exec -T postgres sh -c 'until pg_isready -U olp; do sleep 1; done' 2>/dev/null
 	@echo "Infrastructure is up."

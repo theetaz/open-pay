@@ -5,22 +5,29 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
+import { useExchangeRate } from '#/hooks/use-exchange-rate'
 import { CreatePaymentDialog } from '#/components/dashboard/create-payment-dialog'
 import { formatDualAmount } from '#/lib/currency'
 
 export function DashboardIndex() {
   const { data: meData } = useMe()
   const { data: paymentsData } = usePayments({ perPage: 5 })
+  const { data: rateData } = useExchangeRate()
 
   const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
+  const liveRate = rateData?.data?.effectiveRate || null
   const payments = paymentsData?.data || []
   const totalPayments = paymentsData?.meta?.total || 0
 
   const paidPayments = payments.filter((p) => p.status === 'PAID')
-  const totalRevenue = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
+  const totalRevenueUsdt = paidPayments.reduce((sum, p) => sum + parseFloat(p.netAmountUsdt || '0'), 0)
+  const totalRevenueLkr = paidPayments.reduce((sum, p) => {
+    const rate = parseFloat(p.exchangeRate || '0') || parseFloat(liveRate || '0')
+    return sum + parseFloat(p.netAmountUsdt || '0') * rate
+  }, 0)
   const unsettledPayments = payments.filter((p) => p.status === 'INITIATED' || p.status === 'USER_REVIEW')
 
-  const revenueFmt = formatDualAmount(totalRevenue, undefined, undefined, primaryCurrency)
+  const revenueFmt = formatDualAmount(totalRevenueUsdt, totalRevenueLkr > 0 ? totalRevenueLkr : undefined, 'LKR', primaryCurrency, liveRate)
 
   return (
     <>

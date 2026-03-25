@@ -118,7 +118,7 @@ export function KycWizard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
-      navigate('/')
+      navigate('/activate')
     },
   })
 

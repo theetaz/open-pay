@@ -8,8 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/openlankapay/openlankapay/pkg/observability"
+	"github.com/openlankapay/openlankapay/pkg/ratelimit"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/handler"
+	"github.com/openlankapay/openlankapay/services/gateway/internal/middleware"
 	"github.com/openlankapay/openlankapay/services/gateway/internal/proxy"
 )
 
@@ -30,10 +34,23 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 
+	// Rate limiter: prefer Redis, fall back to in-memory
+	var rateLimiter middleware.RateLimiter
+	redisURL := getEnv("REDIS_URL", "localhost:6379")
+	redisClient := redis.NewClient(&redis.Options{Addr: redisURL})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		logger.Warn().Err(err).Msg("Redis unavailable, using in-memory rate limiter")
+		rateLimiter = middleware.NewInMemoryRateLimiter(100)
+	} else {
+		logger.Info().Msg("using Redis-backed rate limiter")
+		rateLimiter = ratelimit.NewRedisRateLimiter(redisClient, ratelimit.DefaultConfig())
+	}
+
 	cfg := handler.GatewayConfig{
 		JWTSecret:          getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars"),
 		ServiceProxy:       serviceProxy,
 		RateLimitPerMinute: 100,
+		RateLimiter:        rateLimiter,
 		GatewayPort:        port,
 		PlatformFeePct:     getEnv("PLATFORM_FEE_PCT", "1.5"),
 		ExchangeFeePct:     getEnv("EXCHANGE_FEE_PCT", "0.5"),

@@ -63,7 +63,7 @@ export function BranchesPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add New Branch</DialogTitle>
             <DialogDescription>Fill in the details to create a new branch.</DialogDescription>

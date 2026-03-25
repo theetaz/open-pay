@@ -91,8 +91,14 @@ export function AuditLogPage() {
             <SelectItem value="merchant.approved">Approved</SelectItem>
             <SelectItem value="merchant.rejected">Rejected</SelectItem>
             <SelectItem value="merchant.deactivated">Deactivated</SelectItem>
+            <SelectItem value="payment.initiated">Payment Initiated</SelectItem>
+            <SelectItem value="payment.paid">Payment Paid</SelectItem>
+            <SelectItem value="payment.expired">Payment Expired</SelectItem>
+            <SelectItem value="payment.failed">Payment Failed</SelectItem>
             <SelectItem value="payment_link.created">Link Created</SelectItem>
+            <SelectItem value="payment_link.updated">Link Updated</SelectItem>
             <SelectItem value="payment_link.deleted">Link Deleted</SelectItem>
+            <SelectItem value="payment_link.used">Link Used</SelectItem>
           </SelectContent>
         </Select>
       </div>

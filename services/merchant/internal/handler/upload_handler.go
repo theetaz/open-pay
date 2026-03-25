@@ -13,13 +13,22 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/openlankapay/openlankapay/pkg/auth"
+	"github.com/openlankapay/openlankapay/services/merchant/internal/domain"
 )
+
+// DocumentRepository persists uploaded document metadata.
+type DocumentRepository interface {
+	Create(ctx context.Context, doc *domain.Document) error
+	ListByMerchant(ctx context.Context, merchantID uuid.UUID) ([]*domain.Document, error)
+	DeleteByKey(ctx context.Context, merchantID uuid.UUID, objectKey string) error
+}
 
 // FileUploadHandler handles file upload operations.
 type FileUploadHandler struct {
 	minioClient *minio.Client
 	bucketName  string
 	endpoint    string
+	docs        DocumentRepository
 }
 
 // FileUploadConfig holds MinIO configuration.
@@ -32,7 +41,7 @@ type FileUploadConfig struct {
 }
 
 // NewFileUploadHandler creates a new FileUploadHandler with MinIO client.
-func NewFileUploadHandler(cfg FileUploadConfig) (*FileUploadHandler, error) {
+func NewFileUploadHandler(cfg FileUploadConfig, docs DocumentRepository) (*FileUploadHandler, error) {
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
@@ -57,8 +66,15 @@ func NewFileUploadHandler(cfg FileUploadConfig) (*FileUploadHandler, error) {
 		minioClient: client,
 		bucketName:  cfg.Bucket,
 		endpoint:    cfg.Endpoint,
+		docs:        docs,
 	}, nil
 }
+
+// MinioClient returns the MinIO client used by this handler.
+func (h *FileUploadHandler) MinioClient() *minio.Client { return h.minioClient }
+
+// BucketName returns the bucket name used by this handler.
+func (h *FileUploadHandler) BucketName() string { return h.bucketName }
 
 // RegisterUploadRoutes adds upload routes to the router.
 func RegisterUploadRoutes(r chi.Router, h *FileUploadHandler, jwtSecret string) {
@@ -120,6 +136,23 @@ func (h *FileUploadHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "UPLOAD_FAILED", "failed to upload file")
 		return
+	}
+
+	// Store document metadata in DB
+	if h.docs != nil {
+		doc := &domain.Document{
+			ID:          uuid.New(),
+			MerchantID:  claims.MerchantID,
+			Category:    category,
+			Filename:    header.Filename,
+			ObjectKey:   objectKey,
+			ContentType: contentType,
+			FileSize:    header.Size,
+		}
+		if err := h.docs.Create(r.Context(), doc); err != nil {
+			// Log but don't fail — file is already uploaded
+			fmt.Printf("warning: failed to store document metadata: %v\n", err)
+		}
 	}
 
 	// Return the file URL

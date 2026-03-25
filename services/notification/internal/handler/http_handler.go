@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openlankapay/openlankapay/pkg/auth"
+	pgadapter "github.com/openlankapay/openlankapay/services/notification/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/notification/internal/domain"
 )
 
@@ -19,12 +20,19 @@ type NotificationServiceInterface interface {
 	ListByMerchant(ctx context.Context, merchantID uuid.UUID) ([]*domain.Notification, error)
 }
 
-type NotificationHandler struct {
-	svc NotificationServiceInterface
+type EmailTemplateRepo interface {
+	List(ctx context.Context) ([]*pgadapter.EmailTemplate, error)
+	Create(ctx context.Context, t *pgadapter.EmailTemplate) error
+	Update(ctx context.Context, t *pgadapter.EmailTemplate) error
 }
 
-func NewNotificationHandler(svc NotificationServiceInterface) *NotificationHandler {
-	return &NotificationHandler{svc: svc}
+type NotificationHandler struct {
+	svc       NotificationServiceInterface
+	templates EmailTemplateRepo
+}
+
+func NewNotificationHandler(svc NotificationServiceInterface, templates EmailTemplateRepo) *NotificationHandler {
+	return &NotificationHandler{svc: svc, templates: templates}
 }
 
 func NewRouter(h *NotificationHandler, jwtSecret string) http.Handler {
@@ -39,6 +47,16 @@ func NewRouter(h *NotificationHandler, jwtSecret string) http.Handler {
 
 	// Internal endpoint for sending notifications (called by other services)
 	r.Post("/internal/notifications/send", h.SendNotification)
+
+	// Admin email template management (protected by platform admin JWT)
+	r.Group(func(r chi.Router) {
+		r.Use(auth.JWTMiddleware(jwtSecret))
+		r.Use(auth.RequirePlatformAdmin())
+
+		r.Get("/v1/admin/email-templates", h.ListEmailTemplates)
+		r.Post("/v1/admin/email-templates", h.CreateEmailTemplate)
+		r.Put("/v1/admin/email-templates/{id}", h.UpdateEmailTemplate)
+	})
 
 	return r
 }
@@ -130,4 +148,97 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, envelope{"error": map[string]string{"code": code, "message": message}})
+}
+
+// --- Email Template Handlers ---
+
+func (h *NotificationHandler) ListEmailTemplates(w http.ResponseWriter, r *http.Request) {
+	templates, err := h.templates.List(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list templates")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(templates))
+	for _, t := range templates {
+		items = append(items, templateResponse(t))
+	}
+	writeJSON(w, http.StatusOK, envelope{"data": items})
+}
+
+func (h *NotificationHandler) CreateEmailTemplate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		EventType string   `json:"eventType"`
+		Name      string   `json:"name"`
+		Subject   string   `json:"subject"`
+		BodyHTML  string   `json:"bodyHtml"`
+		Variables []string `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	t := &pgadapter.EmailTemplate{
+		EventType: req.EventType,
+		Name:      req.Name,
+		Subject:   req.Subject,
+		BodyHTML:  req.BodyHTML,
+		Variables: req.Variables,
+	}
+
+	if err := h.templates.Create(r.Context(), t); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create template")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, envelope{"data": templateResponse(t)})
+}
+
+func (h *NotificationHandler) UpdateEmailTemplate(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ID", "invalid template ID")
+		return
+	}
+
+	var req struct {
+		Name      string   `json:"name"`
+		Subject   string   `json:"subject"`
+		BodyHTML  string   `json:"bodyHtml"`
+		Variables []string `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "malformed request body")
+		return
+	}
+
+	t := &pgadapter.EmailTemplate{
+		ID:        id,
+		Name:      req.Name,
+		Subject:   req.Subject,
+		BodyHTML:  req.BodyHTML,
+		Variables: req.Variables,
+	}
+
+	if err := h.templates.Update(r.Context(), t); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update template")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]string{"status": "updated"}})
+}
+
+func templateResponse(t *pgadapter.EmailTemplate) map[string]any {
+	return map[string]any{
+		"id":        t.ID.String(),
+		"eventType": t.EventType,
+		"name":      t.Name,
+		"subject":   t.Subject,
+		"bodyHtml":  t.BodyHTML,
+		"variables": t.Variables,
+		"isActive":  t.IsActive,
+		"createdAt": t.CreatedAt.Format(time.RFC3339),
+		"updatedAt": t.UpdatedAt.Format(time.RFC3339),
+	}
 }

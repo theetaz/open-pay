@@ -20,9 +20,8 @@ export function IntegrationDetails({ form }: IntegrationDetailsProps) {
 
       <FieldGroup>
         <Field>
-          <FieldLabel className="text-sm font-medium">
+          <FieldLabel className="text-sm font-medium" required>
             Do you need to technically integrate the Open Pay Payment Gateway?
-            <span className="text-destructive"> *</span>
           </FieldLabel>
 
           <FieldSeparator />

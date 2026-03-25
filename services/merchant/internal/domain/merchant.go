@@ -24,9 +24,19 @@ const (
 type MerchantStatus string
 
 const (
-	MerchantActive   MerchantStatus = "ACTIVE"
-	MerchantInactive MerchantStatus = "INACTIVE"
+	MerchantActive     MerchantStatus = "ACTIVE"
+	MerchantInactive   MerchantStatus = "INACTIVE"
+	MerchantFrozen     MerchantStatus = "FROZEN"
+	MerchantTerminated MerchantStatus = "TERMINATED"
 )
+
+// Valid merchant status transitions.
+var validStatusTransitions = map[MerchantStatus][]MerchantStatus{
+	MerchantActive:   {MerchantInactive, MerchantFrozen, MerchantTerminated},
+	MerchantInactive: {MerchantActive},
+	MerchantFrozen:   {MerchantActive, MerchantTerminated},
+	// MerchantTerminated is final — no transitions out
+}
 
 // Valid KYC transitions.
 var validKYCTransitions = map[KYCStatus][]KYCStatus{
@@ -66,6 +76,9 @@ type Merchant struct {
 	DefaultCurrency   string
 	DefaultProvider   string
 	Status            MerchantStatus
+	StatusReason      string
+	StatusChangedAt   *time.Time
+	KYCReviewNotes    string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         *time.Time
@@ -116,6 +129,27 @@ func (m *Merchant) TransitionKYC(to KYCStatus) error {
 	}
 
 	return fmt.Errorf("%w: cannot transition from %s to %s", ErrInvalidKYCTransition, m.KYCStatus, to)
+}
+
+// TransitionStatus moves the merchant to a new status if the transition is valid.
+func (m *Merchant) TransitionStatus(to MerchantStatus, reason string) error {
+	allowed, ok := validStatusTransitions[m.Status]
+	if !ok {
+		return fmt.Errorf("%w: no transitions from %s", ErrInvalidStatusTransition, m.Status)
+	}
+
+	for _, s := range allowed {
+		if s == to {
+			m.Status = to
+			m.StatusReason = reason
+			now := time.Now().UTC()
+			m.StatusChangedAt = &now
+			m.UpdatedAt = now
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%w: cannot transition from %s to %s", ErrInvalidStatusTransition, m.Status, to)
 }
 
 // CanAcceptPayments checks if the merchant is eligible to process payments.

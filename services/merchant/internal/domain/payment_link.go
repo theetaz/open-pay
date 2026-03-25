@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -28,10 +29,19 @@ type PaymentLink struct {
 	Currency          string
 	Amount            decimal.Decimal
 	AllowCustomAmount bool
+	MinAmount         *decimal.Decimal
+	MaxAmount         *decimal.Decimal
+	AllowQuantityBuy  bool
+	MaxQuantity       int
 	IsReusable        bool
 	ShowOnQRPage      bool
 	UsageCount        int
 	Status            PaymentLinkStatus
+	SuccessURL        string
+	CancelURL         string
+	WebhookURL        string
+	MerchantTradeNo   string
+	OrderExpireMinutes *int
 	ExpireAt          *time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
@@ -63,14 +73,61 @@ func NewPaymentLink(merchantID uuid.UUID, name, slug, currency string, amount de
 
 	now := time.Now().UTC()
 	return &PaymentLink{
-		ID:         uuid.New(),
-		MerchantID: merchantID,
-		Name:       name,
-		Slug:       slug,
-		Currency:   currency,
-		Amount:     amount,
-		Status:     PaymentLinkActive,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:          uuid.New(),
+		MerchantID:  merchantID,
+		Name:        name,
+		Slug:        slug,
+		Currency:    currency,
+		Amount:      amount,
+		MaxQuantity: 1,
+		Status:      PaymentLinkActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}, nil
+}
+
+// Validate performs additional validation after all fields are set.
+func (pl *PaymentLink) Validate() error {
+	if pl.AllowCustomAmount {
+		if pl.MinAmount != nil && pl.MinAmount.LessThanOrEqual(decimal.Zero) {
+			return fmt.Errorf("%w: minAmount must be greater than zero", ErrInvalidPaymentLink)
+		}
+		if pl.MinAmount != nil && pl.MaxAmount != nil && pl.MaxAmount.LessThanOrEqual(*pl.MinAmount) {
+			return fmt.Errorf("%w: maxAmount must be greater than minAmount", ErrInvalidPaymentLink)
+		}
+	}
+
+	if pl.AllowQuantityBuy && pl.MaxQuantity < 1 {
+		return fmt.Errorf("%w: maxQuantity must be at least 1 when allowQuantityBuy is true", ErrInvalidPaymentLink)
+	}
+
+	if pl.SuccessURL != "" {
+		if _, err := url.ParseRequestURI(pl.SuccessURL); err != nil {
+			return fmt.Errorf("%w: successUrl must be a valid URL", ErrInvalidPaymentLink)
+		}
+	}
+
+	if pl.CancelURL != "" {
+		if _, err := url.ParseRequestURI(pl.CancelURL); err != nil {
+			return fmt.Errorf("%w: cancelUrl must be a valid URL", ErrInvalidPaymentLink)
+		}
+	}
+
+	if pl.WebhookURL != "" {
+		if _, err := url.ParseRequestURI(pl.WebhookURL); err != nil {
+			return fmt.Errorf("%w: webhookUrl must be a valid URL", ErrInvalidPaymentLink)
+		}
+	}
+
+	return nil
+}
+
+// IsExpired returns true if the link has passed its expiration date.
+func (pl *PaymentLink) IsExpired() bool {
+	return pl.ExpireAt != nil && time.Now().After(*pl.ExpireAt)
+}
+
+// IsConsumed returns true if this is a single-use link that has been used.
+func (pl *PaymentLink) IsConsumed() bool {
+	return !pl.IsReusable && pl.UsageCount > 0
 }

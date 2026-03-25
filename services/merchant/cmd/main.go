@@ -8,8 +8,11 @@ import (
 	"syscall"
 	"time"
 
+	minio "github.com/minio/minio-go/v7"
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/messaging"
+	"github.com/openlankapay/openlankapay/pkg/notification"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	pgadapter "github.com/openlankapay/openlankapay/services/merchant/internal/adapter/postgres"
 	"github.com/openlankapay/openlankapay/services/merchant/internal/handler"
@@ -39,12 +42,32 @@ func main() {
 	userRepo := pgadapter.NewUserRepository(pool)
 	branchRepo := pgadapter.NewBranchRepository(pool)
 	paymentLinkRepo := pgadapter.NewPaymentLinkRepository(pool)
+	directorRepo := pgadapter.NewDirectorRepository(pool)
 
 	// Event publisher (noop for now)
 	eventPub := &noopPublisher{}
 
+	// Notification client — prefer NATS, fallback to HTTP
+	var notifier notification.Notifier
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	if natsClient, natsErr := messaging.NewClient(natsURL); natsErr == nil {
+		if nc, err := notification.NewNATSClient(natsClient); err == nil {
+			notifier = nc
+			logger.Info().Msg("using NATS for notifications")
+		}
+	}
+	if notifier == nil {
+		notifServiceURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")
+		notifier = notification.NewClient(notifServiceURL)
+		logger.Info().Msg("using HTTP for notifications (NATS unavailable)")
+	}
+
 	// Service
-	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret)
+	adminEmail := getEnv("ADMIN_NOTIFICATION_EMAIL", "admin@openlankapay.lk")
+	svc := service.NewMerchantService(merchantRepo, apiKeyRepo, userRepo, eventPub, jwtSecret, notifier, adminEmail, directorRepo)
+
+	// Document repository
+	docRepo := pgadapter.NewDocumentRepository(pool)
 
 	// File upload handler (MinIO)
 	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
@@ -58,7 +81,7 @@ func main() {
 		SecretKey: minioSecretKey,
 		Bucket:    minioBucket,
 		UseSSL:    false,
-	})
+	}, docRepo)
 	if err != nil {
 		logger.Warn().Err(err).Msg("MinIO not available, file uploads disabled")
 		uploadHandler = nil
@@ -70,8 +93,16 @@ func main() {
 	adminServiceURL := getEnv("ADMIN_SERVICE_URL", "http://localhost:8088")
 	auditClient := audit.NewClient(adminServiceURL)
 
+	// Extract MinIO client from upload handler for director document uploads
+	var minioClient *minio.Client
+	var minioBucketName string
+	if uploadHandler != nil {
+		minioClient = uploadHandler.MinioClient()
+		minioBucketName = uploadHandler.BucketName()
+	}
+
 	// HTTP Handler
-	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient)
+	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient, docRepo, minioClient, minioBucketName)
 	router := handler.NewRouter(h, branchRepo, paymentLinkRepo, uploadHandler)
 
 	// Server
