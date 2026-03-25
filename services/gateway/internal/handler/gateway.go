@@ -220,7 +220,7 @@ func serviceHealthCheck(serviceURL string) map[string]any {
 	if err != nil {
 		return map[string]any{"status": "unhealthy", "responseTime": elapsed}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Any HTTP response means the service is running
 	return map[string]any{"status": "healthy", "responseTime": elapsed}

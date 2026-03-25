@@ -82,7 +82,7 @@ func (f *CoinGeckoFetcher) fetchUSDTLKR(ctx context.Context) (decimal.Decimal, e
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("fetching rate: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return decimal.Zero, fmt.Errorf("unexpected status: %d", resp.StatusCode)

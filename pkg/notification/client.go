@@ -71,7 +71,7 @@ func (c *Client) sendSync(ctx context.Context, input SendEmailInput) error {
 	if err != nil {
 		return fmt.Errorf("sending notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("notification service returned %d", resp.StatusCode)

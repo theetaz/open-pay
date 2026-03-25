@@ -74,7 +74,7 @@ func (c *Client) logSync(ctx context.Context, entry LogEntry) error {
 	if err != nil {
 		return fmt.Errorf("sending audit log: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("audit service returned %d", resp.StatusCode)

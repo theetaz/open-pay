@@ -82,7 +82,7 @@ func (r *SettingsRepository) BulkUpdate(ctx context.Context, updates map[string]
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for key, value := range updates {
 		_, err := tx.Exec(ctx,
