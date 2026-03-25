@@ -78,7 +78,8 @@ export function useMe() {
     queryKey: ['auth', 'me'],
     queryFn: () => api.get<MeResponse>('/v1/auth/me'),
     enabled: isAuthenticated(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000,
   })
 }
 

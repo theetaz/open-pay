@@ -252,6 +252,19 @@ func (h *MerchantHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Force logout if merchant account is no longer active
+	switch merchant.Status {
+	case domain.MerchantTerminated:
+		writeError(w, http.StatusForbidden, "ACCOUNT_TERMINATED", "your merchant account has been terminated")
+		return
+	case domain.MerchantFrozen:
+		writeError(w, http.StatusForbidden, "ACCOUNT_FROZEN", "your merchant account has been frozen")
+		return
+	case domain.MerchantInactive:
+		writeError(w, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "your merchant account is not active")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, envelope{"data": meResponse(user, merchant)})
 }
 

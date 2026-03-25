@@ -98,6 +98,20 @@ migrate-create: ## Create migration (usage: make migrate-create svc=payment name
 	@mkdir -p migrations/$(svc)
 	migrate create -ext sql -dir migrations/$(svc) -seq $(name)
 
+db-reset: ## Reset all databases (drop all, re-run migrations with seeds)
+	@echo "Resetting all databases..."
+	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+		echo "Dropping all tables in $${db}_db..."; \
+		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" drop -f 2>/dev/null || true; \
+	done
+	@echo ""
+	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+		echo "Migrating $${db}_db..."; \
+		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
+	done
+	@echo ""
+	@echo "All databases reset with seed data."
+
 # ─── Cleanup ───
 clean: ## Remove build artifacts
 	rm -rf bin/ coverage.out coverage.html
