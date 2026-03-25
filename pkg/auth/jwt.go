@@ -109,9 +109,21 @@ func ValidateRefreshToken(tokenString, secret string) (uuid.UUID, error) {
 
 // JWTMiddleware returns a chi-compatible middleware that validates JWT tokens
 // from the Authorization header and injects claims into the request context.
+// Requests with the X-Internal-Admin header (set by the gateway for admin-proxied
+// requests) bypass JWT validation since the gateway already authenticated the admin user.
 func JWTMiddleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Allow gateway-authenticated admin requests to pass through
+			if r.Header.Get("X-Internal-Admin") == "true" {
+				adminClaims := &Claims{
+					Role: "PLATFORM_ADMIN",
+				}
+				ctx := context.WithValue(r.Context(), claimsKey, adminClaims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				http.Error(w, `{"error":{"code":"UNAUTHORIZED","message":"missing authorization token"}}`, http.StatusUnauthorized)

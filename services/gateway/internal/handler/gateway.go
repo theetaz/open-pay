@@ -36,6 +36,14 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Use(corsMiddleware)
 	r.Use(chimw.RealIP)
 
+	// Strip internal headers from external requests to prevent forgery
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Header.Del("X-Internal-Admin")
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// Apply rate limiting
 	if cfg.RateLimiter != nil {
 		r.Use(middleware.RateLimit(cfg.RateLimiter))
@@ -314,6 +322,8 @@ func requestID(next http.Handler) http.Handler {
 
 // rewritePath returns a handler that rewrites the request URL path before proxying.
 // The template can contain chi URL params like {id} which are replaced from the route context.
+// The Authorization header is removed because the gateway already validated the admin JWT;
+// downstream services may use a different JWT secret and would reject it.
 func rewritePath(template string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		newPath := template
@@ -326,6 +336,8 @@ func rewritePath(template string, next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 		r.URL.Path = newPath
+		r.Header.Del("Authorization")
+		r.Header.Set("X-Internal-Admin", "true")
 		next.ServeHTTP(w, r)
 	}
 }
