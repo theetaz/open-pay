@@ -66,6 +66,14 @@ func (m *mockDeliveryRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.Del
 	return d, nil
 }
 
+func (m *mockDeliveryRepo) ListRetryable(_ context.Context, _ int) ([]*domain.Delivery, error) {
+	return nil, nil
+}
+
+func (m *mockDeliveryRepo) ListByMerchant(_ context.Context, _ uuid.UUID, _, _ int) ([]*domain.Delivery, int, error) {
+	return nil, 0, nil
+}
+
 func TestConfigureWebhook(t *testing.T) {
 	ctx := context.Background()
 	svc := service.NewWebhookService(newMockConfigRepo(), newMockDeliveryRepo())
