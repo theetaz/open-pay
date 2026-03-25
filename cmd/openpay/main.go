@@ -227,9 +227,9 @@ func handlePayments() {
 			case "--status":
 				i++; params.Status = os.Args[i]
 			case "--page":
-				i++; fmt.Sscanf(os.Args[i], "%d", &params.Page)
+				i++; _, _ = fmt.Sscanf(os.Args[i], "%d", &params.Page)
 			case "--per-page":
-				i++; fmt.Sscanf(os.Args[i], "%d", &params.PerPage)
+				i++; _, _ = fmt.Sscanf(os.Args[i], "%d", &params.PerPage)
 			}
 		}
 
@@ -244,9 +244,9 @@ func handlePayments() {
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tAMOUNT\tCURRENCY\tSTATUS\tCREATED")
+		_, _ = fmt.Fprintln(w, "ID\tAMOUNT\tCURRENCY\tSTATUS\tCREATED")
 		for _, p := range result.Data {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.ID, p.Amount, p.Currency, p.Status, p.CreatedAt[:10])
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.ID, p.Amount, p.Currency, p.Status, p.CreatedAt[:10])
 		}
 		_ = w.Flush()
 		fmt.Printf("\nPage %d of %d (%d total)\n", result.Meta.Page, (result.Meta.Total+result.Meta.PerPage-1)/result.Meta.PerPage, result.Meta.Total)
