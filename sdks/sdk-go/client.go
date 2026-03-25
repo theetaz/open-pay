@@ -43,6 +43,7 @@ type Client struct {
 
 	// Resource services
 	Payments *PaymentsService
+	Checkout *CheckoutService
 	Webhooks *WebhooksService
 }
 
@@ -88,6 +89,7 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 	}
 
 	c.Payments = &PaymentsService{client: c}
+	c.Checkout = &CheckoutService{client: c}
 	c.Webhooks = &WebhooksService{client: c}
 
 	return c, nil

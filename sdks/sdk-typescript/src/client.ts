@@ -38,6 +38,7 @@ export class OpenPay {
   private readonly timeout: number
 
   readonly payments: PaymentsResource
+  readonly checkout: CheckoutResource
   readonly webhooks: WebhooksResource
 
   constructor(apiKey: string, options: ClientOptions = {}) {
@@ -48,6 +49,7 @@ export class OpenPay {
     this.timeout = options.timeout || 30_000
 
     this.payments = new PaymentsResource(this)
+    this.checkout = new CheckoutResource(this)
     this.webhooks = new WebhooksResource(this)
   }
 
@@ -135,6 +137,66 @@ class PaymentsResource {
     const qs = query.toString()
     const path = '/v1/sdk/payments' + (qs ? `?${qs}` : '')
     return this.client.request<PaginatedResponse<Payment>>('GET', path)
+  }
+}
+
+// ─── Checkout Resource ───
+
+export interface CheckoutSessionInput {
+  amount: string
+  currency?: string
+  provider?: string
+  merchantTradeNo?: string
+  description?: string
+  successUrl?: string
+  cancelUrl?: string
+  customerEmail?: string
+  lineItems?: Array<{ name: string; description?: string; amount?: string }>
+  expiresInMinutes?: number
+}
+
+export interface CheckoutSession {
+  id: string
+  paymentId: string
+  url: string
+  amount: string
+  currency: string
+  amountUsdt: string
+  status: string
+  qrContent: string
+  deepLink: string
+  merchantTradeNo: string
+  successUrl: string
+  cancelUrl: string
+  exchangeRate?: string
+  expiresAt: string
+  createdAt: string
+}
+
+class CheckoutResource {
+  constructor(private client: OpenPay) {}
+
+  /**
+   * Create a checkout session. Returns a hosted checkout URL.
+   *
+   * @example
+   * ```typescript
+   * const session = await openpay.checkout.createSession({
+   *   amount: '1000.00',
+   *   currency: 'LKR',
+   *   successUrl: 'https://mysite.com/success',
+   *   cancelUrl: 'https://mysite.com/cancel',
+   * })
+   * // Redirect customer to session.url
+   * ```
+   */
+  async createSession(input: CheckoutSessionInput): Promise<CheckoutSession> {
+    const res = await this.client.request<{ data: CheckoutSession }>(
+      'POST',
+      '/v1/sdk/checkout/sessions',
+      input,
+    )
+    return res.data
   }
 }
 

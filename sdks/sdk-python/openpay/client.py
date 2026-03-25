@@ -36,6 +36,7 @@ class OpenPay:
         self._http = httpx.Client(timeout=timeout)
 
         self.payments = PaymentsResource(self)
+        self.checkout = CheckoutResource(self)
         self.webhooks = WebhooksResource(self)
 
     def close(self) -> None:
@@ -145,6 +146,43 @@ class PaymentsResource:
         path = "/v1/sdk/payments?" + "&".join(params)
         resp = self._client._request("GET", path)
         return PaginatedPayments.from_dict(resp)
+
+
+class CheckoutResource:
+    """Checkout session operations."""
+
+    def __init__(self, client: OpenPay):
+        self._client = client
+
+    def create_session(
+        self,
+        amount: str,
+        currency: str = "LKR",
+        *,
+        success_url: str = "",
+        cancel_url: str = "",
+        customer_email: str = "",
+        merchant_trade_no: str = "",
+        description: str = "",
+        expires_in_minutes: int = 0,
+    ) -> dict[str, Any]:
+        """Create a checkout session. Returns a hosted checkout URL."""
+        body: dict[str, Any] = {"amount": amount, "currency": currency}
+        if success_url:
+            body["successUrl"] = success_url
+        if cancel_url:
+            body["cancelUrl"] = cancel_url
+        if customer_email:
+            body["customerEmail"] = customer_email
+        if merchant_trade_no:
+            body["merchantTradeNo"] = merchant_trade_no
+        if description:
+            body["description"] = description
+        if expires_in_minutes > 0:
+            body["expiresInMinutes"] = expires_in_minutes
+
+        resp = self._client._request("POST", "/v1/sdk/checkout/sessions", body)
+        return resp["data"]
 
 
 class WebhooksResource:
