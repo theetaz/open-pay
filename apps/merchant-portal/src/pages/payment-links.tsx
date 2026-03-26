@@ -1,24 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { Switch } from '#/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '#/components/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Separator } from '#/components/ui/separator'
 import { DatePicker } from '#/components/ui/date-picker'
 import { RichTextEditor } from '#/components/ui/rich-text-editor'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
-import { EmptyState } from '#/components/dashboard/empty-state'
 import { CopyButton } from '#/components/dashboard/copy-button'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Plus, Link2, Loader2, Check, X, ExternalLink, Trash2, QrCode } from 'lucide-react'
 import { usePaymentLinks, useCreatePaymentLink, useDeletePaymentLink, checkSlugAvailability } from '#/hooks/use-payment-links'
 import type { PaymentLink } from '#/hooks/use-payment-links'
+import type { ColumnDef } from '@tanstack/react-table'
 import { toast } from 'sonner'
 import { formatAmount } from '#/lib/currency'
 
@@ -41,6 +40,8 @@ function getPaymentLinkUrl(slug: string) {
 export function PaymentLinksPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [detailLink, setDetailLink] = useState<PaymentLink | null>(null)
+  const [search, setSearch] = useState('')
+  const [filterValues, setFilterValues] = useState<Record<string, string | string[]>>({ status: '' })
   const { data: linksData } = usePaymentLinks({ perPage: 100 })
   const deleteMutation = useDeletePaymentLink()
   const links = linksData?.data || []
@@ -53,6 +54,130 @@ export function PaymentLinksPage() {
       deleteMutation.mutate(link.id)
     }
   }
+
+  const filters: FilterConfig[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { label: 'Active', value: 'ACTIVE' },
+        { label: 'Inactive', value: 'INACTIVE' },
+        { label: 'Expired', value: 'EXPIRED' },
+      ],
+    },
+  ]
+
+  const handleFilterChange = (id: string, value: string | string[]) => {
+    setFilterValues((prev) => ({ ...prev, [id]: value }))
+  }
+
+  const handleClearFilters = () => {
+    setFilterValues({ status: '' })
+  }
+
+  const filteredData = useMemo(() => {
+    let result = links
+
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.slug.toLowerCase().includes(q),
+      )
+    }
+
+    const statusFilter = filterValues.status
+    if (statusFilter && typeof statusFilter === 'string' && statusFilter !== '') {
+      result = result.filter((l) => l.status === statusFilter)
+    }
+
+    return result
+  }, [links, search, filterValues])
+
+  const columns: ColumnDef<PaymentLink, any>[] = useMemo(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      },
+      {
+        accessorKey: 'slug',
+        header: 'Slug',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-muted-foreground">{row.original.slug}</span>
+        ),
+      },
+      {
+        accessorKey: 'amount',
+        header: 'Amount',
+        cell: ({ row }) =>
+          row.original.allowCustomAmount
+            ? 'Custom'
+            : formatAmount(row.original.amount, row.original.currency),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'usageCount',
+        header: 'Used',
+      },
+      {
+        accessorKey: 'createdAt',
+        header: 'Created',
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-sm">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        enableHiding: false,
+        cell: ({ row }) => {
+          const link = row.original
+          return (
+            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-8 p-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(getPaymentLinkUrl(link.slug))
+                  toast.success('Payment link copied to clipboard')
+                }}
+              >
+                <Link2 className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-8 p-0"
+                onClick={() => setDetailLink(link)}
+              >
+                <QrCode className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-8 p-0 text-destructive hover:text-destructive"
+                onClick={() => handleDelete(link)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          )
+        },
+      },
+    ],
+    [],
+  )
 
   return (
     <>
@@ -77,80 +202,20 @@ export function PaymentLinksPage() {
         <p className="text-sm text-muted-foreground">Manage and track all your payment links in one place</p>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Used</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {links.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <EmptyState message="No payment links yet. Create your first one." />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                links.map((link) => (
-                  <TableRow key={link.id} className="cursor-pointer" onClick={() => setDetailLink(link)}>
-                    <TableCell className="font-medium">{link.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{link.slug}</TableCell>
-                    <TableCell>
-                      {link.allowCustomAmount ? 'Custom' : formatAmount(link.amount, link.currency)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={link.status} />
-                    </TableCell>
-                    <TableCell>{link.usageCount}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {new Date(link.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="size-8 p-0"
-                          onClick={() => {
-                            navigator.clipboard.writeText(getPaymentLinkUrl(link.slug))
-                            toast.success('Payment link copied to clipboard')
-                          }}
-                        >
-                          <Link2 className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="size-8 p-0"
-                          onClick={() => setDetailLink(link)}
-                        >
-                          <QrCode className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="size-8 p-0 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(link)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredData}
+        filters={filters}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or slug..."
+        pagination={{ page: 1, perPage: 999, total: filteredData.length }}
+        onPageChange={() => {}}
+        onRowClick={(link) => setDetailLink(link)}
+      />
 
       <CreatePaymentLinkDialog open={createOpen} onOpenChange={setCreateOpen} />
       <PaymentLinkDetailDialog link={detailLink} onClose={() => setDetailLink(null)} />

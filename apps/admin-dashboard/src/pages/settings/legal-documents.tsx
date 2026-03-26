@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Card, CardContent, CardHeader, CardTitle } from '#/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
@@ -13,6 +13,7 @@ import { ScrollArea } from '#/components/ui/scroll-area'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Plus, CheckCircle2, Loader2, Eye, Pencil, FileText, Upload, X, Download } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -58,10 +59,12 @@ function typeLabel(type: string) {
   return DOCUMENT_TYPES.find(t => t.value === type)?.label || type
 }
 
+const VERSION_HISTORY_FILTERS: FilterConfig[] = []
+
 export function SettingsLegalDocumentsPage() {
   const queryClient = useQueryClient()
 
-  // Selected document type filter — persisted in URL params
+  // Selected document type filter -- persisted in URL params
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedType = searchParams.get('type') || 'terms_and_conditions'
   const setSelectedType = (type: string) => setSearchParams({ type }, { replace: true })
@@ -79,6 +82,10 @@ export function SettingsLegalDocumentsPage() {
 
   // Markdown editor mode: 'write' or 'preview'
   const [editorMode, setEditorMode] = React.useState<'write' | 'preview'>('write')
+
+  // Version history search
+  const [versionSearch, setVersionSearch] = React.useState('')
+  const [versionFilterValues, setVersionFilterValues] = React.useState<Record<string, string | string[]>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'legal-documents'],
@@ -112,6 +119,16 @@ export function SettingsLegalDocumentsPage() {
   const activeDoc = typeDocs.find(d => d.isActive)
   const versionHistory = typeDocs.filter(d => !d.isActive).sort((a, b) => b.version - a.version)
 
+  const filteredVersionHistory = React.useMemo(() => {
+    if (!versionSearch) return versionHistory
+    const q = versionSearch.toLowerCase()
+    return versionHistory.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        `v${d.version}`.toLowerCase().includes(q)
+    )
+  }, [versionHistory, versionSearch])
+
   // Open new version dialog prepopulated from a source doc (or the active version of selected type)
   function openNewVersion(sourceDoc?: LegalDoc) {
     const type = sourceDoc?.type || selectedType
@@ -144,6 +161,55 @@ export function SettingsLegalDocumentsPage() {
       if (createFileRef.current) createFileRef.current.value = ''
     }
   }
+
+  const versionColumns: ColumnDef<LegalDoc>[] = [
+    {
+      accessorKey: 'version',
+      header: 'Version',
+      cell: ({ row }) => <span>v{row.original.version}</span>,
+    },
+    {
+      accessorKey: 'title',
+      header: 'Title',
+      cell: ({ row }) => <span className="font-medium">{row.original.title}</span>,
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Created',
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {new Date(row.original.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      enableHiding: false,
+      cell: ({ row }) => {
+        const d = row.original
+        return (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)} title="View">
+              <Eye className="size-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => openNewVersion(d)} title="Create new version from this">
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => activateMutation.mutate(d.id)}
+              disabled={activateMutation.isPending}
+              title="Activate this version"
+            >
+              <CheckCircle2 className="size-4 mr-1" />Activate
+            </Button>
+          </div>
+        )
+      },
+    },
+  ]
 
   return (
     <>
@@ -237,46 +303,20 @@ export function SettingsLegalDocumentsPage() {
             <CardTitle className="text-sm text-muted-foreground">Version History</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {versionHistory.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>v{d.version}</TableCell>
-                    <TableCell className="font-medium">{d.title}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(d.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setViewDoc(d)} title="View">
-                          <Eye className="size-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openNewVersion(d)} title="Create new version from this">
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => activateMutation.mutate(d.id)}
-                          disabled={activateMutation.isPending}
-                          title="Activate this version"
-                        >
-                          <CheckCircle2 className="size-4 mr-1" />Activate
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              columns={versionColumns}
+              data={filteredVersionHistory}
+              filters={VERSION_HISTORY_FILTERS}
+              filterValues={versionFilterValues}
+              onFilterChange={(id, value) => setVersionFilterValues((prev) => ({ ...prev, [id]: value }))}
+              onClearFilters={() => { setVersionFilterValues({}); setVersionSearch('') }}
+              search={versionSearch}
+              onSearchChange={setVersionSearch}
+              searchPlaceholder="Search versions..."
+              pagination={{ page: 1, perPage: 999, total: filteredVersionHistory.length }}
+              onPageChange={() => {}}
+              isLoading={isLoading}
+            />
           </CardContent>
         </Card>
       )}

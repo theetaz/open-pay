@@ -1,17 +1,13 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Input } from '#/components/ui/input'
-import { Button } from '#/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
-import { Card, CardContent } from '#/components/ui/card'
+import type { ColumnDef } from '@tanstack/react-table'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
-import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { api } from '#/lib/api'
 import { isAuthenticated } from '#/lib/auth'
-import { Search, ChevronLeft, ChevronRight, Activity } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 const PER_PAGE = 20
 
@@ -31,19 +27,79 @@ interface AuditLogsResponse {
   meta: { total: number; page: number; perPage: number }
 }
 
+const filters: FilterConfig[] = [
+  {
+    id: 'action',
+    label: 'Action',
+    type: 'select',
+    options: [
+      { label: 'All Actions', value: '' },
+      { label: 'Registered', value: 'merchant.registered' },
+      { label: 'Login', value: 'merchant.login' },
+      { label: 'Approved', value: 'merchant.approved' },
+      { label: 'Rejected', value: 'merchant.rejected' },
+      { label: 'Deactivated', value: 'merchant.deactivated' },
+      { label: 'Payment Initiated', value: 'payment.initiated' },
+      { label: 'Payment Paid', value: 'payment.paid' },
+      { label: 'Payment Expired', value: 'payment.expired' },
+      { label: 'Payment Failed', value: 'payment.failed' },
+      { label: 'Link Created', value: 'payment_link.created' },
+      { label: 'Link Updated', value: 'payment_link.updated' },
+      { label: 'Link Deleted', value: 'payment_link.deleted' },
+      { label: 'Link Used', value: 'payment_link.used' },
+    ],
+  },
+]
+
+const columns: ColumnDef<AuditLog, any>[] = [
+  {
+    accessorKey: 'createdAt',
+    header: 'Timestamp',
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground whitespace-nowrap">
+        {new Date(row.original.createdAt).toLocaleString()}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'actorType',
+    header: 'Actor Type',
+    cell: ({ row }) => <StatusBadge status={row.original.actorType} />,
+  },
+  {
+    accessorKey: 'action',
+    header: 'Action',
+    cell: ({ row }) => <span className="font-medium">{row.original.action}</span>,
+  },
+  {
+    accessorKey: 'resourceType',
+    header: 'Resource Type',
+    cell: ({ row }) => <span className="text-sm">{row.original.resourceType}</span>,
+  },
+  {
+    accessorKey: 'ipAddress',
+    header: 'IP Address',
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">{row.original.ipAddress || '-'}</span>
+    ),
+  },
+]
+
 export function AuditLogPage() {
   const [page, setPage] = React.useState(1)
-  const [searchInput, setSearchInput] = React.useState('')
-  const [actionFilter, setActionFilter] = React.useState('')
+  const [search, setSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<Record<string, string | string[]>>({ action: '' })
   const [debouncedSearch, setDebouncedSearch] = React.useState('')
+
+  const actionFilter = (filterValues.action as string) || ''
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchInput)
+      setDebouncedSearch(search)
       setPage(1)
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchInput])
+  }, [search])
 
   const { data, isLoading } = useQuery({
     queryKey: ['merchant', 'audit-logs', { page, perPage: PER_PAGE, action: actionFilter || debouncedSearch }],
@@ -51,7 +107,7 @@ export function AuditLogPage() {
       const params = new URLSearchParams()
       params.set('page', String(page))
       params.set('perPage', String(PER_PAGE))
-      if (actionFilter && actionFilter !== 'all') params.set('action', actionFilter)
+      if (actionFilter) params.set('action', actionFilter)
       else if (debouncedSearch) params.set('action', debouncedSearch)
       return api.get<AuditLogsResponse>(`/v1/merchant/audit-logs?${params.toString()}`)
     },
@@ -60,7 +116,20 @@ export function AuditLogPage() {
 
   const logs = data?.data || []
   const total = data?.meta?.total || 0
-  const totalPages = Math.ceil(total / PER_PAGE)
+
+  function handleFilterChange(id: string, value: string | string[]) {
+    setFilterValues((prev) => ({ ...prev, [id]: value }))
+    setPage(1)
+  }
+
+  function handleClearFilters() {
+    setFilterValues({ action: '' })
+    setPage(1)
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+  }
 
   return (
     <>
@@ -70,110 +139,20 @@ export function AuditLogPage() {
         <StatCard title="Total Logs" value={String(total)} description="All-time audit logs" icon={Activity} />
       </div>
 
-      <div className="flex items-center gap-4 mb-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by action..."
-            className="pl-9"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </div>
-        <Select value={actionFilter} onValueChange={(v) => { if (v) { setActionFilter(v); setPage(1) } }}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All Actions" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Actions</SelectItem>
-            <SelectItem value="merchant.registered">Registered</SelectItem>
-            <SelectItem value="merchant.login">Login</SelectItem>
-            <SelectItem value="merchant.approved">Approved</SelectItem>
-            <SelectItem value="merchant.rejected">Rejected</SelectItem>
-            <SelectItem value="merchant.deactivated">Deactivated</SelectItem>
-            <SelectItem value="payment.initiated">Payment Initiated</SelectItem>
-            <SelectItem value="payment.paid">Payment Paid</SelectItem>
-            <SelectItem value="payment.expired">Payment Expired</SelectItem>
-            <SelectItem value="payment.failed">Payment Failed</SelectItem>
-            <SelectItem value="payment_link.created">Link Created</SelectItem>
-            <SelectItem value="payment_link.updated">Link Updated</SelectItem>
-            <SelectItem value="payment_link.deleted">Link Deleted</SelectItem>
-            <SelectItem value="payment_link.used">Link Used</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Actor Type</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Resource Type</TableHead>
-                <TableHead>IP Address</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <EmptyState
-                      message={isLoading ? 'Loading audit logs...' : 'No audit log entries found.'}
-                      description={
-                        !isLoading
-                          ? 'Actions like logins, payment link creation, and account changes will be logged here.'
-                          : undefined
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={log.actorType} />
-                    </TableCell>
-                    <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell className="text-sm">{log.resourceType}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{log.ipAddress || '-'}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total} logs
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  <ChevronLeft className="size-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                >
-                  <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={logs}
+        filters={filters}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        search={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search by action..."
+        pagination={{ page, perPage: PER_PAGE, total }}
+        onPageChange={setPage}
+        isLoading={isLoading}
+      />
     </>
   )
 }

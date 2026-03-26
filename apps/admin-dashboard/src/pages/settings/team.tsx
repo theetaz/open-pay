@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent } from '#/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Badge } from '#/components/ui/badge'
@@ -9,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '#/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 import { PageHeader } from '#/components/dashboard/page-header'
-import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Plus, Loader2, UserX, UserCheck } from 'lucide-react'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
@@ -20,10 +19,14 @@ interface AdminUser {
 }
 interface AdminRole { id: string; name: string; description: string; permissions: string[]; isSystem: boolean }
 
+const TEAM_FILTERS: FilterConfig[] = []
+
 export function SettingsTeamPage() {
   const queryClient = useQueryClient()
   const [createOpen, setCreateOpen] = React.useState(false)
   const [form, setForm] = React.useState({ email: '', password: '', name: '', roleId: '' })
+  const [search, setSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<Record<string, string | string[]>>({})
 
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -57,57 +60,105 @@ export function SettingsTeamPage() {
   const users = usersData?.data || []
   const roles = rolesData?.data || []
 
+  const filteredUsers = React.useMemo(() => {
+    if (!search) return users
+    const q = search.toLowerCase()
+    return users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+    )
+  }, [users, search])
+
+  const columns: ColumnDef<AdminUser>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    },
+    {
+      accessorKey: 'email',
+      header: 'Email',
+      cell: ({ row }) => <span className="text-sm">{row.original.email}</span>,
+    },
+    {
+      accessorKey: 'role',
+      header: 'Role',
+      cell: ({ row }) => <Badge variant="secondary">{row.original.role?.name || 'N/A'}</Badge>,
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) =>
+        row.original.isActive ? (
+          <Badge className="bg-green-500/10 text-green-600">Active</Badge>
+        ) : (
+          <Badge variant="destructive">Inactive</Badge>
+        ),
+    },
+    {
+      accessorKey: 'lastLoginAt',
+      header: 'Last Login',
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {row.original.lastLoginAt ? new Date(row.original.lastLoginAt).toLocaleString() : 'Never'}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      enableHiding: false,
+      cell: ({ row }) => {
+        const u = row.original
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleMutation.mutate(u.id)}
+            disabled={toggleMutation.isPending}
+          >
+            {u.isActive ? (
+              <>
+                <UserX className="size-4 mr-1" />Deactivate
+              </>
+            ) : (
+              <>
+                <UserCheck className="size-4 mr-1" />Activate
+              </>
+            )}
+          </Button>
+        )
+      },
+    },
+  ]
+
   return (
     <>
-      <PageHeader title="Team Members" description="Manage platform administrators and their access"
-        action={<Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 size-4" />Invite Admin</Button>}
+      <PageHeader
+        title="Team Members"
+        description="Manage platform administrators and their access"
+        action={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 size-4" />Invite Admin
+          </Button>
+        }
       />
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.length === 0 ? (
-                <TableRow><TableCell colSpan={6}><EmptyState message={isLoading ? 'Loading...' : 'No team members.'} /></TableCell></TableRow>
-              ) : users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-sm">{u.email}</TableCell>
-                  <TableCell><Badge variant="secondary">{u.role?.name || 'N/A'}</Badge></TableCell>
-                  <TableCell>
-                    {u.isActive
-                      ? <Badge className="bg-green-500/10 text-green-600">Active</Badge>
-                      : <Badge variant="destructive">Inactive</Badge>
-                    }
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost" size="sm"
-                      onClick={() => toggleMutation.mutate(u.id)}
-                      disabled={toggleMutation.isPending}
-                    >
-                      {u.isActive ? <><UserX className="size-4 mr-1" />Deactivate</> : <><UserCheck className="size-4 mr-1" />Activate</>}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredUsers}
+        filters={TEAM_FILTERS}
+        filterValues={filterValues}
+        onFilterChange={(id, value) => setFilterValues((prev) => ({ ...prev, [id]: value }))}
+        onClearFilters={() => { setFilterValues({}); setSearch('') }}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or email..."
+        pagination={{ page: 1, perPage: 999, total: filteredUsers.length }}
+        onPageChange={() => {}}
+        isLoading={isLoading}
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
