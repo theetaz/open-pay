@@ -145,46 +145,115 @@ stop_all() {
 }
 
 show_status() {
+    local running_docker=0
+    local total_docker=0
+    local running_go=0
+    local total_go=0
+    local running_fe=0
+    local total_fe=0
+
     echo ""
-    echo -e "${BOLD}Service Status:${NC}"
+    echo -e "${BOLD}${BLUE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${BLUE}║        Open Lanka Payment — Service Status       ║${NC}"
+    echo -e "${BOLD}${BLUE}╚══════════════════════════════════════════════════╝${NC}"
     echo ""
 
-    # Docker containers
+    # ─── Infrastructure ───
     echo -e "${BOLD}  Infrastructure (Docker):${NC}"
-    for container in postgres redis nats minio mailpit; do
+    echo ""
+
+    _infra_status() {
+        local container="$1" label="$2" url="$3" note="$4"
+        local padding=$((18 - ${#label}))
+        total_docker=$((total_docker + 1))
+
         if docker compose ps --status running 2>/dev/null | grep -q "$container"; then
-            echo -e "  ${GREEN}●${NC} $container"
+            running_docker=$((running_docker + 1))
+            printf "    ${GREEN}●${NC} ${CYAN}%s${NC}%*s%s" "$label" "$padding" "" "$url"
+            [ -n "$note" ] && printf "  ${DIM}(%s)${NC}" "$note"
+            echo ""
         else
-            echo -e "  ${RED}●${NC} $container"
+            printf "    ${RED}●${NC} ${CYAN}%s${NC}%*s${DIM}not running${NC}\n" "$label" "$padding" ""
         fi
-    done
+    }
+
+    _infra_status "postgres" "PostgreSQL"    "localhost:5433"           ""
+    _infra_status "redis"    "Redis"         "localhost:6379"           ""
+    _infra_status "nats"     "NATS"          "nats://localhost:4222"    "monitor: http://localhost:8222"
+    _infra_status "minio"    "MinIO Console" "http://localhost:9001"    "minioadmin / minioadmin123"
+    _infra_status "mailpit"  "Mailpit UI"    "http://localhost:8025"    "catches all dev emails"
 
     echo ""
-    echo -e "${BOLD}  Go Services:${NC}"
+
+    # ─── Go Services ───
+    echo -e "${BOLD}  Go Services (hot reload via air):${NC}"
+    echo ""
+
     for entry in "${GO_SERVICES[@]}"; do
         svc="${entry%%:*}"
         port="${entry##*:}"
+        total_go=$((total_go + 1))
         pidfile="$PIDS_DIR/$svc.pid"
+        local padding=$((18 - ${#svc}))
+
         if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-            echo -e "  ${GREEN}●${NC} $svc :$port"
+            running_go=$((running_go + 1))
+            printf "    ${GREEN}●${NC} ${MAGENTA}%s${NC}%*shttp://localhost:%s\n" "$svc" "$padding" "" "$port"
         else
-            echo -e "  ${RED}●${NC} $svc :$port"
+            printf "    ${RED}●${NC} ${MAGENTA}%s${NC}%*s${DIM}not running  (port %s)${NC}\n" "$svc" "$padding" "" "$port"
         fi
     done
 
     echo ""
-    echo -e "${BOLD}  Frontend Apps:${NC}"
-    for entry in "${FRONTEND_APPS[@]}"; do
-        app="${entry%%:*}"
-        port="${entry##*:}"
-        pidfile="$PIDS_DIR/$app.pid"
-        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-            echo -e "  ${GREEN}●${NC} $app :$port"
-        else
-            echo -e "  ${RED}●${NC} $app :$port"
-        fi
-    done
+
+    # ─── Frontend Apps ───
+    echo -e "${BOLD}  Frontend Apps (Vite HMR):${NC}"
     echo ""
+
+    _fe_status() {
+        local app="$1" port="$2" label="$3"
+        local padding=$((18 - ${#label}))
+        total_fe=$((total_fe + 1))
+        local pidfile="$PIDS_DIR/$app.pid"
+
+        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+            running_fe=$((running_fe + 1))
+            printf "    ${GREEN}●${NC} ${YELLOW}%s${NC}%*shttp://localhost:%s\n" "$label" "$padding" "" "$port"
+        else
+            printf "    ${RED}●${NC} ${YELLOW}%s${NC}%*s${DIM}not running  (port %s)${NC}\n" "$label" "$padding" "" "$port"
+        fi
+    }
+
+    _fe_status "merchant-portal" "4600" "Merchant Portal"
+    _fe_status "admin-dashboard" "4500" "Admin Dashboard"
+
+    echo ""
+
+    # ─── Production URLs ───
+    echo -e "${BOLD}  Production:${NC}"
+    echo ""
+    echo -e "    ${CYAN}API Gateway${NC}      https://olp-api.nipuntheekshana.com"
+    echo -e "    ${YELLOW}Merchant Portal${NC}  https://olp-merchant.nipuntheekshana.com"
+    echo -e "    ${YELLOW}Admin Dashboard${NC}  https://olp-admin.nipuntheekshana.com"
+    echo ""
+
+    # ─── Summary ───
+    local total=$((total_docker + total_go + total_fe))
+    local running=$((running_docker + running_go + running_fe))
+
+    if [ "$running" -eq "$total" ]; then
+        echo -e "  ${GREEN}${BOLD}All ${total} services running${NC}"
+    elif [ "$running" -eq 0 ]; then
+        echo -e "  ${RED}${BOLD}No services running${NC}  ${DIM}(run: make start)${NC}"
+    else
+        echo -e "  ${YELLOW}${BOLD}${running}/${total} services running${NC}  ${DIM}(${running_docker}/${total_docker} infra, ${running_go}/${total_go} go, ${running_fe}/${total_fe} frontend)${NC}"
+    fi
+
+    echo ""
+    echo -e "  ${DIM}Commands:  make start  |  make stop  |  make status${NC}"
+    echo -e "  ${DIM}Logs:      tail -f .logs/<service>.log${NC}"
+    echo ""
+
     exit 0
 }
 

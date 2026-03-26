@@ -1,10 +1,11 @@
 import * as React from 'react'
+import { useMemo } from 'react'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { StatCard } from '#/components/dashboard/stat-card'
-import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Plus, Loader2, DollarSign, Clock, ArrowDownToLine } from 'lucide-react'
 import { useBalance, useWithdrawals, useRequestWithdrawal } from '#/hooks/use-settlements'
 import { useMe } from '#/hooks/use-auth'
@@ -21,25 +22,166 @@ import {
 } from '#/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '#/components/ui/field'
 
+interface Withdrawal {
+  id: string
+  createdAt: string
+  amountUsdt: string
+  amountLkr: string
+  exchangeRate: string
+  bankName: string
+  status: string
+  bankReference?: string
+}
+
+const statusFilters: FilterConfig[] = [
+  {
+    id: 'status',
+    label: 'Status',
+    type: 'select',
+    options: [
+      { label: 'All', value: '' },
+      { label: 'Requested', value: 'REQUESTED' },
+      { label: 'Approved', value: 'APPROVED' },
+      { label: 'Completed', value: 'COMPLETED' },
+      { label: 'Rejected', value: 'REJECTED' },
+    ],
+  },
+]
+
 export function WithdrawalPage() {
+  const [page, setPage] = React.useState(1)
+  const [search, setSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<Record<string, string | string[]>>({ status: '' })
+
+  const statusFilter = (filterValues.status as string) || ''
+
   const { data: balanceData } = useBalance()
   const { data: withdrawalsData } = useWithdrawals()
   const { data: meData } = useMe()
   const { data: rateData } = useExchangeRate()
 
   const balance = balanceData?.data
-  const withdrawals = withdrawalsData?.data || []
+  const allWithdrawals: Withdrawal[] = withdrawalsData?.data || []
   const merchant = meData?.data?.merchant
   const primaryCurrency = merchant?.defaultCurrency || 'LKR'
-  const liveRate = rateData?.data?.effectiveRate || (withdrawals.length > 0 ? withdrawals[0].exchangeRate : null)
+  const liveRate = rateData?.data?.effectiveRate || (allWithdrawals.length > 0 ? allWithdrawals[0].exchangeRate : null)
 
-  const pending = withdrawals.filter((w) => w.status === 'REQUESTED')
-  const completed = withdrawals.filter((w) => w.status === 'COMPLETED')
+  // Filter withdrawals client-side
+  const filteredWithdrawals = React.useMemo(() => {
+    let result = allWithdrawals
+    if (statusFilter) {
+      result = result.filter((w) => w.status === statusFilter)
+    }
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(
+        (w) =>
+          w.bankName?.toLowerCase().includes(q) ||
+          w.bankReference?.toLowerCase().includes(q) ||
+          w.status.toLowerCase().includes(q),
+      )
+    }
+    return result
+  }, [allWithdrawals, statusFilter, search])
+
+  const PER_PAGE = 20
+  const total = filteredWithdrawals.length
+  const paginatedWithdrawals = filteredWithdrawals.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+
+  const pending = allWithdrawals.filter((w) => w.status === 'REQUESTED')
+  const completed = allWithdrawals.filter((w) => w.status === 'COMPLETED')
   const totalWithdrawn = completed.reduce((sum, w) => sum + parseFloat(w.amountLkr), 0)
 
   const availableFmt = formatDualAmount(balance?.availableUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
   const pendingFmt = formatDualAmount(balance?.pendingUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
   const earnedFmt = formatDualAmount(balance?.totalEarnedUsdt || '0', undefined, undefined, primaryCurrency, liveRate)
+
+  const columns: ColumnDef<Withdrawal, any>[] = useMemo(
+    () => [
+      {
+        accessorKey: 'createdAt',
+        header: 'Date',
+        cell: ({ row }) => (
+          <span className="text-sm">{new Date(row.original.createdAt).toLocaleDateString()}</span>
+        ),
+      },
+      {
+        id: 'amount',
+        header: 'Amount',
+        cell: ({ row }) => {
+          const w = row.original
+          const wAmt = formatDualAmount(w.amountUsdt, w.amountLkr, 'LKR', primaryCurrency, w.exchangeRate)
+          return (
+            <div>
+              <p className="font-medium">{wAmt.primary}</p>
+              {wAmt.secondary && (
+                <p className="text-xs text-muted-foreground">({wAmt.secondary})</p>
+              )}
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'exchangeRate',
+        header: 'Rate',
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            @ {parseFloat(row.original.exchangeRate).toFixed(2)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'bankName',
+        header: 'Bank',
+        cell: ({ row }) => <span className="text-sm">{row.original.bankName}</span>,
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+          const status = row.original.status
+          return (
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full ${
+                status === 'COMPLETED'
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : status === 'REJECTED'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    : status === 'APPROVED'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+              }`}
+            >
+              {status}
+            </span>
+          )
+        },
+      },
+      {
+        accessorKey: 'bankReference',
+        header: 'Reference',
+        cell: ({ row }) => (
+          <span className="text-sm font-mono">{row.original.bankReference || '-'}</span>
+        ),
+      },
+    ],
+    [primaryCurrency],
+  )
+
+  function handleFilterChange(id: string, value: string | string[]) {
+    setFilterValues((prev) => ({ ...prev, [id]: value }))
+    setPage(1)
+  }
+
+  function handleClearFilters() {
+    setFilterValues({ status: '' })
+    setPage(1)
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <>
@@ -81,59 +223,19 @@ export function WithdrawalPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Rate</TableHead>
-                <TableHead>Bank</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Reference</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {withdrawals.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6}>
-                    <EmptyState message="No withdrawal requests yet." />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                withdrawals.map((w) => {
-                  const wAmt = formatDualAmount(w.amountUsdt, w.amountLkr, 'LKR', primaryCurrency, w.exchangeRate)
-                  return (
-                  <TableRow key={w.id}>
-                    <TableCell className="text-sm">{new Date(w.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <p className="font-medium">{wAmt.primary}</p>
-                      {wAmt.secondary && (
-                        <p className="text-xs text-muted-foreground">({wAmt.secondary})</p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">@ {parseFloat(w.exchangeRate).toFixed(2)}</TableCell>
-                    <TableCell className="text-sm">{w.bankName}</TableCell>
-                    <TableCell>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        w.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        w.status === 'REJECTED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        w.status === 'APPROVED' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      }`}>
-                        {w.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm font-mono">{w.bankReference || '-'}</TableCell>
-                  </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={paginatedWithdrawals}
+        filters={statusFilters}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        search={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search withdrawals..."
+        pagination={{ page, perPage: PER_PAGE, total }}
+        onPageChange={setPage}
+      />
     </>
   )
 }

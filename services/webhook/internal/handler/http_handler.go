@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +21,7 @@ type WebhookServiceInterface interface {
 	Configure(ctx context.Context, merchantID uuid.UUID, url string) (*domain.WebhookConfig, error)
 	GetPublicKey(ctx context.Context, merchantID uuid.UUID) (string, error)
 	Deliver(ctx context.Context, merchantID uuid.UUID, eventType string, payload []byte, httpClient *http.Client) (*domain.Delivery, error)
+	ListDeliveries(ctx context.Context, merchantID uuid.UUID, page, perPage int) ([]*domain.Delivery, int, error)
 }
 
 // WebhookHandler handles HTTP requests for webhook operations.
@@ -44,6 +46,7 @@ func NewRouter(h *WebhookHandler, jwtSecret string) http.Handler {
 		r.Post("/v1/webhooks/configure", h.Configure)
 		r.Get("/v1/webhooks/public-key", h.GetPublicKey)
 		r.Post("/v1/webhooks/test", h.TestWebhook)
+		r.Get("/v1/webhooks/deliveries", h.ListDeliveries)
 	})
 
 	// Internal endpoint for delivering webhooks (called by other services)
@@ -163,6 +166,55 @@ func (h *WebhookHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
 		"deliveryTime": deliveryTime,
 		"message":      "Test webhook delivered",
 	}})
+}
+
+// ListDeliveries handles GET /v1/webhooks/deliveries.
+func (h *WebhookHandler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	page, perPage := 1, 20
+	if v := r.URL.Query().Get("page"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			page = p
+		}
+	}
+	if v := r.URL.Query().Get("perPage"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			perPage = p
+		}
+	}
+
+	deliveries, total, err := h.svc.ListDeliveries(r.Context(), claims.MerchantID, page, perPage)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list deliveries")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(deliveries))
+	for _, d := range deliveries {
+		item := map[string]any{
+			"id":               d.ID.String(),
+			"eventType":        d.EventType,
+			"status":           string(d.Status),
+			"attemptCount":     d.AttemptCount,
+			"maxAttempts":      d.MaxAttempts,
+			"lastResponseCode": d.LastResponseCode,
+			"lastError":        d.LastError,
+			"nextAttemptAt":    d.NextAttemptAt,
+			"deliveredAt":      d.DeliveredAt,
+			"createdAt":        d.CreatedAt,
+		}
+		items = append(items, item)
+	}
+
+	writeJSON(w, http.StatusOK, envelope{
+		"data": items,
+		"meta": map[string]any{"page": page, "perPage": perPage, "total": total},
+	})
 }
 
 // --- Request/Response types ---

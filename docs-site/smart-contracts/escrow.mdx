@@ -1,0 +1,258 @@
+---
+title: OpenPayEscrow
+description: "On-chain escrow contract for trustless payment processing"
+---
+
+# OpenPayEscrow
+
+The `OpenPayEscrow` contract holds payment funds in escrow until confirmed by the platform. It handles ERC-20 token payments and native BNB payments, applies platform fees, and enforces slippage protection via the price feed.
+
+**Address (BSC Testnet):** `0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2`
+
+**Explorer:** [View on BscScan](https://testnet.bscscan.com/address/0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2)
+
+## Constructor
+
+```solidity
+constructor(uint256 _platformFeeBps, address _feeRecipient)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `_platformFeeBps` | `uint256` | Platform fee in basis points (e.g., 200 = 2%) |
+| `_feeRecipient` | `address` | Address that receives platform fees |
+
+## Payment Struct
+
+Each payment is stored on-chain with the following fields:
+
+```solidity
+struct Payment {
+    bytes32 paymentId;
+    address merchant;
+    address payer;
+    address token;       // address(0) for native BNB
+    uint256 amount;      // Token amount deposited
+    uint256 platformFee; // Calculated on confirmation
+    uint256 usdAmount;   // USD value (6 decimal precision)
+    uint256 exchangeRate;
+    uint256 createdAt;
+    uint256 expiresAt;
+    PaymentStatus status;
+}
+```
+
+## Payment Status Enum
+
+```solidity
+enum PaymentStatus {
+    None,      // 0 - Does not exist
+    Pending,   // 1 - Funds deposited, awaiting action
+    Confirmed, // 2 - Merchant paid, fee collected
+    Refunded,  // 3 - Funds returned to payer
+    Expired    // 4 - Timed out, funds returned
+}
+```
+
+## Write Functions
+
+### createPayment
+
+Create an ERC-20 token payment. The payer must have approved the escrow contract to spend the token amount beforehand.
+
+```solidity
+function createPayment(
+    bytes32 paymentId,
+    address merchant,
+    address token,
+    uint256 amount,
+    uint256 usdAmount,
+    uint256 expiresAt
+) external
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `paymentId` | `bytes32` | Unique payment identifier (generated off-chain) |
+| `merchant` | `address` | Merchant wallet address |
+| `token` | `address` | ERC-20 token address (USDT, USDC, etc.) |
+| `amount` | `uint256` | Token amount to deposit |
+| `usdAmount` | `uint256` | USD equivalent (for record-keeping) |
+| `expiresAt` | `uint256` | Unix timestamp when payment expires |
+
+<Warning>
+  The payer must call `token.approve(escrowAddress, amount)` before calling `createPayment`. Otherwise the transaction will revert.
+</Warning>
+
+### createNativePayment
+
+Create a payment using native BNB. The BNB amount is sent as `msg.value`.
+
+```solidity
+function createNativePayment(
+    bytes32 paymentId,
+    address merchant,
+    uint256 usdAmount,
+    uint256 expiresAt
+) external payable
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `paymentId` | `bytes32` | Unique payment identifier |
+| `merchant` | `address` | Merchant wallet address |
+| `usdAmount` | `uint256` | USD equivalent |
+| `expiresAt` | `uint256` | Unix timestamp when payment expires |
+
+### confirmPayment
+
+Confirm a pending payment. Splits funds between the merchant (minus fee) and the fee recipient. **Owner only.**
+
+```solidity
+function confirmPayment(bytes32 paymentId) external onlyOwner
+```
+
+On confirmation:
+- Platform fee (default 2%) is sent to `feeRecipient`
+- Remaining amount is sent to the `merchant`
+- Payment status changes to `Confirmed`
+
+### refundPayment
+
+Refund a pending payment back to the payer. **Owner only.**
+
+```solidity
+function refundPayment(bytes32 paymentId) external onlyOwner
+```
+
+### expirePayment
+
+Expire a payment that has passed its `expiresAt` timestamp. Funds are returned to the payer. **Owner only.**
+
+```solidity
+function expirePayment(bytes32 paymentId) external onlyOwner
+```
+
+## Read Functions
+
+### getPayment
+
+Retrieve full payment details by ID.
+
+```solidity
+function getPayment(bytes32 paymentId) external view returns (Payment memory)
+```
+
+### getQuote
+
+Get a price quote for converting a USD amount to a specific token. Returns the token amount needed plus slippage bounds.
+
+```solidity
+function getQuote(
+    address token,
+    uint256 usdAmount
+) external view returns (
+    uint256 tokenAmount,
+    uint256 exchangeRate,
+    uint256 minAmount,
+    uint256 maxAmount
+)
+```
+
+| Return Value | Description |
+|---|---|
+| `tokenAmount` | Exact token amount at current price |
+| `exchangeRate` | Current exchange rate from the price feed |
+| `minAmount` | Minimum acceptable amount (tokenAmount - slippage) |
+| `maxAmount` | Maximum amount (tokenAmount + slippage) |
+
+### State Variables
+
+```solidity
+function platformFeeBps() external view returns (uint256);  // Default: 200 (2%)
+function slippageBps() external view returns (uint256);      // Default: 200 (2%)
+function feeRecipient() external view returns (address);
+function priceFeed() external view returns (address);
+```
+
+## Admin Functions (Owner Only)
+
+| Function | Description |
+|---|---|
+| `setPlatformFee(uint256 newFeeBps)` | Set platform fee (max 1000 = 10%) |
+| `setSlippage(uint256 newSlippageBps)` | Set slippage tolerance (max 500 = 5%) |
+| `setFeeRecipient(address newRecipient)` | Change the fee recipient address |
+| `setPriceFeed(address _priceFeed)` | Update the price feed contract address |
+| `setSupportedToken(address token, bool supported)` | Enable or disable a payment token |
+
+## Events
+
+```solidity
+event PaymentCreated(
+    bytes32 indexed paymentId,
+    address indexed merchant,
+    address indexed payer,
+    address token,
+    uint256 amount,
+    uint256 usdAmount
+);
+
+event PaymentConfirmed(
+    bytes32 indexed paymentId,
+    address indexed merchant,
+    uint256 merchantAmount,
+    uint256 platformFee
+);
+
+event PaymentRefunded(
+    bytes32 indexed paymentId,
+    address indexed payer,
+    uint256 amount
+);
+
+event PaymentExpired(
+    bytes32 indexed paymentId
+);
+
+event PlatformFeeUpdated(uint256 oldFee, uint256 newFee);
+event SlippageUpdated(uint256 oldSlippage, uint256 newSlippage);
+event PriceFeedUpdated(address oldFeed, address newFeed);
+event TokenSupported(address indexed token, bool supported);
+```
+
+## Security
+
+| Protection | Description |
+|---|---|
+| **ReentrancyGuard** | All state-changing functions are protected against reentrancy |
+| **SafeERC20** | Token transfers use OpenZeppelin SafeERC20 wrappers |
+| **Ownable** | Only the contract owner can confirm, refund, or expire payments |
+| **Slippage bounds** | Price quotes include min/max amounts to protect against oracle manipulation |
+| **Expiry enforcement** | Payments cannot be confirmed after their expiry timestamp |
+
+## Example: Reading a Payment with ethers.js
+
+```typescript
+import { ethers } from "ethers";
+
+const provider = new ethers.JsonRpcProvider("https://data-seed-prebsc-1-s1.bnbchain.org:8545");
+
+const escrow = new ethers.Contract(
+  "0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2",
+  [
+    "function getPayment(bytes32) view returns (tuple(bytes32,address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint8))",
+    "function getQuote(address,uint256) view returns (uint256,uint256,uint256,uint256)",
+  ],
+  provider
+);
+
+// Get a price quote: how much USDT for $10?
+const [tokenAmount, exchangeRate, minAmount, maxAmount] = await escrow.getQuote(
+  "0xMockUSDTAddress",
+  ethers.parseUnits("10", 6) // $10 with 6 decimal precision
+);
+
+console.log("Token amount:", ethers.formatUnits(tokenAmount, 18));
+console.log("Min:", ethers.formatUnits(minAmount, 18));
+console.log("Max:", ethers.formatUnits(maxAmount, 18));
+```

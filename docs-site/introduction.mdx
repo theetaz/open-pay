@@ -1,0 +1,64 @@
+---
+title: Introduction
+description: "Open Pay — a crypto-to-fiat payment platform for Sri Lanka and beyond"
+---
+
+# Welcome to Open Pay
+
+Open Pay is a full-stack crypto payment processing platform that enables merchants to accept cryptocurrency payments (USDT, USDC, BNB, and more) and settle in local fiat currency (LKR). It bridges the gap between crypto and traditional commerce.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Start accepting crypto payments in under 5 minutes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Explore the full REST API with request/response examples
+  </Card>
+  <Card title="SDKs" icon="puzzle-piece" href="/sdks/overview">
+    Official SDKs for TypeScript, Go, Python, PHP, and Java
+  </Card>
+  <Card title="Smart Contracts" icon="link" href="/smart-contracts/overview">
+    On-chain escrow with Chainlink price feeds on BSC
+  </Card>
+</CardGroup>
+
+## What You Can Do
+
+<AccordionGroup>
+  <Accordion title="Accept Crypto Payments">
+    Create payment requests in USD/LKR and let customers pay in USDT, USDC, BNB, or other supported tokens. Real-time exchange rates ensure fair pricing.
+  </Accordion>
+  <Accordion title="Embed Checkout">
+    Use the Checkout Sessions API with any of our SDKs to create hosted checkout pages — no frontend crypto knowledge needed.
+  </Accordion>
+  <Accordion title="Manage Subscriptions">
+    Create recurring billing plans with configurable intervals, trial periods, and automatic payment collection.
+  </Accordion>
+  <Accordion title="Receive Webhooks">
+    Get notified of payment events in real-time with ED25519-signed webhooks and automatic retries with exponential backoff.
+  </Accordion>
+  <Accordion title="On-Chain Escrow">
+    Smart contracts hold funds in escrow until confirmed, with Chainlink oracle price verification and slippage protection.
+  </Accordion>
+</AccordionGroup>
+
+## Platform Components
+
+| Component | Description |
+|---|---|
+| **Merchant Portal** | Web dashboard for managing payments, API keys, webhooks, and settlement |
+| **Admin Dashboard** | Platform administration: merchant approval, audit logs, system settings |
+| **REST API** | 80+ endpoints across 8 microservices |
+| **SDKs** | TypeScript, Go, Python, PHP, Java — all with HMAC authentication |
+| **CLI** | `openpay` command-line tool for terminal-based payment management |
+| **Smart Contracts** | Solidity escrow on BSC with Chainlink price feeds |
+| **WooCommerce Plugin** | WordPress payment gateway for WooCommerce stores |
+
+## Environments
+
+| Environment | URL |
+|---|---|
+| API Gateway | `https://olp-api.nipuntheekshana.com` |
+| Merchant Portal | `https://olp-merchant.nipuntheekshana.com` |
+| Admin Dashboard | `https://olp-admin.nipuntheekshana.com` |
+| Smart Contracts | BSC Testnet (Chain 97) |

@@ -45,6 +45,10 @@ type MerchantServiceInterface interface {
 	SetupTOTP(ctx context.Context, userID uuid.UUID) (secret, uri string, err error)
 	VerifyAndEnableTOTP(ctx context.Context, userID uuid.UUID, code string) ([]string, error)
 	DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error
+	CreateAPIKey(ctx context.Context, merchantID uuid.UUID, env, name string) (*domain.APIKey, string, error)
+	RevokeAPIKey(ctx context.Context, id uuid.UUID, reason string) error
+	ListAPIKeys(ctx context.Context, merchantID uuid.UUID) ([]*domain.APIKey, error)
+	ValidateAPIKey(ctx context.Context, keyID, secret string) (*domain.Merchant, error)
 }
 
 // MerchantHandler handles HTTP requests for merchant operations.
@@ -107,6 +111,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 		r.Get("/v1/merchants/{id}/directors", h.ListDirectors)
 		r.Post("/v1/merchants/{id}/directors/{directorId}/resend", h.ResendDirectorVerification)
 		r.Delete("/v1/merchants/{id}/directors/{directorId}", h.RemoveDirector)
+
+		// API key management
+		r.Post("/v1/api-keys", h.CreateAPIKey)
+		r.Get("/v1/api-keys", h.ListAPIKeys)
+		r.Delete("/v1/api-keys/{id}", h.RevokeAPIKey)
 	})
 
 	// Branch routes
@@ -125,6 +134,11 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 	}
 
 	return r
+}
+
+// RegisterInternalRoutes adds internal service-to-service endpoints (no auth).
+func RegisterInternalRoutes(r chi.Router, ih *InternalHandler) {
+	r.Post("/internal/api-keys/validate", ih.ValidateAPIKey)
 }
 
 // RegisterWithUser handles POST /v1/auth/register.
@@ -187,6 +201,18 @@ func (h *MerchantHandler) Login(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "ACCOUNT_INACTIVE", "account is inactive")
 			return
 		}
+		if errors.Is(err, service.ErrAccountTerminated) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_TERMINATED", "your merchant account has been terminated")
+			return
+		}
+		if errors.Is(err, service.ErrAccountFrozen) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_FROZEN", "your merchant account has been frozen, please contact support")
+			return
+		}
+		if errors.Is(err, service.ErrAccountNotActive) {
+			writeError(w, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "your merchant account is not active")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
 		return
 	}
@@ -237,6 +263,19 @@ func (h *MerchantHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	merchant, err := h.svc.GetByID(r.Context(), claims.MerchantID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "merchant not found")
+		return
+	}
+
+	// Force logout if merchant account is no longer active
+	switch merchant.Status {
+	case domain.MerchantTerminated:
+		writeError(w, http.StatusForbidden, "ACCOUNT_TERMINATED", "your merchant account has been terminated")
+		return
+	case domain.MerchantFrozen:
+		writeError(w, http.StatusForbidden, "ACCOUNT_FROZEN", "your merchant account has been frozen")
+		return
+	case domain.MerchantInactive:
+		writeError(w, http.StatusForbidden, "ACCOUNT_NOT_ACTIVE", "your merchant account is not active")
 		return
 	}
 
@@ -455,6 +494,15 @@ func (h *MerchantHandler) ListMerchants(w http.ResponseWriter, r *http.Request) 
 	params := service.ListParams{
 		Page:    intQuery(r, "page", 1),
 		PerPage: intQuery(r, "perPage", 20),
+		Search:  r.URL.Query().Get("search"),
+	}
+	if v := r.URL.Query().Get("kycStatus"); v != "" {
+		s := domain.KYCStatus(v)
+		params.KYCStatus = &s
+	}
+	if v := r.URL.Query().Get("status"); v != "" {
+		s := domain.MerchantStatus(v)
+		params.Status = &s
 	}
 
 	merchants, total, err := h.svc.List(r.Context(), params)

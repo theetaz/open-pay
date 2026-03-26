@@ -122,15 +122,40 @@ func (r *MerchantRepository) List(ctx context.Context, params service.ListParams
 		params.PerPage = 20
 	}
 
-	countQuery := "SELECT COUNT(*) FROM merchants WHERE deleted_at IS NULL"
+	// Build dynamic WHERE clause
+	where := "deleted_at IS NULL"
+	args := []any{}
+	argIdx := 1
+
+	if params.KYCStatus != nil {
+		where += fmt.Sprintf(" AND kyc_status = $%d", argIdx)
+		args = append(args, string(*params.KYCStatus))
+		argIdx++
+	}
+	if params.Status != nil {
+		where += fmt.Sprintf(" AND status = $%d", argIdx)
+		args = append(args, string(*params.Status))
+		argIdx++
+	}
+	if params.Search != "" {
+		where += fmt.Sprintf(" AND (business_name ILIKE $%d OR contact_email ILIKE $%d OR contact_name ILIKE $%d)", argIdx, argIdx, argIdx)
+		args = append(args, "%"+params.Search+"%")
+		argIdx++
+	}
+
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM merchants WHERE "+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("counting merchants: %w", err)
 	}
 
 	offset := (params.Page - 1) * params.PerPage
-	query := "SELECT " + merchantSelectCols + " FROM merchants WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2"
-	rows, err := r.pool.Query(ctx, query, params.PerPage, offset)
+	listArgs := make([]any, len(args), len(args)+2)
+	copy(listArgs, args)
+	listArgs = append(listArgs, params.PerPage, offset)
+
+	query := fmt.Sprintf("SELECT %s FROM merchants WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		merchantSelectCols, where, argIdx, argIdx+1)
+	rows, err := r.pool.Query(ctx, query, listArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("listing merchants: %w", err)
 	}

@@ -1,0 +1,69 @@
+---
+title: "List Merchants"
+api: "GET /v1/merchants"
+description: "List all merchants on the platform (admin only)"
+---
+
+<Note>
+  This endpoint requires admin-level authentication. Regular merchants cannot access this endpoint.
+</Note>
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of merchants per page. Maximum 100.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by merchant status. One of `active`, `pending_verification`, `suspended`, `deactivated`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search merchants by business name or email.
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "merch_abc123",
+      "businessName": "Acme Payments Ltd",
+      "email": "admin@acmepay.com",
+      "businessType": "company",
+      "status": "active",
+      "createdAt": "2026-03-26T10:00:00Z"
+    },
+    {
+      "id": "merch_def456",
+      "businessName": "Island Crafts",
+      "email": "hello@islandcrafts.lk",
+      "businessType": "individual",
+      "status": "pending_verification",
+      "createdAt": "2026-03-25T08:15:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 42,
+    "totalPages": 3
+  }
+}
+```
+
+### Error Responses
+
+```json 403 Forbidden
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Admin access required"
+  }
+}
+```

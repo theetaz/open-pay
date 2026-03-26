@@ -1,0 +1,111 @@
+---
+title: "List Subscription Plans"
+api: "GET /v1/subscription-plans"
+description: "Retrieve all subscription plans for the authenticated merchant"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  The page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  The number of plans per page. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="active" type="boolean">
+  Filter by plan status. Set to `true` to return only active plans, or `false` for inactive plans.
+</ParamField>
+
+## Response
+
+<ResponseField name="plans" type="array">
+  An array of subscription plan objects.
+
+  <Expandable title="plan fields">
+    <ResponseField name="id" type="string">
+      Unique identifier for the plan.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      The plan name.
+    </ResponseField>
+    <ResponseField name="amount" type="number">
+      The recurring amount.
+    </ResponseField>
+    <ResponseField name="currency" type="string">
+      The plan currency.
+    </ResponseField>
+    <ResponseField name="interval" type="string">
+      The billing interval.
+    </ResponseField>
+    <ResponseField name="trialDays" type="integer">
+      Number of trial days.
+    </ResponseField>
+    <ResponseField name="subscriberCount" type="integer">
+      The number of active subscribers on this plan.
+    </ResponseField>
+    <ResponseField name="active" type="boolean">
+      Whether the plan is active.
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO 8601 timestamp of when the plan was created.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/subscription-plans?active=true" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "plans": [
+    {
+      "id": "plan_abc123def456",
+      "name": "Pro Monthly",
+      "amount": 29.99,
+      "currency": "USD",
+      "interval": "monthly",
+      "trialDays": 14,
+      "subscriberCount": 42,
+      "active": true,
+      "createdAt": "2026-03-01T10:00:00Z"
+    },
+    {
+      "id": "plan_xyz789ghi012",
+      "name": "Enterprise Yearly",
+      "amount": 299.00,
+      "currency": "USD",
+      "interval": "yearly",
+      "trialDays": 30,
+      "subscriberCount": 8,
+      "active": true,
+      "createdAt": "2026-02-15T08:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 2,
+    "totalPages": 1
+  }
+}
+```
+</ResponseExample>

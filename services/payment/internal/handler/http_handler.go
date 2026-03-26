@@ -61,6 +61,9 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/payments/{id}", h.GetPayment)
 	})
 
+	// Checkout sessions (SDK — uses X-Merchant-ID header from gateway)
+	r.Post("/v1/checkout/sessions", h.CreateCheckoutSession)
+
 	// Public routes
 	r.Post("/v1/public/payments", h.CreatePublicPayment)
 	r.Get("/v1/payments/{id}/checkout", h.GetCheckout)
@@ -77,13 +80,30 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 	return r
 }
 
+// merchantIDFromRequest extracts the merchant ID from JWT claims or X-Merchant-ID header (SDK auth).
+func merchantIDFromRequest(r *http.Request) (uuid.UUID, bool) {
+	// Try JWT claims first (portal users)
+	if claims, ok := auth.ClaimsFromContext(r.Context()); ok && claims.MerchantID != uuid.Nil {
+		return claims.MerchantID, true
+	}
+	// Fallback to X-Merchant-ID header (set by gateway for HMAC-authenticated SDK requests)
+	if hdr := r.Header.Get("X-Merchant-ID"); hdr != "" {
+		if id, err := uuid.Parse(hdr); err == nil {
+			return id, true
+		}
+	}
+	return uuid.Nil, false
+}
+
 // CreatePayment handles POST /v1/payments.
 func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
-	claims, ok := auth.ClaimsFromContext(r.Context())
+	merchantID, ok := merchantIDFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
 		return
 	}
+	// Build a claims-like reference for audit logging
+	claims, _ := auth.ClaimsFromContext(r.Context())
 
 	var req createPaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -107,7 +127,7 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := service.CreatePaymentInput{
-		MerchantID:      claims.MerchantID,
+		MerchantID:      merchantID,
 		BranchID:        req.BranchID,
 		Amount:          amount,
 		Currency:        currency,
@@ -147,9 +167,14 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.auditLog != nil {
-		merchantID := claims.MerchantID
+		actorID := merchantID
+		actorType := "SDK"
+		if claims != nil {
+			actorID = claims.UserID
+			actorType = "MERCHANT_USER"
+		}
 		h.auditLog.Log(r.Context(), audit.LogEntry{
-			ActorID: claims.UserID, ActorType: "MERCHANT_USER", MerchantID: &merchantID,
+			ActorID: actorID, ActorType: actorType, MerchantID: &merchantID,
 			Action: "payment.initiated", ResourceType: "payment", ResourceID: &payment.ID,
 			IPAddress:  stripPort(r.RemoteAddr),
 			Metadata:   map[string]string{"amount": payment.Amount.String(), "currency": payment.Currency, "provider": payment.Provider},
@@ -236,7 +261,7 @@ func (h *PaymentHandler) CreatePublicPayment(w http.ResponseWriter, r *http.Requ
 
 // GetPayment handles GET /v1/payments/{id}.
 func (h *PaymentHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
-	claims, ok := auth.ClaimsFromContext(r.Context())
+	merchantID, ok := merchantIDFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
 		return
@@ -258,7 +283,7 @@ func (h *PaymentHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payment.MerchantID != claims.MerchantID {
+	if payment.MerchantID != merchantID {
 		writeError(w, http.StatusForbidden, "FORBIDDEN", "cannot access another merchant's payment")
 		return
 	}
@@ -268,7 +293,7 @@ func (h *PaymentHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 
 // ListPayments handles GET /v1/payments.
 func (h *PaymentHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
-	claims, ok := auth.ClaimsFromContext(r.Context())
+	merchantID, ok := merchantIDFromRequest(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
 		return
@@ -300,7 +325,7 @@ func (h *PaymentHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, total, err := h.svc.ListPayments(r.Context(), claims.MerchantID, params)
+	payments, total, err := h.svc.ListPayments(r.Context(), merchantID, params)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list payments")
 		return

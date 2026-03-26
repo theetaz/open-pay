@@ -1,12 +1,10 @@
-import { useState } from 'react'
-import { Card, CardContent } from '#/components/ui/card'
-import { Button } from '#/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
+import { useState, useMemo } from 'react'
+import type { ColumnDef } from '@tanstack/react-table'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
-import { EmptyState } from '#/components/dashboard/empty-state'
 import { PageHeader } from '#/components/dashboard/page-header'
-import { DollarSign, CreditCard, Clock, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { DataTable, type FilterConfig } from '#/components/data-table'
+import { DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
 import { useExchangeRate } from '#/hooks/use-exchange-rate'
@@ -14,18 +12,51 @@ import { formatDualAmount } from '#/lib/currency'
 
 const PER_PAGE = 20
 
+interface Payment {
+  id: string
+  paymentNo: string
+  merchantTradeNo?: string
+  createdAt: string
+  status: string
+  provider: string
+  amountUsdt: string
+  amount?: string
+  currency?: string
+  totalFeesUsdt: string
+  netAmountUsdt: string
+  exchangeRate?: string
+}
+
+const filters: FilterConfig[] = [
+  {
+    id: 'status',
+    label: 'Status',
+    type: 'select',
+    options: [
+      { label: 'All', value: '' },
+      { label: 'Paid', value: 'PAID' },
+      { label: 'Initiated', value: 'INITIATED' },
+      { label: 'Failed', value: 'FAILED' },
+      { label: 'Expired', value: 'EXPIRED' },
+    ],
+  },
+]
+
 export function PaymentsPage() {
   const [page, setPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [filterValues, setFilterValues] = useState<Record<string, string | string[]>>({ status: '' })
+  const [search, setSearch] = useState('')
+
+  const statusFilter = (filterValues.status as string) || ''
+
   const { data: meData } = useMe()
   const { data: paymentsData, isLoading } = usePayments({ page, perPage: PER_PAGE, status: statusFilter || undefined })
-
   const { data: rateData } = useExchangeRate()
+
   const primaryCurrency = meData?.data?.merchant?.defaultCurrency || 'LKR'
   const liveRate = rateData?.data?.effectiveRate || null
-  const payments = paymentsData?.data || []
+  const payments: Payment[] = paymentsData?.data || []
   const total = paymentsData?.meta?.total || 0
-  const totalPages = Math.ceil(total / PER_PAGE)
 
   // Calculate stats from all fetched payments
   const paidPayments = payments.filter((p) => p.status === 'PAID')
@@ -46,13 +77,108 @@ export function PaymentsPage() {
   const revenueFmt = formatDualAmount(totalRevenueUsdt, totalRevenueLkr > 0 ? totalRevenueLkr : undefined, 'LKR', primaryCurrency, liveRate)
   const feesFmt = formatDualAmount(totalFeesUsdt, totalFeesLkr > 0 ? totalFeesLkr : undefined, 'LKR', primaryCurrency, liveRate)
 
-  const statuses = [
-    { label: 'All', value: '' },
-    { label: 'Paid', value: 'PAID' },
-    { label: 'Initiated', value: 'INITIATED' },
-    { label: 'Failed', value: 'FAILED' },
-    { label: 'Expired', value: 'EXPIRED' },
-  ]
+  const columns: ColumnDef<Payment, any>[] = useMemo(
+    () => [
+      {
+        accessorKey: 'paymentNo',
+        header: 'Payment No',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-mono text-sm">{row.original.paymentNo}</p>
+            {row.original.merchantTradeNo && (
+              <p className="text-xs text-muted-foreground">{row.original.merchantTradeNo}</p>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'createdAt',
+        header: 'Date',
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            {new Date(row.original.createdAt).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'provider',
+        header: 'Provider',
+        cell: ({ row }) => <span className="text-sm">{row.original.provider}</span>,
+      },
+      {
+        id: 'amount',
+        header: 'Amount',
+        cell: ({ row }) => {
+          const p = row.original
+          const amt = formatDualAmount(p.amountUsdt, p.amount, p.currency, primaryCurrency, p.exchangeRate)
+          return (
+            <div className="text-right">
+              <p className="text-sm font-medium">{amt.primary}</p>
+              {amt.secondary && (
+                <p className="text-xs text-muted-foreground">({amt.secondary})</p>
+              )}
+              {p.exchangeRate && (
+                <p className="text-xs text-muted-foreground">@ {parseFloat(p.exchangeRate).toFixed(2)}</p>
+              )}
+            </div>
+          )
+        },
+      },
+      {
+        id: 'fees',
+        header: 'Fees',
+        cell: ({ row }) => {
+          const p = row.original
+          const fee = formatDualAmount(p.totalFeesUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
+          return (
+            <div className="text-right">
+              <p className="text-sm font-medium">{fee.primary}</p>
+              {fee.secondary && (
+                <p className="text-xs text-muted-foreground">({fee.secondary})</p>
+              )}
+            </div>
+          )
+        },
+      },
+      {
+        id: 'net',
+        header: 'Net',
+        cell: ({ row }) => {
+          const p = row.original
+          const net = formatDualAmount(p.netAmountUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
+          return (
+            <div className="text-right">
+              <p className="text-sm font-medium">{net.primary}</p>
+              {net.secondary && (
+                <p className="text-xs text-muted-foreground">({net.secondary})</p>
+              )}
+            </div>
+          )
+        },
+      },
+    ],
+    [primaryCurrency],
+  )
+
+  function handleFilterChange(id: string, value: string | string[]) {
+    setFilterValues((prev) => ({ ...prev, [id]: value }))
+    setPage(1)
+  }
+
+  function handleClearFilters() {
+    setFilterValues({ status: '' })
+    setPage(1)
+  }
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <>
@@ -82,110 +208,20 @@ export function PaymentsPage() {
         />
       </div>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-1 mb-4">
-        {statuses.map((s) => (
-          <Button
-            key={s.value}
-            variant={statusFilter === s.value ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => { setStatusFilter(s.value); setPage(1) }}
-          >
-            {s.label}
-          </Button>
-        ))}
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Payment No</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Fees</TableHead>
-                <TableHead className="text-right">Net</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <EmptyState
-                      message={isLoading ? 'Loading payments...' : 'No payments found.'}
-                      description={!isLoading ? 'Payments will appear here once transactions are processed.' : undefined}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                payments.map((p) => {
-                  const amt = formatDualAmount(p.amountUsdt, p.amount, p.currency, primaryCurrency, p.exchangeRate)
-                  const fee = formatDualAmount(p.totalFeesUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
-                  const net = formatDualAmount(p.netAmountUsdt, undefined, undefined, primaryCurrency, p.exchangeRate)
-
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <p className="font-mono text-sm">{p.paymentNo}</p>
-                        {p.merchantTradeNo && (
-                          <p className="text-xs text-muted-foreground">{p.merchantTradeNo}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {new Date(p.createdAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={p.status} />
-                      </TableCell>
-                      <TableCell className="text-sm">{p.provider}</TableCell>
-                      <TableCell className="text-right">
-                        <p className="text-sm font-medium">{amt.primary}</p>
-                        {amt.secondary && (
-                          <p className="text-xs text-muted-foreground">({amt.secondary})</p>
-                        )}
-                        {p.exchangeRate && (
-                          <p className="text-xs text-muted-foreground">@ {parseFloat(p.exchangeRate).toFixed(2)}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <p className="text-sm font-medium">{fee.primary}</p>
-                        {fee.secondary && (
-                          <p className="text-xs text-muted-foreground">({fee.secondary})</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <p className="text-sm font-medium">{net.primary}</p>
-                        {net.secondary && (
-                          <p className="text-xs text-muted-foreground">({net.secondary})</p>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
-              </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-                  <ChevronLeft className="size-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                  <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={payments}
+        filters={filters}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        search={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search payments..."
+        pagination={{ page, perPage: PER_PAGE, total }}
+        onPageChange={setPage}
+        isLoading={isLoading}
+      />
     </>
   )
 }

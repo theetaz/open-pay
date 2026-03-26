@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	minio "github.com/minio/minio-go/v7"
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
@@ -104,6 +105,10 @@ func main() {
 	// HTTP Handler
 	h := handler.NewMerchantHandler(svc, jwtSecret, auditClient, docRepo, minioClient, minioBucketName)
 	router := handler.NewRouter(h, branchRepo, paymentLinkRepo, uploadHandler)
+
+	// Internal routes (service-to-service, no auth)
+	internalHandler := handler.NewInternalHandler(apiKeyRepo)
+	handler.RegisterInternalRoutes(router.(*chi.Mux), internalHandler)
 
 	// Server
 	port := getEnv("PORT", "8082")

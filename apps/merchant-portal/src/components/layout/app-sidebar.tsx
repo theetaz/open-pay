@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
+  Plug,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -35,6 +36,7 @@ const navItems = [
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },
+  { title: 'Integrations', href: '/integrations', icon: Plug },
   { title: 'Audit Log', href: '/audit-log', icon: ScrollText },
   { title: 'Settings', href: '/settings', icon: Settings },
 ]

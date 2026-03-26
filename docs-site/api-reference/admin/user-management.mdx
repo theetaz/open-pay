@@ -1,0 +1,371 @@
+---
+title: "User Management"
+description: "Manage admin users, roles, and permissions for the platform"
+---
+
+## List Admin Users
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by user status. One of `active`, `deactivated`.
+</ParamField>
+
+<ParamField query="roleId" type="string">
+  Filter by assigned role.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/users?page=1&limit=10" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "admin_user_001",
+      "email": "admin@openpay.com",
+      "name": "John Admin",
+      "role": {
+        "id": "role_001",
+        "name": "super_admin"
+      },
+      "status": "active",
+      "lastLoginAt": "2026-03-25T16:00:00Z",
+      "createdAt": "2025-12-01T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 5,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## Create Admin User
+
+<ParamField body="email" type="string" required>
+  Email address for the new admin user. Must be unique.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Full name of the admin user.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Password for the account. Minimum 8 characters, must include uppercase, lowercase, and a number.
+</ParamField>
+
+<ParamField body="roleId" type="string" required>
+  The role to assign to the user.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/users" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "support@openpay.com",
+    "name": "Jane Support",
+    "password": "SecureP@ss456",
+    "roleId": "role_002"
+  }'
+```
+
+### Example Response (201)
+
+```json
+{
+  "id": "admin_user_002",
+  "email": "support@openpay.com",
+  "name": "Jane Support",
+  "role": {
+    "id": "role_002",
+    "name": "support_agent"
+  },
+  "status": "active",
+  "createdAt": "2026-03-26T10:00:00Z"
+}
+```
+
+---
+
+## Update Admin User
+
+<ParamField path="id" type="string" required>
+  The unique admin user identifier.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Updated full name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Updated email address.
+</ParamField>
+
+<ParamField body="roleId" type="string">
+  Updated role assignment.
+</ParamField>
+
+<ParamField body="password" type="string">
+  New password for the account.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X PUT "https://olp-api.nipuntheekshana.com/v1/admin/users/admin_user_002" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Support Lead",
+    "roleId": "role_003"
+  }'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "admin_user_002",
+  "email": "support@openpay.com",
+  "name": "Jane Support Lead",
+  "role": {
+    "id": "role_003",
+    "name": "support_lead"
+  },
+  "status": "active",
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T11:00:00Z"
+}
+```
+
+---
+
+## Deactivate Admin User
+
+Deactivate an admin user account. The user will no longer be able to log in.
+
+<ParamField path="id" type="string" required>
+  The unique admin user identifier.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/users/admin_user_002/deactivate" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "admin_user_002",
+  "status": "deactivated",
+  "message": "Admin user deactivated successfully"
+}
+```
+
+---
+
+## List Roles
+
+Retrieve all available roles and their permissions.
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/roles" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "role_001",
+      "name": "super_admin",
+      "description": "Full access to all platform features",
+      "permissions": [
+        "merchants.view",
+        "merchants.approve",
+        "merchants.reject",
+        "merchants.freeze",
+        "merchants.terminate",
+        "withdrawals.view",
+        "withdrawals.manage",
+        "settings.view",
+        "settings.update",
+        "users.view",
+        "users.manage",
+        "roles.view",
+        "roles.manage",
+        "audit_logs.view"
+      ],
+      "createdAt": "2025-12-01T00:00:00Z",
+      "updatedAt": "2025-12-01T00:00:00Z"
+    },
+    {
+      "id": "role_002",
+      "name": "support_agent",
+      "description": "View merchants and handle basic support tasks",
+      "permissions": [
+        "merchants.view",
+        "withdrawals.view",
+        "audit_logs.view"
+      ],
+      "createdAt": "2025-12-01T00:00:00Z",
+      "updatedAt": "2026-01-15T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Create Role
+
+<ParamField body="name" type="string" required>
+  Unique role name (e.g., `finance_manager`). Must be lowercase with underscores.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Human-readable description of the role.
+</ParamField>
+
+<ParamField body="permissions" type="string[]" required>
+  List of permission strings to assign to the role.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/roles" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "finance_manager",
+    "description": "Manage withdrawals and view financial reports",
+    "permissions": [
+      "merchants.view",
+      "withdrawals.view",
+      "withdrawals.manage",
+      "audit_logs.view"
+    ]
+  }'
+```
+
+### Example Response (201)
+
+```json
+{
+  "id": "role_003",
+  "name": "finance_manager",
+  "description": "Manage withdrawals and view financial reports",
+  "permissions": [
+    "merchants.view",
+    "withdrawals.view",
+    "withdrawals.manage",
+    "audit_logs.view"
+  ],
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T10:00:00Z"
+}
+```
+
+---
+
+## Update Role
+
+<ParamField path="id" type="string" required>
+  The unique role identifier.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Updated role name.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Updated description.
+</ParamField>
+
+<ParamField body="permissions" type="string[]">
+  Updated list of permissions. This replaces the entire permissions list.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X PUT "https://olp-api.nipuntheekshana.com/v1/admin/roles/role_003" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": [
+      "merchants.view",
+      "withdrawals.view",
+      "withdrawals.manage",
+      "settings.view",
+      "audit_logs.view"
+    ]
+  }'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "role_003",
+  "name": "finance_manager",
+  "description": "Manage withdrawals and view financial reports",
+  "permissions": [
+    "merchants.view",
+    "withdrawals.view",
+    "withdrawals.manage",
+    "settings.view",
+    "audit_logs.view"
+  ],
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T12:00:00Z"
+}
+```
+
+### Error Responses
+
+```json 409 Conflict
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "A role with this name already exists"
+  }
+}
+```
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "User not found"
+  }
+}
+```

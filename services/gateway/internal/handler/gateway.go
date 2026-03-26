@@ -20,6 +20,7 @@ type GatewayConfig struct {
 	ServiceProxy       *proxy.ServiceProxy
 	RateLimitPerMinute int
 	RateLimiter        middleware.RateLimiter
+	KeyValidator       middleware.KeyValidator
 	GatewayPort        string
 	PlatformFeePct     string
 	ExchangeFeePct     string
@@ -83,6 +84,11 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/merchants/{id}/directors/{directorId}/resend", p.ProxyToMerchant)
 	r.Delete("/v1/merchants/{id}/directors/{directorId}", p.ProxyToMerchant)
 
+	// API key management routes → merchant service (JWT auth)
+	r.Post("/v1/api-keys", p.ProxyToMerchant)
+	r.Get("/v1/api-keys", p.ProxyToMerchant)
+	r.Delete("/v1/api-keys/{id}", p.ProxyToMerchant)
+
 	// File upload routes → merchant service
 	r.Post("/v1/uploads", p.ProxyToMerchant)
 	r.Delete("/v1/uploads", p.ProxyToMerchant)
@@ -136,6 +142,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)
 	r.Post("/v1/webhooks/test", p.ProxyToWebhook)
+	r.Get("/v1/webhooks/deliveries", p.ProxyToWebhook)
 
 	// Subscription routes → subscription service
 	r.Post("/v1/subscription-plans", p.ProxyToSubscription)
@@ -221,6 +228,26 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 		r.Post("/v1/admin/withdrawals/{id}/reject", rewritePath("/v1/withdrawals/{id}/reject", p.ProxyToSettlement))
 		r.Post("/v1/admin/withdrawals/{id}/complete", rewritePath("/v1/withdrawals/{id}/complete", p.ProxyToSettlement))
 	})
+
+	// SDK routes — HMAC-authenticated for API key users
+	if cfg.KeyValidator != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.HMACAuth(cfg.KeyValidator))
+
+			// Payment operations via SDK
+			r.Post("/v1/sdk/payments", rewritePathSDK("/v1/payments", p.ProxyToPayment))
+			r.Get("/v1/sdk/payments/{id}", rewritePathSDK("/v1/payments/{id}", p.ProxyToPayment))
+			r.Get("/v1/sdk/payments", rewritePathSDK("/v1/payments", p.ProxyToPayment))
+
+			// Checkout sessions via SDK
+			r.Post("/v1/sdk/checkout/sessions", rewritePathSDK("/v1/checkout/sessions", p.ProxyToPayment))
+
+			// Webhook configuration via SDK
+			r.Post("/v1/sdk/webhooks/configure", rewritePathSDK("/v1/webhooks/configure", p.ProxyToWebhook))
+			r.Get("/v1/sdk/webhooks/public-key", rewritePathSDK("/v1/webhooks/public-key", p.ProxyToWebhook))
+			r.Post("/v1/sdk/webhooks/test", rewritePathSDK("/v1/webhooks/test", p.ProxyToWebhook))
+		})
+	}
 
 	return r
 }
@@ -325,6 +352,26 @@ func requestID(next http.Handler) http.Handler {
 // The Authorization header is removed because the gateway already validated the admin JWT;
 // downstream services may use a different JWT secret and would reject it.
 func rewritePath(template string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		newPath := template
+		rctx := chi.RouteContext(r.Context())
+		if rctx != nil {
+			for i, key := range rctx.URLParams.Keys {
+				if i < len(rctx.URLParams.Values) {
+					newPath = strings.Replace(newPath, "{"+key+"}", rctx.URLParams.Values[i], 1)
+				}
+			}
+		}
+		r.URL.Path = newPath
+		r.Header.Del("Authorization")
+		r.Header.Set("X-Internal-Admin", "true")
+		next.ServeHTTP(w, r)
+	}
+}
+
+// rewritePathSDK rewrites the URL path for SDK routes.
+// Sets X-Internal-Admin to bypass downstream JWT middleware (gateway already validated HMAC).
+func rewritePathSDK(template string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		newPath := template
 		rctx := chi.RouteContext(r.Context())

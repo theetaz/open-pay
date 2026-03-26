@@ -1,0 +1,265 @@
+---
+title: Deployment Guide
+description: "Deploy and configure Open Pay smart contracts on BSC"
+---
+
+# Deployment Guide
+
+This guide covers how to deploy the Open Pay smart contracts to BSC Testnet (or Mainnet) and configure them for your environment.
+
+## Current Testnet Deployment
+
+All contracts are live on **BSC Testnet (Chain ID 97)**:
+
+| Contract | Address | Purpose |
+|---|---|---|
+| **OpenPayEscrow** | `0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2` | Payment escrow |
+| **OpenPayPriceFeed** | `0x1f34e070D4BB1eD3AaF37D8E3297b0a9A12a3399` | Price oracle aggregator |
+| **MockUSDT** | Testnet ERC-20 | Test USDT token |
+| **MockUSDC** | Testnet ERC-20 | Test USDC token |
+| **MockPriceFeed** | Testnet contract | Simulated Chainlink oracle |
+
+<Info>
+  These testnet contracts use mock tokens and mock price feeds. For production, you would use real token addresses and Chainlink oracle feeds.
+</Info>
+
+## Deploy Your Own
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) v18+
+- [Hardhat](https://hardhat.org/) or [Foundry](https://book.getfoundry.sh/)
+- A BSC Testnet wallet with test BNB (get from [BNB Faucet](https://testnet.bnbchain.org/faucet-smart))
+- A [BscScan API key](https://bscscan.com/apis) for contract verification
+
+### Environment Setup
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/theetaz/open-pay.git
+    cd open-pay/contracts
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the `contracts` directory:
+
+    ```bash
+    # Private key of the deployer wallet (without 0x prefix)
+    DEPLOYER_PRIVATE_KEY=your_private_key_here
+
+    # BSC Testnet RPC URL
+    BSC_TESTNET_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
+
+    # BSC Mainnet RPC URL (for production)
+    BSC_MAINNET_RPC_URL=https://bsc-dataseed1.bnbchain.org
+
+    # BscScan API key for contract verification
+    BSCSCAN_API_KEY=your_bscscan_api_key
+
+    # Platform fee in basis points (200 = 2%)
+    PLATFORM_FEE_BPS=200
+
+    # Fee recipient address
+    FEE_RECIPIENT=0xYourFeeRecipientAddress
+    ```
+
+    <Warning>
+      Never commit your `.env` file to version control. The deployer private key controls the contract and all escrowed funds.
+    </Warning>
+  </Step>
+
+  <Step title="Deploy Contracts">
+    Deploy to BSC Testnet:
+
+    ```bash
+    npx hardhat run scripts/deploy.ts --network bscTestnet
+    ```
+
+    The deployment script deploys contracts in this order:
+
+    1. **MockPriceFeed** -- simulated Chainlink oracle (testnet only)
+    2. **MockUSDT** -- test USDT token (testnet only)
+    3. **MockUSDC** -- test USDC token (testnet only)
+    4. **OpenPayPriceFeed** -- price aggregator
+    5. **OpenPayEscrow** -- payment escrow
+
+    After deployment, the script configures:
+    - Token price feeds on `OpenPayPriceFeed`
+    - Supported tokens on `OpenPayEscrow`
+    - Price feed address on `OpenPayEscrow`
+  </Step>
+
+  <Step title="Verify on BscScan">
+    Verify each contract on BscScan for public source code access:
+
+    ```bash
+    # Verify OpenPayEscrow
+    npx hardhat verify --network bscTestnet \
+      0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2 \
+      200 \
+      0xYourFeeRecipientAddress
+
+    # Verify OpenPayPriceFeed
+    npx hardhat verify --network bscTestnet \
+      0x1f34e070D4BB1eD3AaF37D8E3297b0a9A12a3399
+    ```
+
+    <Tip>
+      Verification makes your contract source code publicly readable on BscScan, which builds trust with users and merchants.
+    </Tip>
+  </Step>
+</Steps>
+
+## Adding New Tokens
+
+To support a new ERC-20 token for payments:
+
+<Steps>
+  <Step title="Configure the Price Feed">
+    Register the token with a Chainlink price feed on the `OpenPayPriceFeed` contract:
+
+    ```solidity
+    // For a volatile token (e.g., WETH), provide a Chainlink feed
+    priceFeed.configureToken(
+        0xTokenAddress,     // ERC-20 token address
+        0xChainlinkFeed,    // Chainlink price feed address
+        false               // Not a stablecoin
+    );
+
+    // For a stablecoin (e.g., DAI), no feed needed
+    priceFeed.configureToken(
+        0xDAIAddress,       // DAI token address
+        address(0),         // No feed required
+        true                // Is a stablecoin ($1.00)
+    );
+    ```
+  </Step>
+
+  <Step title="Enable on Escrow">
+    Mark the token as supported on the `OpenPayEscrow` contract:
+
+    ```solidity
+    escrow.setSupportedToken(0xTokenAddress, true);
+    ```
+  </Step>
+
+  <Step title="Update Backend">
+    Add the token configuration to the Open Pay backend so the API knows about the new payment option. Update the token list in the service configuration.
+  </Step>
+</Steps>
+
+## Switching to Mainnet
+
+When deploying to BSC Mainnet (Chain ID 56), make these changes:
+
+<Steps>
+  <Step title="Use Real Token Addresses">
+    Replace mock tokens with mainnet addresses:
+
+    | Token | Mainnet Address |
+    |---|---|
+    | USDT (BEP-20) | `0x55d398326f99059fF775485246999027B3197955` |
+    | USDC (BEP-20) | `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d` |
+    | WBNB | `0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c` |
+  </Step>
+
+  <Step title="Use Real Chainlink Feeds">
+    Replace mock price feeds with mainnet Chainlink oracles:
+
+    | Pair | Mainnet Feed Address |
+    |---|---|
+    | BNB/USD | `0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE` |
+    | BTC/USD | `0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf` |
+    | ETH/USD | `0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e` |
+
+    <Info>
+      Find all Chainlink BSC feeds at [data.chain.link](https://data.chain.link/bsc/mainnet).
+    </Info>
+  </Step>
+
+  <Step title="Deploy to Mainnet">
+    ```bash
+    npx hardhat run scripts/deploy.ts --network bscMainnet
+    ```
+  </Step>
+
+  <Step title="Verify and Configure">
+    - Verify contracts on [BscScan Mainnet](https://bscscan.com)
+    - Configure all token price feeds
+    - Set the fee recipient to your production address
+    - Update the platform backend with the new contract addresses
+  </Step>
+</Steps>
+
+## Hardhat Configuration
+
+Example `hardhat.config.ts` for BSC networks:
+
+```typescript
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+const config: HardhatUserConfig = {
+  solidity: {
+    version: "0.8.24",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
+  networks: {
+    bscTestnet: {
+      url: process.env.BSC_TESTNET_RPC_URL || "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+      chainId: 97,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+    bscMainnet: {
+      url: process.env.BSC_MAINNET_RPC_URL || "https://bsc-dataseed1.bnbchain.org",
+      chainId: 56,
+      accounts: process.env.DEPLOYER_PRIVATE_KEY
+        ? [process.env.DEPLOYER_PRIVATE_KEY]
+        : [],
+    },
+  },
+  etherscan: {
+    apiKey: {
+      bscTestnet: process.env.BSCSCAN_API_KEY || "",
+      bsc: process.env.BSCSCAN_API_KEY || "",
+    },
+  },
+};
+
+export default config;
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Transaction reverts with 'Stale price'">
+    The Chainlink oracle data is older than the staleness threshold (default 1 hour). On testnet, mock feeds may not auto-update. Call the mock feed's `updateAnswer()` to refresh the price, or increase the staleness threshold.
+  </Accordion>
+  <Accordion title="'Token not configured' error">
+    The token has not been registered with the price feed contract. Call `priceFeed.configureToken()` to register it.
+  </Accordion>
+  <Accordion title="'Insufficient allowance' on createPayment">
+    The payer has not approved the escrow contract to spend their tokens. The payer must call `token.approve(escrowAddress, amount)` before creating a payment.
+  </Accordion>
+  <Accordion title="Verification fails on BscScan">
+    Ensure you are using the exact same compiler version and optimization settings as the deployment. Check that constructor arguments match exactly.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,206 @@
+---
+title: Java SDK
+description: "Official Java SDK for the Open Pay API"
+---
+
+# Java SDK
+
+The `com.openpay:openpay-sdk` artifact provides a Java client for the Open Pay API. Requires Java 11+.
+
+## Installation
+
+<Tabs>
+  <Tab title="Maven">
+    ```xml
+    <dependency>
+        <groupId>com.openpay</groupId>
+        <artifactId>openpay-sdk</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+    ```
+  </Tab>
+  <Tab title="Gradle (Kotlin)">
+    ```kotlin
+    implementation("com.openpay:openpay-sdk:1.0.0")
+    ```
+  </Tab>
+  <Tab title="Gradle (Groovy)">
+    ```groovy
+    implementation 'com.openpay:openpay-sdk:1.0.0'
+    ```
+  </Tab>
+</Tabs>
+
+## Initialization
+
+```java
+import com.openpay.OpenPayClient;
+
+OpenPayClient client = OpenPayClient.builder()
+    .apiKey(System.getenv("OPENPAY_API_KEY"))
+    .apiSecret(System.getenv("OPENPAY_API_SECRET"))
+    .baseUrl("https://olp-api.nipuntheekshana.com") // optional, this is the default
+    .build();
+```
+
+<Warning>
+  Store your API credentials in environment variables or a secrets manager. Never hardcode them in source code.
+</Warning>
+
+## Create a Payment
+
+```java
+import com.openpay.model.Payment;
+import com.openpay.request.CreatePaymentRequest;
+
+CreatePaymentRequest request = CreatePaymentRequest.builder()
+    .amount(50.00)
+    .currency("USD")
+    .description("Invoice #1234")
+    .metadata(Map.of(
+        "orderId", "order_abc123",
+        "customerId", "cust_456"
+    ))
+    .build();
+
+Payment payment = client.payments().create(request);
+
+System.out.println("Payment ID: " + payment.getId());
+System.out.println("Status: " + payment.getStatus());
+System.out.println("Wallet: " + payment.getWalletAddress());
+```
+
+## Create a Checkout Session
+
+```java
+import com.openpay.model.CheckoutSession;
+import com.openpay.request.CreateCheckoutSessionRequest;
+
+CreateCheckoutSessionRequest request = CreateCheckoutSessionRequest.builder()
+    .amount(25.00)
+    .currency("USD")
+    .description("Premium Plan - Monthly")
+    .metadata(Map.of(
+        "orderId", "order_12345",
+        "customerId", "cust_67890"
+    ))
+    .successUrl("https://yoursite.com/payment/success")
+    .cancelUrl("https://yoursite.com/payment/cancel")
+    .build();
+
+CheckoutSession session = client.checkout().createSession(request);
+
+// Redirect the customer to this URL
+System.out.println("Checkout URL: " + session.getCheckoutUrl());
+```
+
+## Verify Webhook Signature
+
+Using Spring Boot:
+
+```java
+import com.openpay.OpenPayClient;
+import com.openpay.model.WebhookEvent;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+public class WebhookController {
+
+    private final OpenPayClient client;
+
+    public WebhookController() {
+        this.client = OpenPayClient.builder()
+            .apiKey(System.getenv("OPENPAY_API_KEY"))
+            .apiSecret(System.getenv("OPENPAY_API_SECRET"))
+            .build();
+    }
+
+    @PostMapping("/api/webhooks/openpay")
+    public Map<String, Boolean> handleWebhook(
+            @RequestBody String payload,
+            @RequestHeader("X-Webhook-Signature") String signature,
+            @RequestHeader("X-Webhook-Timestamp") String timestamp) {
+
+        boolean isValid = client.webhooks().verifySignature(
+            payload, signature, timestamp
+        );
+
+        if (!isValid) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid signature");
+        }
+
+        WebhookEvent event = client.webhooks().parseEvent(payload);
+
+        switch (event.getType()) {
+            case "payment.completed":
+                System.out.println("Payment completed: " + event.getData().getPaymentId());
+                // Fulfill the order
+                break;
+            case "payment.failed":
+                System.out.println("Payment failed: " + event.getData().getPaymentId());
+                break;
+            case "payment.expired":
+                System.out.println("Payment expired: " + event.getData().getPaymentId());
+                break;
+        }
+
+        return Map.of("received", true);
+    }
+}
+```
+
+## List Payments
+
+```java
+import com.openpay.model.PaymentList;
+import com.openpay.request.ListPaymentsRequest;
+
+ListPaymentsRequest request = ListPaymentsRequest.builder()
+    .page(1)
+    .limit(20)
+    .status("completed")
+    .build();
+
+PaymentList payments = client.payments().list(request);
+
+for (Payment p : payments.getData()) {
+    System.out.printf("%s: %.2f %s - %s%n",
+        p.getId(), p.getAmount(), p.getCurrency(), p.getStatus());
+}
+```
+
+## Error Handling
+
+```java
+import com.openpay.exception.OpenPayException;
+
+try {
+    Payment payment = client.payments().create(request);
+} catch (OpenPayException e) {
+    System.err.printf("API Error %d: %s (code: %s)%n",
+        e.getStatusCode(), e.getMessage(), e.getErrorCode());
+} catch (Exception e) {
+    System.err.println("Unexpected error: " + e.getMessage());
+}
+```
+
+| Method | Return Type | Description |
+|---|---|---|
+| `getStatusCode()` | `int` | HTTP status code |
+| `getMessage()` | `String` | Human-readable error message |
+| `getErrorCode()` | `String` | Machine-readable error code (e.g., `INVALID_AMOUNT`) |
+
+## Async Support
+
+The SDK provides async variants of all methods that return `CompletableFuture`:
+
+```java
+CompletableFuture<Payment> future = client.payments().createAsync(request);
+
+future.thenAccept(payment -> {
+    System.out.println("Payment created: " + payment.getId());
+}).exceptionally(throwable -> {
+    System.err.println("Failed: " + throwable.getMessage());
+    return null;
+});
+```

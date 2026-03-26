@@ -1,0 +1,204 @@
+---
+title: Quickstart
+description: "Start accepting crypto payments with Open Pay in under 5 minutes"
+---
+
+# Quickstart
+
+This guide walks you through integrating Open Pay into your application. By the end, you will be able to create checkout sessions and handle payment webhooks.
+
+<Info>
+  You need a verified merchant account to get API keys. The verification process typically takes under 24 hours.
+</Info>
+
+<Steps>
+  <Step title="Create a Merchant Account">
+    Sign up at the [Merchant Portal](https://olp-merchant.nipuntheekshana.com) with your email and password. You will receive a confirmation email to verify your address.
+
+    ```
+    https://olp-merchant.nipuntheekshana.com/register
+    ```
+  </Step>
+
+  <Step title="Complete KYC Verification">
+    After signing in, navigate to **Settings > KYC Verification** and submit the required documents:
+
+    - Business registration certificate
+    - National ID or passport of the business owner
+    - Bank account details for fiat settlement (LKR)
+
+    The admin team will review and approve your application. You will receive an email once your account is verified.
+
+    <Warning>
+      You cannot generate API keys or process payments until KYC verification is complete.
+    </Warning>
+  </Step>
+
+  <Step title="Get Your API Keys">
+    Once verified, go to the **Integrations** page in the Merchant Portal:
+
+    ```
+    https://olp-merchant.nipuntheekshana.com/integrations
+    ```
+
+    Click **Generate API Key** to create a new key pair. You will receive:
+
+    | Credential | Description |
+    |---|---|
+    | **API Key** | Public identifier sent in the `X-API-Key` header |
+    | **API Secret** | Used to compute HMAC-SHA256 signatures (never expose this client-side) |
+
+    <Warning>
+      The API Secret is shown only once. Copy it immediately and store it in a secure location such as an environment variable or secrets manager.
+    </Warning>
+  </Step>
+
+  <Step title="Install the SDK">
+    Install the Open Pay SDK for your language of choice.
+
+    <CodeGroup>
+      ```bash npm
+      npm install @openpay/sdk
+      ```
+
+      ```bash yarn
+      yarn add @openpay/sdk
+      ```
+
+      ```bash pnpm
+      pnpm add @openpay/sdk
+      ```
+    </CodeGroup>
+
+    Initialize the client with your credentials:
+
+    ```typescript
+    import { OpenPay } from "@openpay/sdk";
+
+    const client = new OpenPay({
+      apiKey: process.env.OPENPAY_API_KEY!,
+      apiSecret: process.env.OPENPAY_API_SECRET!,
+      baseUrl: "https://olp-api.nipuntheekshana.com",
+    });
+    ```
+
+    <Info>
+      The SDK handles HMAC-SHA256 request signing automatically. You do not need to compute signatures manually.
+    </Info>
+  </Step>
+
+  <Step title="Create a Checkout Session">
+    A checkout session generates a hosted payment page where your customer can pay with crypto.
+
+    ```typescript
+    const session = await client.checkout.createSession({
+      amount: 25.0,
+      currency: "USD",
+      description: "Premium Plan - Monthly",
+      metadata: {
+        orderId: "order_12345",
+        customerId: "cust_67890",
+      },
+      successUrl: "https://yoursite.com/payment/success",
+      cancelUrl: "https://yoursite.com/payment/cancel",
+    });
+
+    // Redirect the customer to the hosted checkout page
+    console.log(session.checkoutUrl);
+    // => https://olp-api.nipuntheekshana.com/checkout/cs_abc123...
+    ```
+
+    The response includes:
+
+    | Field | Description |
+    |---|---|
+    | `id` | Unique session identifier (e.g., `cs_abc123`) |
+    | `checkoutUrl` | URL to redirect your customer to |
+    | `paymentId` | Associated payment record ID |
+    | `expiresAt` | Session expiry timestamp (default: 30 minutes) |
+    | `status` | Session status: `pending`, `completed`, `expired` |
+  </Step>
+
+  <Step title="Handle the Webhook Callback">
+    When a payment is confirmed on-chain, Open Pay sends a webhook to your configured endpoint. Webhooks are signed with ED25519 for authenticity.
+
+    First, configure your webhook URL in the Merchant Portal under **Integrations > Webhooks**, or via the API:
+
+    ```typescript
+    await client.webhooks.configure({
+      url: "https://yoursite.com/api/webhooks/openpay",
+      events: ["payment.completed", "payment.failed"],
+    });
+    ```
+
+    Then, set up a handler to verify and process incoming webhooks:
+
+    ```typescript
+    import { OpenPay } from "@openpay/sdk";
+    import express from "express";
+
+    const app = express();
+
+    app.post(
+      "/api/webhooks/openpay",
+      express.raw({ type: "application/json" }),
+      async (req, res) => {
+        const signature = req.headers["x-webhook-signature"] as string;
+        const timestamp = req.headers["x-webhook-timestamp"] as string;
+
+        // Verify the ED25519 signature
+        const isValid = await client.webhooks.verifySignature({
+          payload: req.body,
+          signature,
+          timestamp,
+        });
+
+        if (!isValid) {
+          return res.status(401).json({ error: "Invalid signature" });
+        }
+
+        const event = JSON.parse(req.body.toString());
+
+        switch (event.type) {
+          case "payment.completed":
+            // Fulfill the order
+            console.log("Payment completed:", event.data.paymentId);
+            await fulfillOrder(event.data.metadata.orderId);
+            break;
+
+          case "payment.failed":
+            // Handle failure
+            console.log("Payment failed:", event.data.paymentId);
+            break;
+        }
+
+        // Respond with 200 to acknowledge receipt
+        res.status(200).json({ received: true });
+      }
+    );
+
+    app.listen(3000);
+    ```
+
+    <Info>
+      Always return a `200` status within 10 seconds. If your endpoint fails or times out, Open Pay retries with exponential backoff (up to 5 attempts over 24 hours).
+    </Info>
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/authentication">
+    Understand JWT, HMAC, and ED25519 auth mechanisms in depth
+  </Card>
+  <Card title="Payment Flow" icon="arrows-spin" href="/guides/payment-flow">
+    Full lifecycle of a payment from creation to settlement
+  </Card>
+  <Card title="Webhooks Guide" icon="bell" href="/guides/webhooks">
+    Advanced webhook configuration, retry policies, and event types
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Explore all 80+ API endpoints with examples
+  </Card>
+</CardGroup>

@@ -53,6 +53,28 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Background retry worker — polls for failed deliveries and retries them
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		logger.Info().Msg("webhook retry worker started (30s interval)")
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info().Msg("webhook retry worker stopped")
+				return
+			case <-ticker.C:
+				retried, err := svc.RetryPending(ctx)
+				if err != nil {
+					logger.Error().Err(err).Msg("retry worker error")
+				} else if retried > 0 {
+					logger.Info().Int("count", retried).Msg("retried webhook deliveries")
+				}
+			}
+		}
+	}()
+
 	// Graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)

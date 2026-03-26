@@ -1,0 +1,20 @@
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "deployer": "0xef196df88f6F5F1aD7e579f535B341560a6EaB3E",
+  "deployedAt": "2026-03-26",
+  "contracts": {
+    "MockUSDT": "0x98e2146A4381C74708782D03dAd3913b0388954A",
+    "MockUSDC": "0xE2b9aB57304C8AFc7068940c03EE202e0B8D4CEC",
+    "BNBUSDFeed": "0x98e9C8Ff491C563AB87935C5F4C704Da2F39A80D",
+    "USDTUSDFeed": "0x20f21e195d92c54993d6d64CBbFE4bF87a6293Ae",
+    "OpenPayPriceFeed": "0x1f34e070D4BB1eD3AaF37D8E3297b0a9A12a3399",
+    "OpenPayEscrow": "0xe50464081b781AFE101EB40bC7e68Fd017c5e8f2"
+  },
+  "config": {
+    "platformFeeBps": 200,
+    "slippageBps": 200,
+    "stalenessThreshold": 3600,
+    "supportedTokens": ["mUSDT", "mUSDC", "BNB (native)"]
+  }
+}

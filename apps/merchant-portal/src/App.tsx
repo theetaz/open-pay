@@ -15,6 +15,7 @@ import { SettingsPage } from '#/pages/settings'
 import { ProfilePage } from '#/pages/profile'
 import { SecurityPage } from '#/pages/security'
 import { AuditLogPage } from '#/pages/audit-log'
+import { IntegrationsPage } from '#/pages/integrations'
 import { ExamplePage } from '#/pages/example'
 import { PaymentLinkCheckout } from '#/pages/pay-slug'
 import { CheckoutPage } from '#/pages/checkout'
@@ -40,6 +41,7 @@ export function App() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="security" element={<SecurityPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
         <Route path="example" element={<ExamplePage />} />
       </Route>

@@ -1,0 +1,178 @@
+---
+title: "Branches"
+description: "Create and manage merchant branch locations for point-of-sale integrations"
+---
+
+Branches represent physical store locations for a merchant. Each branch can have its own POS terminals and payment settings.
+
+---
+
+## Create Branch
+
+```
+POST /v1/branches
+```
+
+<Note>
+  Requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Branch display name (e.g., `Colombo Main Store`).
+</ParamField>
+
+<ParamField body="address" type="string" required>
+  Physical address of the branch.
+</ParamField>
+
+<ParamField body="city" type="string" required>
+  City where the branch is located.
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Branch contact phone number.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "name": "Colombo Main Store",
+  "address": "123 Galle Road, Colombo 03",
+  "city": "Colombo",
+  "phone": "+94112345678"
+}
+```
+
+### Example Response (201)
+
+```json
+{
+  "id": "branch_abc123",
+  "merchantId": "merch_abc123",
+  "name": "Colombo Main Store",
+  "address": "123 Galle Road, Colombo 03",
+  "city": "Colombo",
+  "phone": "+94112345678",
+  "status": "active",
+  "createdAt": "2026-03-26T10:00:00Z"
+}
+```
+
+---
+
+## List Branches
+
+```
+GET /v1/branches
+```
+
+Returns all branches for the authenticated merchant.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "branch_abc123",
+      "name": "Colombo Main Store",
+      "address": "123 Galle Road, Colombo 03",
+      "city": "Colombo",
+      "status": "active",
+      "createdAt": "2026-03-26T10:00:00Z"
+    },
+    {
+      "id": "branch_def456",
+      "name": "Kandy Branch",
+      "address": "45 Peradeniya Road, Kandy",
+      "city": "Kandy",
+      "status": "active",
+      "createdAt": "2026-03-20T14:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 2,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## Get Branch
+
+```
+GET /v1/branches/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The branch identifier (e.g., `branch_abc123`).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "id": "branch_abc123",
+  "merchantId": "merch_abc123",
+  "name": "Colombo Main Store",
+  "address": "123 Galle Road, Colombo 03",
+  "city": "Colombo",
+  "phone": "+94112345678",
+  "status": "active",
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T10:00:00Z"
+}
+```
+
+---
+
+## Delete Branch
+
+```
+DELETE /v1/branches/{id}
+```
+
+Permanently deletes a branch. Active POS terminals associated with the branch will be deactivated.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The branch identifier (e.g., `branch_abc123`).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "message": "Branch deleted successfully"
+}
+```
+
+### Error Responses
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Branch not found"
+  }
+}
+```

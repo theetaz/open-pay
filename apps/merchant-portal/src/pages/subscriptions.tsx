@@ -1,12 +1,10 @@
 import * as React from 'react'
-import { Card, CardContent } from '#/components/ui/card'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
-import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Plus, RefreshCw, Users, Loader2, DollarSign } from 'lucide-react'
 import { usePlans, useSubscriptions, useCreatePlan, useArchivePlan, useCancelSubscription } from '#/hooks/use-subscriptions'
@@ -29,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select'
+import type { ColumnDef } from '@tanstack/react-table'
 
 export function SubscriptionsPage() {
   const { data: plansData } = usePlans()
@@ -46,6 +45,225 @@ export function SubscriptionsPage() {
   const activeSubs = subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'TRIAL')
   const totalSubRevenue = subscriptions.reduce((sum, s) => sum + parseFloat(s.totalPaidUsdt || '0'), 0)
   const subRevenueFmt = formatDualAmount(totalSubRevenue, undefined, undefined, primaryCurrency, liveRate)
+
+  // Plans tab state
+  const [plansSearch, setPlansSearch] = React.useState('')
+  const [plansFilterValues, setPlansFilterValues] = React.useState<Record<string, string | string[]>>({ status: '' })
+
+  // Subscribers tab state
+  const [subsSearch, setSubsSearch] = React.useState('')
+  const [subsFilterValues, setSubsFilterValues] = React.useState<Record<string, string | string[]>>({ status: '' })
+
+  const plansFilters: FilterConfig[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { label: 'Active', value: 'ACTIVE' },
+        { label: 'Archived', value: 'ARCHIVED' },
+      ],
+    },
+  ]
+
+  const subsFilters: FilterConfig[] = [
+    {
+      id: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { label: 'Active', value: 'ACTIVE' },
+        { label: 'Trial', value: 'TRIAL' },
+        { label: 'Cancelled', value: 'CANCELLED' },
+        { label: 'Expired', value: 'EXPIRED' },
+      ],
+    },
+  ]
+
+  const filteredPlans = React.useMemo(() => {
+    let result = plans
+
+    if (plansSearch) {
+      const q = plansSearch.toLowerCase()
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.description && p.description.toLowerCase().includes(q)),
+      )
+    }
+
+    const statusFilter = plansFilterValues.status
+    if (statusFilter && typeof statusFilter === 'string' && statusFilter !== '') {
+      result = result.filter((p) => p.status === statusFilter)
+    }
+
+    return result
+  }, [plans, plansSearch, plansFilterValues])
+
+  const filteredSubs = React.useMemo(() => {
+    let result = subscriptions
+
+    if (subsSearch) {
+      const q = subsSearch.toLowerCase()
+      result = result.filter((s) => s.subscriberEmail.toLowerCase().includes(q))
+    }
+
+    const statusFilter = subsFilterValues.status
+    if (statusFilter && typeof statusFilter === 'string' && statusFilter !== '') {
+      result = result.filter((s) => s.status === statusFilter)
+    }
+
+    return result
+  }, [subscriptions, subsSearch, subsFilterValues])
+
+  const planColumns: ColumnDef<(typeof plans)[number], any>[] = React.useMemo(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium">{row.original.name}</p>
+            {row.original.description && (
+              <p className="text-xs text-muted-foreground">{row.original.description}</p>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'amount',
+        header: 'Amount',
+        cell: ({ row }) => (
+          <span className="font-medium">{formatAmount(row.original.amount, row.original.currency)}</span>
+        ),
+      },
+      {
+        id: 'interval',
+        header: 'Interval',
+        cell: ({ row }) => {
+          const p = row.original
+          return (
+            <span className="text-sm">
+              Every {p.intervalCount > 1 ? `${p.intervalCount} ` : ''}
+              {p.intervalType.toLowerCase()}
+              {p.intervalCount > 1 ? 's' : ''}
+            </span>
+          )
+        },
+      },
+      {
+        accessorKey: 'trialDays',
+        header: 'Trial',
+        cell: ({ row }) => (
+          <span className="text-sm">
+            {row.original.trialDays > 0 ? `${row.original.trialDays} days` : '-'}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'createdAt',
+        header: 'Created',
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        enableHiding: false,
+        cell: ({ row }) => {
+          const p = row.original
+          return p.status === 'ACTIVE' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => archivePlan.mutate(p.id)}
+              disabled={archivePlan.isPending}
+            >
+              Archive
+            </Button>
+          ) : null
+        },
+      },
+    ],
+    [archivePlan],
+  )
+
+  const subColumns: ColumnDef<(typeof subscriptions)[number], any>[] = React.useMemo(
+    () => [
+      {
+        accessorKey: 'subscriberEmail',
+        header: 'Email',
+        cell: ({ row }) => <span className="font-medium">{row.original.subscriberEmail}</span>,
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'nextBillingDate',
+        header: 'Next Billing',
+        cell: ({ row }) => (
+          <span className="text-sm">{new Date(row.original.nextBillingDate).toLocaleDateString()}</span>
+        ),
+      },
+      {
+        id: 'totalPaid',
+        header: 'Total Paid',
+        cell: ({ row }) => {
+          const paid = formatDualAmount(row.original.totalPaidUsdt, undefined, undefined, primaryCurrency, liveRate)
+          return (
+            <div className="text-sm">
+              <p className="font-medium">{paid.primary}</p>
+              {paid.secondary && <p className="text-xs text-muted-foreground">({paid.secondary})</p>}
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'billingCount',
+        header: 'Billing Count',
+        cell: ({ row }) => <span className="text-sm">{row.original.billingCount}</span>,
+      },
+      {
+        accessorKey: 'createdAt',
+        header: 'Subscribed',
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        enableHiding: false,
+        cell: ({ row }) => {
+          const s = row.original
+          return s.status === 'ACTIVE' || s.status === 'TRIAL' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-600"
+              onClick={() => cancelSub.mutate({ id: s.id, reason: 'Cancelled by merchant' })}
+              disabled={cancelSub.isPending}
+            >
+              Cancel
+            </Button>
+          ) : null
+        },
+      },
+    ],
+    [cancelSub, primaryCurrency, liveRate],
+  )
 
   return (
     <>
@@ -68,123 +286,35 @@ export function SubscriptionsPage() {
         </TabsList>
 
         <TabsContent value="plans" className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Interval</TableHead>
-                    <TableHead>Trial</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {plans.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <EmptyState message="No subscription plans yet." description="Create your first plan to start accepting recurring payments." />
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    plans.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{p.name}</p>
-                            {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{formatAmount(p.amount, p.currency)}</TableCell>
-                        <TableCell className="text-sm">Every {p.intervalCount > 1 ? `${p.intervalCount} ` : ''}{p.intervalType.toLowerCase()}{p.intervalCount > 1 ? 's' : ''}</TableCell>
-                        <TableCell className="text-sm">{p.trialDays > 0 ? `${p.trialDays} days` : '-'}</TableCell>
-                        <TableCell><StatusBadge status={p.status} /></TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(p.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          {p.status === 'ACTIVE' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => archivePlan.mutate(p.id)}
-                              disabled={archivePlan.isPending}
-                            >
-                              Archive
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <DataTable
+            columns={planColumns}
+            data={filteredPlans}
+            filters={plansFilters}
+            filterValues={plansFilterValues}
+            onFilterChange={(id, value) => setPlansFilterValues((prev) => ({ ...prev, [id]: value }))}
+            onClearFilters={() => setPlansFilterValues({ status: '' })}
+            search={plansSearch}
+            onSearchChange={setPlansSearch}
+            searchPlaceholder="Search plans..."
+            pagination={{ page: 1, perPage: 999, total: filteredPlans.length }}
+            onPageChange={() => {}}
+          />
         </TabsContent>
 
         <TabsContent value="subscribers" className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Next Billing</TableHead>
-                    <TableHead>Total Paid</TableHead>
-                    <TableHead>Billing Count</TableHead>
-                    <TableHead>Subscribed</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {subscriptions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7}>
-                        <EmptyState message="No subscribers yet." description="Subscribers will appear here when customers subscribe to your plans." />
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    subscriptions.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-medium">{s.subscriberEmail}</TableCell>
-                        <TableCell><StatusBadge status={s.status} /></TableCell>
-                        <TableCell className="text-sm">{new Date(s.nextBillingDate).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-sm">
-                          {(() => {
-                            const paid = formatDualAmount(s.totalPaidUsdt, undefined, undefined, primaryCurrency, liveRate)
-                            return (
-                              <>
-                                <p className="font-medium">{paid.primary}</p>
-                                {paid.secondary && <p className="text-xs text-muted-foreground">({paid.secondary})</p>}
-                              </>
-                            )
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-sm">{s.billingCount}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          {(s.status === 'ACTIVE' || s.status === 'TRIAL') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600"
-                              onClick={() => cancelSub.mutate({ id: s.id, reason: 'Cancelled by merchant' })}
-                              disabled={cancelSub.isPending}
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <DataTable
+            columns={subColumns}
+            data={filteredSubs}
+            filters={subsFilters}
+            filterValues={subsFilterValues}
+            onFilterChange={(id, value) => setSubsFilterValues((prev) => ({ ...prev, [id]: value }))}
+            onClearFilters={() => setSubsFilterValues({ status: '' })}
+            search={subsSearch}
+            onSearchChange={setSubsSearch}
+            searchPlaceholder="Search subscribers..."
+            pagination={{ page: 1, perPage: 999, total: filteredSubs.length }}
+            onPageChange={() => {}}
+          />
         </TabsContent>
       </Tabs>
     </>

@@ -1,0 +1,273 @@
+---
+title: Security Best Practices
+description: "Protect your integration with API key management, webhook verification, and smart contract security"
+---
+
+# Security Best Practices
+
+This guide covers the security measures you should implement when integrating with Open Pay, from API key management to smart contract safety.
+
+## API Key Management
+
+<Steps>
+  <Step title="Store Secrets Securely">
+    Never hardcode API keys in source code. Use environment variables or a secret manager.
+
+    <Tabs>
+      <Tab title="Environment Variables">
+        ```bash
+        # .env (never commit this file)
+        OPENPAY_API_KEY=sk_live_abc123...
+        OPENPAY_WEBHOOK_PUBLIC_KEY=MCowBQYDK2VwAyEA...
+        ```
+
+        ```typescript
+        // Access in code
+        const apiKey = process.env.OPENPAY_API_KEY;
+        ```
+      </Tab>
+      <Tab title="AWS Secrets Manager">
+        ```typescript
+        import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+
+        const client = new SecretsManagerClient({ region: 'ap-southeast-1' });
+        const response = await client.send(
+          new GetSecretValueCommand({ SecretId: 'openpay/api-key' })
+        );
+        const apiKey = response.SecretString;
+        ```
+      </Tab>
+      <Tab title="HashiCorp Vault">
+        ```bash
+        vault kv get -field=api_key secret/openpay
+        ```
+      </Tab>
+    </Tabs>
+
+    <Warning>
+      Add `.env` to your `.gitignore`. If an API key is ever committed to version control, rotate it immediately in the Merchant Portal.
+    </Warning>
+  </Step>
+
+  <Step title="Use Separate Keys per Environment">
+    Generate distinct API keys for development, staging, and production. This limits the blast radius if a key is compromised.
+
+    | Environment | Key Prefix | Purpose |
+    |---|---|---|
+    | Development | `sk_test_` | Local testing with test network |
+    | Staging | `sk_staging_` | Pre-production validation |
+    | Production | `sk_live_` | Live payments on mainnet/testnet |
+  </Step>
+
+  <Step title="Rotate Keys Regularly">
+    Rotate your API keys periodically (recommended: every 90 days). The Merchant Portal supports having two active keys simultaneously for zero-downtime rotation:
+
+    1. Generate a new API key
+    2. Update your application to use the new key
+    3. Verify the new key works in production
+    4. Revoke the old key
+  </Step>
+</Steps>
+
+## Webhook Signature Verification
+
+Always verify webhook signatures before processing events. This prevents attackers from forging webhook payloads.
+
+```typescript
+async function verifyWebhookSignature(
+  signature: string,
+  timestamp: string,
+  body: string,
+  publicKey: string
+): Promise<boolean> {
+  // 1. Reject stale timestamps (> 5 minutes)
+  const ts = parseInt(timestamp, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > 300) {
+    return false;
+  }
+
+  // 2. Verify ED25519 signature
+  const message = new TextEncoder().encode(`${timestamp}.${body}`);
+  const sig = Buffer.from(signature, 'base64');
+  const key = Buffer.from(publicKey, 'base64');
+
+  return await ed25519.verify(sig, message, key);
+}
+```
+
+<Info>
+  The timestamp validation window (5 minutes) protects against replay attacks. An attacker who captures a valid webhook cannot replay it after the window expires.
+</Info>
+
+## HTTPS Only
+
+<Warning>
+  Open Pay rejects webhook deliveries to non-HTTPS URLs. All API communication must use TLS 1.2 or higher.
+</Warning>
+
+- Always use `https://` for your webhook endpoint
+- Always call the API over `https://olp-api.nipuntheekshana.com`
+- Ensure your TLS certificates are valid and not self-signed in production
+- Use HSTS headers on your webhook endpoint
+
+## Idempotency Keys
+
+Include an `Idempotency-Key` header on all `POST` requests to prevent duplicate operations during retries:
+
+```bash
+curl -X POST https://olp-api.nipuntheekshana.com/v1/payments \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: order-1042-attempt-1" \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": "25.00", "currency": "USD" }'
+```
+
+**How it works:**
+- First request with a given key: creates the resource and caches the response
+- Subsequent requests with the same key and parameters: returns the cached response
+- Same key with different parameters: returns a `409 Conflict` error
+- Keys expire after 24 hours
+
+<Tip>
+  Use a deterministic key based on your internal order ID (e.g., `order-{orderId}-payment-v1`). This ensures retries are safe even across application restarts.
+</Tip>
+
+## IP Allowlisting
+
+Restrict API key usage to specific IP addresses for an extra layer of protection. Configure this in the Merchant Portal under **Integrations > API Keys > IP Restrictions**.
+
+```json
+{
+  "allowed_ips": [
+    "203.0.113.10",
+    "203.0.113.0/24"
+  ]
+}
+```
+
+- Supports individual IPs and CIDR ranges
+- Requests from non-allowlisted IPs receive a `403 Forbidden` response
+- Recommended for production server-to-server integrations
+
+<Info>
+  For webhook signature verification, you can also allowlist Open Pay's outbound IP addresses. Contact support for the current list of webhook delivery IPs.
+</Info>
+
+## Two-Factor Authentication (2FA)
+
+Enable 2FA on your merchant account to protect against unauthorized access to the Merchant Portal and sensitive API operations.
+
+<Steps>
+  <Step title="Set Up 2FA">
+    ```bash
+    curl -X POST https://olp-api.nipuntheekshana.com/v1/auth/setup-2fa \
+      -H "Authorization: Bearer <jwt_token>"
+    ```
+
+    This returns a TOTP secret and QR code URI. Scan the QR code with an authenticator app (Google Authenticator, Authy, etc.).
+  </Step>
+
+  <Step title="Verify and Enable">
+    ```bash
+    curl -X POST https://olp-api.nipuntheekshana.com/v1/auth/verify-2fa \
+      -H "Authorization: Bearer <jwt_token>" \
+      -H "Content-Type: application/json" \
+      -d '{ "code": "123456" }'
+    ```
+  </Step>
+
+  <Step title="Operations Requiring 2FA">
+    Once enabled, the following operations require a valid 2FA code:
+    - API key creation and revocation
+    - Webhook URL changes
+    - Withdrawal requests
+    - Password changes
+  </Step>
+</Steps>
+
+## HMAC Replay Protection
+
+For server-to-server API calls using HMAC authentication (used by SDKs), the platform enforces timestamp-based replay protection:
+
+```
+HMAC-SHA256(secret_key, timestamp + "." + method + "." + path + "." + body)
+```
+
+| Component | Description |
+|---|---|
+| `timestamp` | Current Unix timestamp (seconds) |
+| `method` | HTTP method (GET, POST, etc.) |
+| `path` | Request path (e.g., `/v1/payments`) |
+| `body` | Request body (empty string for GET) |
+
+The server rejects requests where the timestamp is more than **60 seconds** from the server time. This prevents captured requests from being replayed.
+
+```typescript
+import { createHmac } from 'crypto';
+
+function signRequest(
+  secretKey: string,
+  method: string,
+  path: string,
+  body: string
+): { signature: string; timestamp: string } {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const message = `${timestamp}.${method}.${path}.${body}`;
+  const signature = createHmac('sha256', secretKey)
+    .update(message)
+    .digest('hex');
+
+  return { signature, timestamp };
+}
+```
+
+## Smart Contract Security
+
+Open Pay's on-chain escrow contracts implement multiple security patterns:
+
+<CardGroup cols={2}>
+  <Card title="ReentrancyGuard" icon="shield">
+    All external calls are protected with OpenZeppelin's `ReentrancyGuard` to prevent reentrancy attacks on fund withdrawal functions.
+  </Card>
+  <Card title="SafeERC20" icon="lock">
+    Token transfers use OpenZeppelin's `SafeERC20` library to handle non-standard ERC20 implementations that don't return a boolean.
+  </Card>
+  <Card title="Ownable" icon="user-shield">
+    Admin functions (fee updates, pausing) are restricted to the contract owner using OpenZeppelin's `Ownable` pattern.
+  </Card>
+  <Card title="Chainlink Price Feeds" icon="link">
+    Exchange rates are sourced from Chainlink oracles with staleness checks. Payments are rejected if the price feed is stale (> 1 hour old).
+  </Card>
+</CardGroup>
+
+### Contract Audit Checklist
+
+<Warning>
+  Smart contracts are deployed on BSC Testnet. Before mainnet deployment, a professional audit is recommended.
+</Warning>
+
+Key security properties of the escrow contract:
+
+- Funds can only be released to the merchant after payment confirmation
+- Refunds can only be triggered by the contract owner or after expiration
+- Slippage tolerance is configurable (default: 1%) and capped at 5%
+- Emergency pause functionality halts all deposits and withdrawals
+- Contract is upgradeable via proxy pattern for critical security patches
+
+## Security Checklist
+
+Use this checklist to verify your integration is secure:
+
+<Steps>
+  <Step title="API keys stored in environment variables or secret manager" />
+  <Step title="Separate API keys for dev, staging, and production" />
+  <Step title="Webhook signature verification implemented and tested" />
+  <Step title="Webhook timestamp validation (5-minute window)" />
+  <Step title="All API calls over HTTPS" />
+  <Step title="Idempotency keys on all POST requests" />
+  <Step title="IP allowlisting enabled for production API keys" />
+  <Step title="2FA enabled on merchant account" />
+  <Step title="API keys rotated every 90 days" />
+  <Step title="Error messages sanitized before showing to end users" />
+</Steps>

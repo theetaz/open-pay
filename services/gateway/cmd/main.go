@@ -46,11 +46,16 @@ func main() {
 		rateLimiter = ratelimit.NewRedisRateLimiter(redisClient, ratelimit.DefaultConfig())
 	}
 
+	// API key validator for HMAC-authenticated SDK routes
+	merchantURL := getEnv("MERCHANT_SERVICE_URL", "http://localhost:8082")
+	keyValidator := middleware.NewRemoteKeyValidator(merchantURL)
+
 	cfg := handler.GatewayConfig{
 		JWTSecret:          getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars"),
 		ServiceProxy:       serviceProxy,
 		RateLimitPerMinute: 100,
 		RateLimiter:        rateLimiter,
+		KeyValidator:       keyValidator,
 		GatewayPort:        port,
 		PlatformFeePct:     getEnv("PLATFORM_FEE_PCT", "1.5"),
 		ExchangeFeePct:     getEnv("EXCHANGE_FEE_PCT", "0.5"),
