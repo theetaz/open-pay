@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#/components/ui/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
@@ -9,7 +8,7 @@ import { Badge } from '#/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '#/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel, FieldDescription } from '#/components/ui/field'
 import { PageHeader } from '#/components/dashboard/page-header'
-import { EmptyState } from '#/components/dashboard/empty-state'
+import { DataTable, type FilterConfig } from '#/components/data-table'
 import { Pencil, Loader2 } from 'lucide-react'
 import { api } from '#/lib/api'
 import { toast } from 'sonner'
@@ -18,10 +17,14 @@ interface EmailTemplate {
   id: string; eventType: string; name: string; subject: string; bodyHtml: string; variables: string[]; isActive: boolean
 }
 
+const EMAIL_TEMPLATE_FILTERS: FilterConfig[] = []
+
 export function SettingsEmailTemplatesPage() {
   const queryClient = useQueryClient()
   const [editTemplate, setEditTemplate] = React.useState<EmailTemplate | null>(null)
   const [form, setForm] = React.useState({ name: '', subject: '', bodyHtml: '' })
+  const [search, setSearch] = React.useState('')
+  const [filterValues, setFilterValues] = React.useState<Record<string, string | string[]>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'email-templates'],
@@ -40,57 +43,79 @@ export function SettingsEmailTemplatesPage() {
 
   const templates = data?.data || []
 
+  const filteredTemplates = React.useMemo(() => {
+    if (!search) return templates
+    const q = search.toLowerCase()
+    return templates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q) ||
+        t.eventType.toLowerCase().includes(q)
+    )
+  }, [templates, search])
+
   const openEdit = (t: EmailTemplate) => {
     setEditTemplate(t)
     setForm({ name: t.name, subject: t.subject, bodyHtml: t.bodyHtml })
   }
 
+  const columns: ColumnDef<EmailTemplate>[] = [
+    {
+      accessorKey: 'eventType',
+      header: 'Event Type',
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.eventType}</span>,
+    },
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    },
+    {
+      accessorKey: 'subject',
+      header: 'Subject',
+      cell: ({ row }) => <span className="text-sm max-w-[200px] truncate block">{row.original.subject}</span>,
+    },
+    {
+      id: 'variables',
+      header: 'Variables',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.variables || []).map((v) => (
+            <Badge key={v} variant="secondary" className="text-[10px]">{`{{${v}}}`}</Badge>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      enableHiding: false,
+      cell: ({ row }) => (
+        <Button variant="ghost" size="sm" onClick={() => openEdit(row.original)}>
+          <Pencil className="size-4 mr-1" />Edit
+        </Button>
+      ),
+    },
+  ]
+
   return (
     <>
       <PageHeader title="Email Templates" description="Manage notification email templates and content" />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Templates</CardTitle>
-          <CardDescription>Edit the subject and body of notification emails. Use {'{{variable}}'} for dynamic content.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event Type</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Variables</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {templates.length === 0 ? (
-                <TableRow><TableCell colSpan={5}><EmptyState message={isLoading ? 'Loading...' : 'No templates.'} /></TableCell></TableRow>
-              ) : templates.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-mono text-xs">{t.eventType}</TableCell>
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">{t.subject}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(t.variables || []).map((v) => (
-                        <Badge key={v} variant="secondary" className="text-[10px]">{`{{${v}}}`}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
-                      <Pencil className="size-4 mr-1" />Edit
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={filteredTemplates}
+        filters={EMAIL_TEMPLATE_FILTERS}
+        filterValues={filterValues}
+        onFilterChange={(id, value) => setFilterValues((prev) => ({ ...prev, [id]: value }))}
+        onClearFilters={() => { setFilterValues({}); setSearch('') }}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or subject..."
+        pagination={{ page: 1, perPage: 999, total: filteredTemplates.length }}
+        onPageChange={() => {}}
+        isLoading={isLoading}
+      />
 
       <Dialog open={!!editTemplate} onOpenChange={(v) => !v && setEditTemplate(null)}>
         <DialogContent className="max-w-2xl">
