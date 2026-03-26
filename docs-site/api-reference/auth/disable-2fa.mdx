@@ -1,0 +1,53 @@
+---
+title: "Disable 2FA"
+api: "POST /v1/auth/2fa/disable"
+description: "Disable two-factor authentication on the merchant's account"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+Disables two-factor authentication for the merchant's account. Requires a valid TOTP code to confirm the action.
+
+## Request Body
+
+<ParamField body="code" type="string" required>
+  Six-digit TOTP code from the authenticator app, or a valid recovery code.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "code": "739201"
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "message": "Two-factor authentication disabled successfully"
+}
+```
+
+### Error Responses
+
+```json 400 Invalid Code
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid TOTP code"
+  }
+}
+```
+
+```json 400 Not Enabled
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Two-factor authentication is not enabled"
+  }
+}
+```

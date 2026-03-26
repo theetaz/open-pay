@@ -1,0 +1,209 @@
+---
+title: TypeScript SDK
+description: "Official TypeScript/Node.js SDK for the Open Pay API"
+---
+
+# TypeScript SDK
+
+The `@openpay/sdk` package provides a fully typed client for Node.js, Deno, Bun, and edge runtimes.
+
+## Installation
+
+<CodeGroup>
+  ```bash npm
+  npm install @openpay/sdk
+  ```
+
+  ```bash yarn
+  yarn add @openpay/sdk
+  ```
+
+  ```bash pnpm
+  pnpm add @openpay/sdk
+  ```
+</CodeGroup>
+
+## Initialization
+
+```typescript
+import { OpenPay } from "@openpay/sdk";
+
+const client = new OpenPay({
+  apiKey: process.env.OPENPAY_API_KEY!,
+  apiSecret: process.env.OPENPAY_API_SECRET!,
+  baseUrl: "https://olp-api.nipuntheekshana.com", // optional, this is the default
+});
+```
+
+<Warning>
+  Never expose your `apiSecret` in client-side code. The SDK is designed for server-side use only.
+</Warning>
+
+## Create a Payment
+
+Create a payment request that a customer can pay with crypto.
+
+```typescript
+const payment = await client.payments.create({
+  amount: 50.00,
+  currency: "USD",
+  description: "Invoice #1234",
+  metadata: {
+    orderId: "order_abc123",
+    customerId: "cust_456",
+  },
+});
+
+console.log(payment.id);          // "pay_8f3a..."
+console.log(payment.status);      // "pending"
+console.log(payment.walletAddress); // "0x..."
+console.log(payment.expiresAt);   // ISO 8601 timestamp
+```
+
+## Create a Checkout Session
+
+Checkout sessions generate a hosted payment page. Redirect your customer to the returned URL.
+
+```typescript
+const session = await client.checkout.createSession({
+  amount: 25.00,
+  currency: "USD",
+  description: "Premium Plan - Monthly",
+  metadata: {
+    orderId: "order_12345",
+    customerId: "cust_67890",
+  },
+  successUrl: "https://yoursite.com/payment/success",
+  cancelUrl: "https://yoursite.com/payment/cancel",
+});
+
+// Redirect the customer
+console.log(session.checkoutUrl);
+// => https://olp-api.nipuntheekshana.com/checkout/cs_abc123...
+```
+
+The session response includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Session ID (`cs_abc123`) |
+| `checkoutUrl` | `string` | URL to redirect the customer to |
+| `paymentId` | `string` | Associated payment ID |
+| `expiresAt` | `string` | ISO 8601 expiry (default 30 minutes) |
+| `status` | `string` | `pending`, `completed`, or `expired` |
+
+## Verify Webhook Signature
+
+When Open Pay sends a webhook to your server, verify the ED25519 signature before processing.
+
+```typescript
+import { OpenPay } from "@openpay/sdk";
+import express from "express";
+
+const app = express();
+const client = new OpenPay({
+  apiKey: process.env.OPENPAY_API_KEY!,
+  apiSecret: process.env.OPENPAY_API_SECRET!,
+});
+
+app.post(
+  "/api/webhooks/openpay",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const signature = req.headers["x-webhook-signature"] as string;
+    const timestamp = req.headers["x-webhook-timestamp"] as string;
+
+    const isValid = await client.webhooks.verifySignature({
+      payload: req.body,
+      signature,
+      timestamp,
+    });
+
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid signature" });
+    }
+
+    const event = JSON.parse(req.body.toString());
+
+    switch (event.type) {
+      case "payment.completed":
+        console.log("Payment completed:", event.data.paymentId);
+        await fulfillOrder(event.data.metadata.orderId);
+        break;
+
+      case "payment.failed":
+        console.log("Payment failed:", event.data.paymentId);
+        break;
+
+      case "payment.expired":
+        console.log("Payment expired:", event.data.paymentId);
+        break;
+    }
+
+    res.status(200).json({ received: true });
+  }
+);
+
+app.listen(3000);
+```
+
+<Info>
+  Always return a `200` status within 10 seconds. If your endpoint fails or times out, Open Pay retries with exponential backoff (up to 5 attempts over 24 hours).
+</Info>
+
+## List Payments
+
+```typescript
+const payments = await client.payments.list({
+  page: 1,
+  limit: 20,
+  status: "completed",
+});
+
+for (const payment of payments.data) {
+  console.log(`${payment.id}: ${payment.amount} ${payment.currency} - ${payment.status}`);
+}
+```
+
+## Error Handling
+
+The SDK throws typed errors with status codes and messages.
+
+```typescript
+import { OpenPayError } from "@openpay/sdk";
+
+try {
+  const payment = await client.payments.create({
+    amount: 50.00,
+    currency: "USD",
+  });
+} catch (error) {
+  if (error instanceof OpenPayError) {
+    console.error(`API Error ${error.statusCode}: ${error.message}`);
+    console.error("Error code:", error.code);
+  } else {
+    console.error("Unexpected error:", error);
+  }
+}
+```
+
+| Error Property | Type | Description |
+|---|---|---|
+| `statusCode` | `number` | HTTP status code (400, 401, 404, 500, etc.) |
+| `message` | `string` | Human-readable error message |
+| `code` | `string` | Machine-readable error code (e.g., `INVALID_AMOUNT`) |
+
+## TypeScript Types
+
+The SDK exports all request and response types:
+
+```typescript
+import type {
+  CreatePaymentRequest,
+  CreatePaymentResponse,
+  CreateCheckoutSessionRequest,
+  CheckoutSession,
+  Payment,
+  WebhookEvent,
+} from "@openpay/sdk";
+```

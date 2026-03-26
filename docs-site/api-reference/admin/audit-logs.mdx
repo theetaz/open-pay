@@ -1,0 +1,201 @@
+---
+title: "Audit Logs"
+description: "Query platform-wide and merchant-scoped audit trails for compliance and monitoring"
+---
+
+## Audit Log Fields
+
+Every audit log entry contains the following fields:
+
+| Field          | Type     | Description                                              |
+| -------------- | -------- | -------------------------------------------------------- |
+| `id`           | string   | Unique audit log identifier                              |
+| `actorType`    | string   | Type of actor (`admin`, `merchant`, `system`)            |
+| `actorId`      | string   | Identifier of the actor who performed the action         |
+| `action`       | string   | The action performed (e.g., `merchant.approve`, `withdrawal.reject`) |
+| `resourceType` | string   | The type of resource affected (e.g., `merchant`, `withdrawal`, `settings`) |
+| `resourceId`   | string   | Identifier of the affected resource                      |
+| `ipAddress`    | string   | IP address of the request origin                         |
+| `userAgent`    | string   | User-Agent header from the request                       |
+| `timestamp`    | string   | ISO 8601 timestamp of the event                          |
+| `metadata`     | object   | Additional context about the action (varies per action)  |
+
+---
+
+## List Audit Logs
+
+Retrieve platform-wide audit logs. Requires admin authentication.
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+<ParamField query="action" type="string">
+  Filter by action type (e.g., `merchant.approve`, `settings.update`).
+</ParamField>
+
+<ParamField query="resourceType" type="string">
+  Filter by resource type (e.g., `merchant`, `withdrawal`, `settings`).
+</ParamField>
+
+<ParamField query="actorId" type="string">
+  Filter by the actor who performed the action.
+</ParamField>
+
+<ParamField query="actorType" type="string">
+  Filter by actor type. One of `admin`, `merchant`, `system`.
+</ParamField>
+
+<ParamField query="fromDate" type="string">
+  Filter logs from this date (ISO 8601).
+</ParamField>
+
+<ParamField query="toDate" type="string">
+  Filter logs up to this date (ISO 8601).
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/audit-logs?action=merchant.approve&page=1&limit=10" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "log_001",
+      "actorType": "admin",
+      "actorId": "admin_user_001",
+      "action": "merchant.approve",
+      "resourceType": "merchant",
+      "resourceId": "merch_abc123",
+      "ipAddress": "203.0.113.45",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "timestamp": "2026-03-25T14:30:00Z",
+      "metadata": {
+        "notes": "KYC documents verified successfully",
+        "previousStatus": "pending_verification"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 156,
+    "totalPages": 16
+  }
+}
+```
+
+---
+
+## Get Audit Log Detail
+
+<ParamField path="id" type="string" required>
+  The unique audit log identifier.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/audit-logs/log_001" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "log_001",
+  "actorType": "admin",
+  "actorId": "admin_user_001",
+  "action": "merchant.approve",
+  "resourceType": "merchant",
+  "resourceId": "merch_abc123",
+  "ipAddress": "203.0.113.45",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+  "timestamp": "2026-03-25T14:30:00Z",
+  "metadata": {
+    "notes": "KYC documents verified successfully",
+    "previousStatus": "pending_verification",
+    "newStatus": "active"
+  }
+}
+```
+
+---
+
+## Merchant-Scoped Audit Logs
+
+Retrieve audit logs scoped to the authenticated merchant. This endpoint is available to merchants (not admin-only) and returns only logs related to the merchant's own resources.
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+<ParamField query="action" type="string">
+  Filter by action type.
+</ParamField>
+
+<ParamField query="resourceType" type="string">
+  Filter by resource type.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/merchant/audit-logs?page=1&limit=10" \
+  -H "Authorization: Bearer <merchant_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "log_042",
+      "actorType": "merchant",
+      "actorId": "merch_abc123",
+      "action": "api_key.create",
+      "resourceType": "api_key",
+      "resourceId": "key_def456",
+      "ipAddress": "198.51.100.22",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "timestamp": "2026-03-24T09:00:00Z",
+      "metadata": {
+        "keyName": "Production Key"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 23,
+    "totalPages": 3
+  }
+}
+```
+
+### Error Responses
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Audit log not found"
+  }
+}
+```

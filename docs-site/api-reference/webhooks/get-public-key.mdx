@@ -1,0 +1,61 @@
+---
+title: "Get Public Key"
+api: "GET /v1/webhooks/public-key"
+description: "Retrieve the ED25519 public key used to verify webhook payload signatures"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Response
+
+<ResponseField name="publicKey" type="string">
+  The ED25519 public key in base64 encoding. Use this key to verify the `X-Signature` header on incoming webhook requests.
+</ResponseField>
+
+<ResponseField name="algorithm" type="string">
+  The signature algorithm used. Always `ED25519`.
+</ResponseField>
+
+## Signature Verification
+
+Each webhook request includes an `X-Signature` header containing an ED25519 signature of the raw request body. To verify:
+
+1. Retrieve the public key from this endpoint (cache it, as it rarely changes).
+2. Read the raw request body bytes from the incoming webhook.
+3. Verify the `X-Signature` header value against the body using the ED25519 public key.
+
+```javascript Node.js Example
+const crypto = require("crypto");
+
+function verifyWebhookSignature(publicKeyBase64, signature, body) {
+  const publicKey = Buffer.from(publicKeyBase64, "base64");
+  const signatureBuffer = Buffer.from(signature, "base64");
+  return crypto.verify(null, Buffer.from(body), {
+    key: publicKey,
+    format: "der",
+    type: "spki"
+  }, signatureBuffer);
+}
+```
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/webhooks/public-key" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "publicKey": "MCowBQYDK2VwAyEA...",
+  "algorithm": "ED25519"
+}
+```
+</ResponseExample>

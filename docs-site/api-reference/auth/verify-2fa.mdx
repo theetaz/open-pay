@@ -1,0 +1,55 @@
+---
+title: "Verify 2FA"
+api: "POST /v1/auth/2fa/verify"
+description: "Verify a TOTP code to complete two-factor authentication setup"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+Completes the two-factor authentication setup by verifying a TOTP code generated from the secret provided during [Setup 2FA](/api-reference/auth/setup-2fa). Once verified, all future login attempts will require a TOTP code.
+
+## Request Body
+
+<ParamField body="code" type="string" required>
+  Six-digit TOTP code from the authenticator app.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "code": "482910"
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "message": "Two-factor authentication enabled successfully",
+  "recoveryCodes": [
+    "abc12-def34",
+    "ghi56-jkl78",
+    "mno90-pqr12",
+    "stu34-vwx56",
+    "yza78-bcd90"
+  ]
+}
+```
+
+<Warning>
+  Store the recovery codes securely. They can be used to regain access if the authenticator device is lost.
+</Warning>
+
+### Error Responses
+
+```json 400 Invalid Code
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid TOTP code"
+  }
+}
+```

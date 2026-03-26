@@ -1,0 +1,49 @@
+---
+title: "Get Balance"
+api: "GET /v1/settlements/balance"
+description: "Retrieve the merchant's current available, pending, and total earned balances"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Response
+
+<ResponseField name="availableBalance" type="number">
+  The amount currently available for withdrawal. This reflects confirmed payments minus any pending or completed withdrawals.
+</ResponseField>
+
+<ResponseField name="pendingBalance" type="number">
+  The amount from payments that are still being confirmed on-chain and not yet available for withdrawal.
+</ResponseField>
+
+<ResponseField name="totalEarned" type="number">
+  The cumulative total amount earned across all confirmed payments.
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The currency of the balances (e.g., `USD`).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/settlements/balance" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "availableBalance": 1250.75,
+  "pendingBalance": 49.99,
+  "totalEarned": 8340.20,
+  "currency": "USD"
+}
+```
+</ResponseExample>

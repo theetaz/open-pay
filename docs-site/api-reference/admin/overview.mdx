@@ -1,0 +1,65 @@
+---
+title: "Admin API Overview"
+description: "Manage merchants, withdrawals, users, roles, and platform settings through the Admin API"
+---
+
+## Admin Authentication
+
+The Admin API uses a **separate JWT** from the merchant API. Obtain an admin token by calling the admin login endpoint:
+
+```
+POST https://olp-api.nipuntheekshana.com/v1/admin/auth/login
+```
+
+```json
+{
+  "email": "admin@openpay.com",
+  "password": "your_password"
+}
+```
+
+Include the token in all subsequent admin requests:
+
+```
+Authorization: Bearer <admin_token>
+```
+
+<Note>
+  Admin tokens are distinct from merchant tokens. A merchant Bearer token will not grant access to admin routes.
+</Note>
+
+## Role-Based Access Control (RBAC)
+
+Admin users are assigned **roles**, and each role contains a set of **permissions**. The platform enforces RBAC on every admin endpoint -- if the authenticated user's role does not include the required permission, the API returns `403 FORBIDDEN`.
+
+| Concept    | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| Role       | A named group of permissions (e.g., `super_admin`, `support_agent`) |
+| Permission | A granular access right (e.g., `merchants.approve`, `withdrawals.manage`) |
+
+Manage roles and permissions via the [User Management](/api-reference/admin/user-management) endpoints.
+
+## Available Endpoint Groups
+
+| Group                  | Description                                      | Reference                                                        |
+| ---------------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| Merchant Management    | List, approve, reject, freeze, and terminate merchants | [Merchant Management](/api-reference/admin/merchant-management)   |
+| Withdrawal Management  | Review, approve, reject, and complete withdrawals    | [Withdrawal Management](/api-reference/admin/withdrawal-management) |
+| Audit Logs             | Query platform-wide and merchant-scoped audit trails | [Audit Logs](/api-reference/admin/audit-logs)                     |
+| Platform Settings      | Configure payments, security, notifications, and more | [Settings](/api-reference/admin/settings)                         |
+| User Management        | Manage admin users and RBAC roles                    | [User Management](/api-reference/admin/user-management)           |
+
+## Error Handling
+
+Admin endpoints follow the same error format as the rest of the API:
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You do not have permission to perform this action"
+  }
+}
+```
+
+See the [API Overview](/api-reference/overview) for the full list of error codes, pagination format, and rate-limit details.

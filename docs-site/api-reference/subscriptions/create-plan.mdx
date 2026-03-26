@@ -1,0 +1,106 @@
+---
+title: "Create Subscription Plan"
+api: "POST /v1/subscription-plans"
+description: "Create a new recurring subscription plan for customers to subscribe to"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Body Parameters
+
+<ParamField body="name" type="string" required>
+  A human-readable name for the subscription plan (e.g., `Pro Monthly`, `Enterprise Yearly`).
+</ParamField>
+
+<ParamField body="amount" type="number" required>
+  The recurring payment amount per billing interval.
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  The fiat currency for the plan. Supported values: `USD`, `LKR`.
+</ParamField>
+
+<ParamField body="interval" type="string" required>
+  The billing interval. Accepted values: `daily`, `weekly`, `monthly`, `yearly`.
+</ParamField>
+
+<ParamField body="trialDays" type="integer">
+  Number of free trial days before the first billing cycle begins. Defaults to `0`.
+</ParamField>
+
+<ParamField body="description" type="string">
+  A description of what the plan includes. Displayed to customers on the checkout page.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the subscription plan.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The plan name.
+</ResponseField>
+
+<ResponseField name="amount" type="number">
+  The recurring amount.
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The plan currency.
+</ResponseField>
+
+<ResponseField name="interval" type="string">
+  The billing interval.
+</ResponseField>
+
+<ResponseField name="trialDays" type="integer">
+  Number of trial days.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  The plan description.
+</ResponseField>
+
+<ResponseField name="active" type="boolean">
+  Whether the plan is currently active and accepting new subscribers.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of when the plan was created.
+</ResponseField>
+
+<RequestExample>
+```json Request
+{
+  "name": "Pro Monthly",
+  "amount": 29.99,
+  "currency": "USD",
+  "interval": "monthly",
+  "trialDays": 14,
+  "description": "Access to all Pro features including priority support"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "plan_abc123def456",
+  "name": "Pro Monthly",
+  "amount": 29.99,
+  "currency": "USD",
+  "interval": "monthly",
+  "trialDays": 14,
+  "description": "Access to all Pro features including priority support",
+  "active": true,
+  "createdAt": "2026-03-26T14:30:00Z"
+}
+```
+</ResponseExample>

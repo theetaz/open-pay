@@ -1,0 +1,120 @@
+---
+title: "Create Payment"
+api: "POST /v1/payments"
+description: "Create a new payment intent and receive a crypto address for the customer to pay"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Body Parameters
+
+<ParamField body="amount" type="number" required>
+  The payment amount in the specified fiat currency. Must be greater than zero.
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  The fiat currency for the payment. Supported values: `USD`, `LKR`.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  A human-readable description of what the payment is for. Displayed to the customer during checkout.
+</ParamField>
+
+<ParamField body="customerEmail" type="string">
+  The customer's email address. If provided, a payment receipt will be sent upon completion.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  An arbitrary key-value object to attach to the payment. Useful for storing your internal order ID or reference codes.
+</ParamField>
+
+<ParamField body="redirectUrl" type="string">
+  The URL to redirect the customer to after the payment is completed or cancelled.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the payment.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current payment status. One of: `initiated`, `pending`, `confirming`, `paid`, `failed`, `expired`.
+</ResponseField>
+
+<ResponseField name="amount" type="number">
+  The fiat amount of the payment.
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The fiat currency (`USD` or `LKR`).
+</ResponseField>
+
+<ResponseField name="cryptoAmount" type="string">
+  The equivalent amount in cryptocurrency (USDT) that the customer needs to send.
+</ResponseField>
+
+<ResponseField name="cryptoAddress" type="string">
+  The blockchain wallet address the customer should send funds to.
+</ResponseField>
+
+<ResponseField name="qrCodeUrl" type="string">
+  URL to a QR code image encoding the crypto address and amount for easy scanning.
+</ResponseField>
+
+<ResponseField name="checkoutUrl" type="string">
+  A hosted checkout page URL where the customer can complete the payment.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp indicating when the payment will expire if not completed.
+</ResponseField>
+
+## Payment Statuses
+
+| Status | Description |
+|---|---|
+| `initiated` | Payment created, awaiting customer action |
+| `pending` | Customer has initiated the crypto transfer |
+| `confirming` | Transaction detected on-chain, waiting for confirmations |
+| `paid` | Payment confirmed and settled |
+| `failed` | Payment failed due to underpayment or transaction error |
+| `expired` | Payment window expired before receiving funds |
+
+<RequestExample>
+```json Request
+{
+  "amount": 25.00,
+  "currency": "USD",
+  "description": "Order #1234 - Premium Plan",
+  "customerEmail": "customer@example.com",
+  "metadata": {
+    "orderId": "order_1234",
+    "plan": "premium"
+  },
+  "redirectUrl": "https://yoursite.com/order/1234/complete"
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "pay_abc123def456",
+  "status": "initiated",
+  "amount": 25.00,
+  "currency": "USD",
+  "cryptoAmount": "25.032500",
+  "cryptoAddress": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
+  "qrCodeUrl": "https://olp-api.nipuntheekshana.com/qr/pay_abc123def456.png",
+  "checkoutUrl": "https://olp-checkout.nipuntheekshana.com/pay/pay_abc123def456",
+  "expiresAt": "2026-03-26T15:30:00Z"
+}
+```
+</ResponseExample>

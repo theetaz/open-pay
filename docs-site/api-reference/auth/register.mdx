@@ -1,0 +1,77 @@
+---
+title: "Register Merchant"
+api: "POST /v1/auth/register"
+description: "Create a new merchant account on the Open Pay platform"
+---
+
+## Request Body
+
+<ParamField body="businessName" type="string" required>
+  The legal business name of the merchant.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Business email address. Must be unique across the platform.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Account password. Minimum 8 characters, must include uppercase, lowercase, and a number.
+</ParamField>
+
+<ParamField body="phone" type="string" required>
+  Business phone number in international format (e.g., `+94771234567`).
+</ParamField>
+
+<ParamField body="businessType" type="string" required>
+  Type of business. One of `individual`, `company`, `nonprofit`.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "businessName": "Acme Payments Ltd",
+  "email": "admin@acmepay.com",
+  "password": "SecureP@ss123",
+  "phone": "+94771234567",
+  "businessType": "company"
+}
+```
+
+### Example Response (201)
+
+```json
+{
+  "merchant": {
+    "id": "merch_abc123",
+    "businessName": "Acme Payments Ltd",
+    "email": "admin@acmepay.com",
+    "phone": "+94771234567",
+    "businessType": "company",
+    "status": "pending_verification",
+    "createdAt": "2026-03-26T10:00:00Z"
+  },
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "rt_def456..."
+}
+```
+
+### Error Responses
+
+```json 409 Conflict
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "A merchant with this email already exists"
+  }
+}
+```
+
+```json 400 Validation Error
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "password must be at least 8 characters"
+  }
+}
+```

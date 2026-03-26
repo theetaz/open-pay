@@ -1,0 +1,247 @@
+---
+title: Error Handling
+description: "Handle API errors, rate limits, and retries gracefully"
+---
+
+# Error Handling
+
+The Open Pay API uses conventional HTTP status codes and a consistent error response format. This guide covers every error scenario and how to handle them.
+
+## Error Response Format
+
+All errors follow a standard JSON structure:
+
+```json
+{
+  "error": {
+    "code": "INVALID_AMOUNT",
+    "message": "Amount must be a positive number greater than 0.01"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `error.code` | `string` | Machine-readable error code (uppercase snake_case) |
+| `error.message` | `string` | Human-readable explanation of the error |
+
+## HTTP Status Codes
+
+| Status | Meaning | When It Happens |
+|---|---|---|
+| `400` | Bad Request | Malformed JSON, missing required fields, invalid parameter values |
+| `401` | Unauthorized | Missing or invalid API key / bearer token |
+| `403` | Forbidden | Valid credentials but insufficient permissions (e.g., accessing another merchant's data) |
+| `404` | Not Found | Resource does not exist (e.g., invalid `payment_id`) |
+| `409` | Conflict | Duplicate operation (e.g., payment already completed, idempotency key reused with different parameters) |
+| `422` | Unprocessable Entity | Semantically invalid request (e.g., unsupported token, amount below minimum) |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Unexpected server error. Retry with backoff. |
+
+## Common Error Codes
+
+<Tabs>
+  <Tab title="Authentication Errors">
+    | Code | Status | Description | Fix |
+    |---|---|---|---|
+    | `INVALID_API_KEY` | 401 | API key is malformed or revoked | Check your API key in the Merchant Portal |
+    | `EXPIRED_TOKEN` | 401 | JWT bearer token has expired | Refresh your token via `POST /v1/auth/refresh-token` |
+    | `MISSING_AUTH_HEADER` | 401 | No `Authorization` header provided | Add `Authorization: Bearer <token>` header |
+    | `INSUFFICIENT_PERMISSIONS` | 403 | API key lacks required scope | Generate a new API key with the correct permissions |
+    | `TWO_FA_REQUIRED` | 403 | Operation requires 2FA verification | Complete 2FA challenge first |
+  </Tab>
+
+  <Tab title="Payment Errors">
+    | Code | Status | Description | Fix |
+    |---|---|---|---|
+    | `INVALID_AMOUNT` | 422 | Amount is negative, zero, or below minimum | Use a positive amount >= 0.01 |
+    | `UNSUPPORTED_TOKEN` | 422 | Requested token is not supported | Use one of: USDT, USDC, BNB |
+    | `UNSUPPORTED_CURRENCY` | 422 | Fiat currency not supported | Use USD or LKR |
+    | `PAYMENT_NOT_FOUND` | 404 | Payment ID does not exist | Verify the `payment_id` |
+    | `PAYMENT_ALREADY_COMPLETED` | 409 | Payment has already been paid | No action needed; payment is settled |
+    | `PAYMENT_EXPIRED` | 409 | Payment TTL has passed | Create a new payment |
+    | `IDEMPOTENCY_MISMATCH` | 409 | Same idempotency key with different params | Use a new idempotency key for different requests |
+  </Tab>
+
+  <Tab title="Webhook Errors">
+    | Code | Status | Description | Fix |
+    |---|---|---|---|
+    | `INVALID_WEBHOOK_URL` | 422 | URL is not reachable or not HTTPS | Use a valid HTTPS URL |
+    | `WEBHOOK_NOT_CONFIGURED` | 404 | No webhook endpoint configured | Call `POST /v1/webhooks/configure` first |
+    | `INVALID_EVENT_TYPE` | 422 | Unrecognized event type in filter | Check the list of supported event types |
+  </Tab>
+
+  <Tab title="Settlement Errors">
+    | Code | Status | Description | Fix |
+    |---|---|---|---|
+    | `INSUFFICIENT_BALANCE` | 422 | Withdrawal amount exceeds available balance | Check balance via `GET /v1/settlements/balance` |
+    | `WITHDRAWAL_MINIMUM` | 422 | Amount below minimum withdrawal threshold | Minimum withdrawal is $10.00 |
+    | `INVALID_WALLET_ADDRESS` | 422 | Destination wallet address is invalid | Verify the BSC wallet address format |
+  </Tab>
+</Tabs>
+
+## Rate Limiting
+
+The API enforces rate limits to ensure fair usage. When you exceed the limit, you receive a `429` response.
+
+**Rate limit headers** are included in every response:
+
+| Header | Description |
+|---|---|
+| `X-RateLimit-Limit` | Maximum requests allowed in the current window |
+| `X-RateLimit-Remaining` | Requests remaining in the current window |
+| `X-RateLimit-Reset` | Unix timestamp when the window resets |
+
+**Default limits:**
+
+| Tier | Rate Limit |
+|---|---|
+| Standard | 100 requests / minute |
+| Pro | 500 requests / minute |
+| Enterprise | Custom |
+
+**Example 429 response:**
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests. Retry after 1711454400."
+  }
+}
+```
+
+### Handling Rate Limits
+
+```typescript
+async function apiRequest(url: string, options: RequestInit, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    // Use the reset header to calculate wait time
+    const resetTimestamp = parseInt(
+      response.headers.get('X-RateLimit-Reset') || '0',
+      10
+    );
+    const waitMs = Math.max(resetTimestamp * 1000 - Date.now(), 1000);
+
+    console.warn(`Rate limited. Waiting ${waitMs}ms before retry ${attempt + 1}`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
+
+  throw new Error('Rate limit exceeded after maximum retries');
+}
+```
+
+## Retry Strategies
+
+<Steps>
+  <Step title="Identify Retryable Errors">
+    Only retry on these status codes:
+
+    - **429** - Rate limit exceeded (wait for `X-RateLimit-Reset`)
+    - **500** - Internal server error (transient)
+    - **502/503/504** - Gateway errors (transient)
+
+    Do **not** retry `400`, `401`, `403`, `404`, `409`, or `422` errors. These require fixing the request.
+  </Step>
+
+  <Step title="Use Exponential Backoff">
+    Increase the delay between retries exponentially with jitter:
+
+    ```typescript
+    function getBackoffDelay(attempt: number): number {
+      const baseDelay = 1000; // 1 second
+      const maxDelay = 30000; // 30 seconds
+      const exponential = baseDelay * Math.pow(2, attempt);
+      const jitter = Math.random() * 1000;
+      return Math.min(exponential + jitter, maxDelay);
+    }
+    ```
+  </Step>
+
+  <Step title="Set a Maximum Retry Count">
+    Limit retries to 3-5 attempts. If the request still fails, log the error and alert your monitoring system.
+  </Step>
+
+  <Step title="Use Idempotency Keys">
+    For `POST` requests (especially payment creation), include an `Idempotency-Key` header so retries don't create duplicate resources:
+
+    ```bash
+    curl -X POST https://olp-api.nipuntheekshana.com/v1/payments \
+      -H "Authorization: Bearer sk_live_..." \
+      -H "Idempotency-Key: order-1042-payment-v1" \
+      -H "Content-Type: application/json" \
+      -d '{ "amount": "25.00", "currency": "USD" }'
+    ```
+
+    <Info>
+      Idempotency keys are scoped to your merchant account and expire after 24 hours. Using the same key with the same parameters returns the original response without creating a new resource.
+    </Info>
+  </Step>
+</Steps>
+
+## Complete Error Handling Example
+
+<CodeGroup>
+```typescript TypeScript
+import { OpenPay, OpenPayError } from '@openpay/sdk';
+
+const client = new OpenPay({ apiKey: 'sk_live_...' });
+
+async function createPaymentSafely(params: CreatePaymentParams) {
+  try {
+    const payment = await client.payments.create(params, {
+      idempotencyKey: `order-${params.metadata.orderId}-v1`,
+    });
+    return payment;
+  } catch (err) {
+    if (err instanceof OpenPayError) {
+      switch (err.code) {
+        case 'INVALID_AMOUNT':
+          console.error('Fix the amount:', err.message);
+          break;
+        case 'RATE_LIMIT_EXCEEDED':
+          console.warn('Rate limited, retrying...');
+          await new Promise(r => setTimeout(r, 5000));
+          return createPaymentSafely(params); // Retry
+        case 'IDEMPOTENCY_MISMATCH':
+          console.error('Duplicate key with different params');
+          break;
+        default:
+          console.error(`API error [${err.status}]: ${err.code} - ${err.message}`);
+      }
+    }
+    throw err;
+  }
+}
+```
+
+```go Go
+payment, err := client.Payments.Create(ctx, params)
+if err != nil {
+    var apiErr *openpay.Error
+    if errors.As(err, &apiErr) {
+        switch apiErr.Code {
+        case "INVALID_AMOUNT":
+            log.Printf("Fix the amount: %s", apiErr.Message)
+        case "RATE_LIMIT_EXCEEDED":
+            time.Sleep(5 * time.Second)
+            return createPaymentSafely(ctx, params) // Retry
+        default:
+            log.Printf("API error [%d]: %s - %s",
+                apiErr.Status, apiErr.Code, apiErr.Message)
+        }
+    }
+    return nil, err
+}
+```
+</CodeGroup>
+
+<Warning>
+  Never expose raw API error messages to end users. Map error codes to user-friendly messages in your application.
+</Warning>

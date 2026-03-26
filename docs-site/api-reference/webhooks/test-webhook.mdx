@@ -1,0 +1,57 @@
+---
+title: "Test Webhook"
+api: "POST /v1/webhooks/test"
+description: "Send a test webhook event to your configured endpoint to verify connectivity"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Description
+
+Sends a simulated `payment.completed` event to your currently configured webhook URL. The test payload mirrors a real webhook delivery, including a valid ED25519 signature, so you can validate your verification logic end-to-end.
+
+<Warning>
+  You must have a webhook URL configured before calling this endpoint. Use [Configure Webhook](/api-reference/webhooks/configure) to set one up.
+</Warning>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Whether the test webhook was delivered successfully (received a 2xx response from your endpoint).
+</ResponseField>
+
+<ResponseField name="statusCode" type="integer">
+  The HTTP status code returned by your webhook endpoint.
+</ResponseField>
+
+<ResponseField name="responseTime" type="integer">
+  The response time in milliseconds from your webhook endpoint.
+</ResponseField>
+
+<ResponseField name="deliveryId" type="string">
+  The unique identifier for this delivery attempt. You can look it up in [List Deliveries](/api-reference/webhooks/list-deliveries).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/webhooks/test" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "success": true,
+  "statusCode": 200,
+  "responseTime": 142,
+  "deliveryId": "del_test_abc123"
+}
+```
+</ResponseExample>

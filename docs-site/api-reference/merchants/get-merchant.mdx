@@ -1,0 +1,54 @@
+---
+title: "Get Merchant"
+api: "GET /v1/merchants/{id}"
+description: "Retrieve a merchant's details by their ID"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header. Merchants can only access their own profile unless they have admin privileges.
+</Note>
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier (e.g., `merch_abc123`).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "businessName": "Acme Payments Ltd",
+  "email": "admin@acmepay.com",
+  "phone": "+94771234567",
+  "businessType": "company",
+  "status": "active",
+  "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
+  "webhookUrl": "https://acmepay.com/webhooks/openpay",
+  "twoFactorEnabled": true,
+  "kycStatus": "verified",
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T12:30:00Z"
+}
+```
+
+### Error Responses
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Merchant not found"
+  }
+}
+```
+
+```json 403 Forbidden
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You do not have permission to view this merchant"
+  }
+}
+```

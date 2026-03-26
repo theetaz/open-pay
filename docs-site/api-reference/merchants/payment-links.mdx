@@ -1,0 +1,294 @@
+---
+title: "Payment Links"
+description: "Create and manage shareable payment links for collecting crypto payments"
+---
+
+Payment links are shareable URLs that allow customers to pay a specific amount without any integration. Useful for invoicing, social media sales, and one-off payments.
+
+---
+
+## Create Payment Link
+
+```
+POST /v1/payment-links
+```
+
+<Note>
+  Requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+### Request Body
+
+<ParamField body="title" type="string" required>
+  Display title shown to the customer (e.g., `Invoice #1042`).
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description or note for the payment.
+</ParamField>
+
+<ParamField body="amount" type="number" required>
+  Payment amount in USD.
+</ParamField>
+
+<ParamField body="currency" type="string" default="USD">
+  Fiat currency for the amount. Currently only `USD` is supported.
+</ParamField>
+
+<ParamField body="acceptedTokens" type="string[]">
+  List of accepted crypto tokens. Defaults to all supported tokens. Options: `USDT`, `USDC`, `ETH`, `BTC`.
+</ParamField>
+
+<ParamField body="slug" type="string">
+  Custom URL slug. Auto-generated if not provided.
+</ParamField>
+
+<ParamField body="expiresAt" type="string">
+  ISO 8601 expiration date. Leave empty for no expiration.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "title": "Invoice #1042",
+  "description": "Web design services - March 2026",
+  "amount": 250.00,
+  "currency": "USD",
+  "acceptedTokens": ["USDT", "USDC"],
+  "slug": "invoice-1042"
+}
+```
+
+### Example Response (201)
+
+```json
+{
+  "id": "pl_abc123",
+  "merchantId": "merch_abc123",
+  "title": "Invoice #1042",
+  "description": "Web design services - March 2026",
+  "amount": 250.00,
+  "currency": "USD",
+  "acceptedTokens": ["USDT", "USDC"],
+  "slug": "invoice-1042",
+  "url": "https://olp-checkout.nipuntheekshana.com/pay/invoice-1042",
+  "status": "active",
+  "expiresAt": null,
+  "createdAt": "2026-03-26T10:00:00Z"
+}
+```
+
+---
+
+## List Payment Links
+
+```
+GET /v1/payment-links
+```
+
+Returns all payment links for the authenticated merchant.
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by status. One of `active`, `expired`, `disabled`.
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "pl_abc123",
+      "title": "Invoice #1042",
+      "amount": 250.00,
+      "currency": "USD",
+      "slug": "invoice-1042",
+      "status": "active",
+      "totalPaid": 250.00,
+      "paymentCount": 1,
+      "createdAt": "2026-03-26T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## Get Payment Link
+
+```
+GET /v1/payment-links/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The payment link identifier (e.g., `pl_abc123`).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "id": "pl_abc123",
+  "merchantId": "merch_abc123",
+  "title": "Invoice #1042",
+  "description": "Web design services - March 2026",
+  "amount": 250.00,
+  "currency": "USD",
+  "acceptedTokens": ["USDT", "USDC"],
+  "slug": "invoice-1042",
+  "url": "https://olp-checkout.nipuntheekshana.com/pay/invoice-1042",
+  "status": "active",
+  "totalPaid": 250.00,
+  "paymentCount": 1,
+  "expiresAt": null,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T12:00:00Z"
+}
+```
+
+---
+
+## Update Payment Link
+
+```
+PUT /v1/payment-links/{id}
+```
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The payment link identifier.
+</ParamField>
+
+### Request Body
+
+<ParamField body="title" type="string">
+  Updated display title.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Updated description.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Set to `disabled` to deactivate the link.
+</ParamField>
+
+<ParamField body="expiresAt" type="string">
+  Updated expiration date in ISO 8601 format.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "status": "disabled"
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "pl_abc123",
+  "title": "Invoice #1042",
+  "status": "disabled",
+  "updatedAt": "2026-03-26T14:00:00Z"
+}
+```
+
+---
+
+## Delete Payment Link
+
+```
+DELETE /v1/payment-links/{id}
+```
+
+Permanently deletes a payment link. The slug will become available for reuse.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The payment link identifier.
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "message": "Payment link deleted successfully"
+}
+```
+
+---
+
+## Get Payment Link by Slug (Public)
+
+```
+GET /v1/public/payment-links/by-slug/{slug}
+```
+
+Public endpoint that does not require authentication. Used by the checkout page to load payment link details.
+
+### Path Parameters
+
+<ParamField path="slug" type="string" required>
+  The payment link slug (e.g., `invoice-1042`).
+</ParamField>
+
+### Example Response (200)
+
+```json
+{
+  "id": "pl_abc123",
+  "title": "Invoice #1042",
+  "description": "Web design services - March 2026",
+  "amount": 250.00,
+  "currency": "USD",
+  "acceptedTokens": ["USDT", "USDC"],
+  "slug": "invoice-1042",
+  "merchantName": "Acme Payments Ltd",
+  "status": "active",
+  "expiresAt": null
+}
+```
+
+### Error Responses
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Payment link not found"
+  }
+}
+```
+
+```json 410 Gone
+{
+  "error": {
+    "code": "EXPIRED",
+    "message": "This payment link has expired"
+  }
+}
+```

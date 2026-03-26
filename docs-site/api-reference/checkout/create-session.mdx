@@ -1,0 +1,89 @@
+---
+title: "Create Checkout Session"
+api: "POST /v1/checkout/sessions"
+description: "Create a hosted checkout session and receive a redirect URL for the customer"
+---
+
+## Authentication
+
+This endpoint supports two authentication methods:
+
+- **Bearer token** via `POST /v1/checkout/sessions`
+- **HMAC signature** via `POST /v1/sdk/checkout/sessions` using `X-API-Key` and `X-Signature` headers
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+or (for server-to-server SDK integration):
+
+```
+X-API-Key: <your_api_key>
+X-Signature: <hmac_sha256_signature>
+X-Timestamp: <unix_timestamp>
+```
+
+<Info>
+  Use the `/v1/sdk/checkout/sessions` endpoint when integrating from your backend with HMAC authentication. This is the recommended approach for production integrations.
+</Info>
+
+## Body Parameters
+
+<ParamField body="amount" type="number" required>
+  The payment amount in the specified fiat currency. Must be greater than zero.
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  The fiat currency for the checkout. Supported values: `USD`, `LKR`.
+</ParamField>
+
+<ParamField body="successUrl" type="string" required>
+  The URL to redirect the customer to after a successful payment. The session ID will be appended as a query parameter.
+</ParamField>
+
+<ParamField body="cancelUrl" type="string" required>
+  The URL to redirect the customer to if they cancel the checkout.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  An arbitrary key-value object to attach to the session. Returned in webhook events for reconciliation.
+</ParamField>
+
+## Response
+
+<ResponseField name="sessionId" type="string">
+  Unique identifier for the checkout session.
+</ResponseField>
+
+<ResponseField name="checkoutUrl" type="string">
+  The full URL of the hosted checkout page. Redirect the customer to this URL to complete payment.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp indicating when the checkout session expires.
+</ResponseField>
+
+<RequestExample>
+```json Request
+{
+  "amount": 49.99,
+  "currency": "USD",
+  "successUrl": "https://yoursite.com/payment/success",
+  "cancelUrl": "https://yoursite.com/payment/cancel",
+  "metadata": {
+    "orderId": "order_5678",
+    "customerRef": "cust_001"
+  }
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "sessionId": "cs_live_abc123def456",
+  "checkoutUrl": "https://olp-checkout.nipuntheekshana.com/session/cs_live_abc123def456",
+  "expiresAt": "2026-03-26T16:00:00Z"
+}
+```
+</ResponseExample>

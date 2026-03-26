@@ -1,0 +1,205 @@
+---
+title: Python SDK
+description: "Official Python SDK for the Open Pay API"
+---
+
+# Python SDK
+
+The `openpay-sdk` package provides an async-first Python client built on `httpx`. It supports Python 3.9+.
+
+## Installation
+
+```bash
+pip install openpay-sdk
+```
+
+## Initialization
+
+```python
+import os
+from openpay import OpenPayClient
+
+client = OpenPayClient(
+    api_key=os.environ["OPENPAY_API_KEY"],
+    api_secret=os.environ["OPENPAY_API_SECRET"],
+    base_url="https://olp-api.nipuntheekshana.com",  # optional, this is the default
+)
+```
+
+<Warning>
+  Never hardcode your API secret. Use environment variables or a secrets manager.
+</Warning>
+
+## Create a Payment
+
+```python
+payment = await client.payments.create(
+    amount=50.00,
+    currency="USD",
+    description="Invoice #1234",
+    metadata={
+        "order_id": "order_abc123",
+        "customer_id": "cust_456",
+    },
+)
+
+print(f"Payment ID: {payment.id}")
+print(f"Status: {payment.status}")
+print(f"Wallet: {payment.wallet_address}")
+print(f"Expires: {payment.expires_at}")
+```
+
+### Synchronous Usage
+
+If you prefer synchronous calls, use the sync client:
+
+```python
+from openpay import OpenPayClient
+
+client = OpenPayClient(
+    api_key=os.environ["OPENPAY_API_KEY"],
+    api_secret=os.environ["OPENPAY_API_SECRET"],
+)
+
+payment = client.payments.create_sync(
+    amount=50.00,
+    currency="USD",
+    description="Invoice #1234",
+)
+```
+
+## Create a Checkout Session
+
+```python
+session = await client.checkout.create_session(
+    amount=25.00,
+    currency="USD",
+    description="Premium Plan - Monthly",
+    metadata={
+        "order_id": "order_12345",
+        "customer_id": "cust_67890",
+    },
+    success_url="https://yoursite.com/payment/success",
+    cancel_url="https://yoursite.com/payment/cancel",
+)
+
+# Redirect the customer to this URL
+print(f"Checkout URL: {session.checkout_url}")
+```
+
+## Verify Webhook Signature
+
+Use with FastAPI, Flask, or any ASGI/WSGI framework.
+
+<Tabs>
+  <Tab title="FastAPI">
+    ```python
+    from fastapi import FastAPI, Request, HTTPException
+    from openpay import OpenPayClient
+
+    app = FastAPI()
+    client = OpenPayClient(
+        api_key=os.environ["OPENPAY_API_KEY"],
+        api_secret=os.environ["OPENPAY_API_SECRET"],
+    )
+
+    @app.post("/api/webhooks/openpay")
+    async def handle_webhook(request: Request):
+        payload = await request.body()
+        signature = request.headers.get("x-webhook-signature", "")
+        timestamp = request.headers.get("x-webhook-timestamp", "")
+
+        is_valid = client.webhooks.verify_signature(
+            payload=payload,
+            signature=signature,
+            timestamp=timestamp,
+        )
+
+        if not is_valid:
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+        event = await request.json()
+
+        match event["type"]:
+            case "payment.completed":
+                print(f"Payment completed: {event['data']['paymentId']}")
+                # Fulfill the order
+            case "payment.failed":
+                print(f"Payment failed: {event['data']['paymentId']}")
+            case "payment.expired":
+                print(f"Payment expired: {event['data']['paymentId']}")
+
+        return {"received": True}
+    ```
+  </Tab>
+  <Tab title="Flask">
+    ```python
+    from flask import Flask, request, jsonify
+    from openpay import OpenPayClient
+
+    app = Flask(__name__)
+    client = OpenPayClient(
+        api_key=os.environ["OPENPAY_API_KEY"],
+        api_secret=os.environ["OPENPAY_API_SECRET"],
+    )
+
+    @app.post("/api/webhooks/openpay")
+    def handle_webhook():
+        payload = request.get_data()
+        signature = request.headers.get("X-Webhook-Signature", "")
+        timestamp = request.headers.get("X-Webhook-Timestamp", "")
+
+        is_valid = client.webhooks.verify_signature(
+            payload=payload,
+            signature=signature,
+            timestamp=timestamp,
+        )
+
+        if not is_valid:
+            return jsonify({"error": "Invalid signature"}), 401
+
+        event = request.get_json()
+
+        if event["type"] == "payment.completed":
+            print(f"Payment completed: {event['data']['paymentId']}")
+
+        return jsonify({"received": True}), 200
+    ```
+  </Tab>
+</Tabs>
+
+## List Payments
+
+```python
+payments = await client.payments.list(
+    page=1,
+    limit=20,
+    status="completed",
+)
+
+for p in payments.data:
+    print(f"{p.id}: {p.amount} {p.currency} - {p.status}")
+```
+
+## Error Handling
+
+```python
+from openpay import OpenPayClient, OpenPayError
+
+try:
+    payment = await client.payments.create(
+        amount=50.00,
+        currency="USD",
+    )
+except OpenPayError as e:
+    print(f"API Error {e.status_code}: {e.message}")
+    print(f"Error code: {e.code}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+| Error Attribute | Type | Description |
+|---|---|---|
+| `status_code` | `int` | HTTP status code |
+| `message` | `str` | Human-readable error message |
+| `code` | `str` | Machine-readable error code |

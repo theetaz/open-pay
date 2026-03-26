@@ -1,0 +1,320 @@
+---
+title: "Merchant Management"
+description: "List, review, and manage merchant accounts from the admin panel"
+---
+
+## List All Merchants
+
+<ParamField query="page" type="integer" default="1">
+  Page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Items per page (max 100).
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by merchant status. One of `pending_verification`, `active`, `frozen`, `deactivated`, `terminated`.
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by business name or email.
+</ParamField>
+
+<ParamField query="businessType" type="string">
+  Filter by business type. One of `individual`, `company`, `nonprofit`.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/merchants?page=1&limit=10&status=active" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "merch_abc123",
+      "businessName": "Acme Payments Ltd",
+      "email": "admin@acmepay.com",
+      "phone": "+94771234567",
+      "businessType": "company",
+      "status": "active",
+      "kycStatus": "approved",
+      "createdAt": "2026-01-15T08:30:00Z",
+      "updatedAt": "2026-02-20T14:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 42,
+    "totalPages": 5
+  }
+}
+```
+
+---
+
+## Get Merchant Details
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "businessName": "Acme Payments Ltd",
+  "email": "admin@acmepay.com",
+  "phone": "+94771234567",
+  "businessType": "company",
+  "status": "active",
+  "kycStatus": "approved",
+  "walletAddress": "0x1234...abcd",
+  "balance": "1250.50",
+  "currency": "USDT",
+  "createdAt": "2026-01-15T08:30:00Z",
+  "updatedAt": "2026-02-20T14:00:00Z",
+  "kycDocuments": [
+    {
+      "type": "business_registration",
+      "url": "https://storage.example.com/docs/br_001.pdf",
+      "uploadedAt": "2026-01-16T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Approve Merchant KYC
+
+Approve a merchant's KYC verification and activate their account.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Optional internal notes for the approval.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/approve" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"notes": "KYC documents verified successfully"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "active",
+  "kycStatus": "approved",
+  "message": "Merchant approved successfully"
+}
+```
+
+---
+
+## Reject Merchant
+
+Reject a merchant's KYC application with a reason.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  The reason for rejecting the merchant application.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/reject" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Business registration document is expired"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "rejected",
+  "kycStatus": "rejected",
+  "message": "Merchant rejected successfully"
+}
+```
+
+---
+
+## Deactivate Merchant
+
+Temporarily deactivate a merchant account. The merchant will not be able to process payments.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  The reason for deactivation.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/deactivate" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Merchant requested temporary suspension"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "deactivated",
+  "message": "Merchant deactivated successfully"
+}
+```
+
+---
+
+## Freeze Merchant Account
+
+Freeze a merchant account, blocking all payment processing and withdrawals.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  The reason for freezing the account.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/freeze" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Suspicious transaction activity detected"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "frozen",
+  "message": "Merchant account frozen successfully"
+}
+```
+
+---
+
+## Unfreeze Merchant Account
+
+Remove the freeze on a merchant account, restoring normal operations.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Optional internal notes for the unfreeze action.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/unfreeze" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"notes": "Investigation concluded, no issues found"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "active",
+  "message": "Merchant account unfrozen successfully"
+}
+```
+
+---
+
+## Terminate Merchant
+
+Permanently terminate a merchant account. This action is irreversible.
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier.
+</ParamField>
+
+<ParamField body="reason" type="string" required>
+  The reason for termination.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/merchants/merch_abc123/terminate" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Repeated violations of terms of service"}'
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "status": "terminated",
+  "message": "Merchant terminated successfully"
+}
+```
+
+### Error Responses
+
+```json 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Merchant not found"
+  }
+}
+```
+
+```json 409 Conflict
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Merchant is already in the requested state"
+  }
+}
+```

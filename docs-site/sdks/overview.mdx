@@ -1,0 +1,125 @@
+---
+title: SDK Overview
+description: "Official SDKs for integrating Open Pay into any application"
+---
+
+# SDKs
+
+Open Pay provides official SDKs for five languages plus a CLI tool. Every SDK handles HMAC-SHA256 request signing automatically, so you never have to compute signatures manually.
+
+<CardGroup cols={3}>
+  <Card title="TypeScript" icon="js" href="/sdks/typescript">
+    `@openpay/sdk` for Node.js and edge runtimes
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/go">
+    `openlankapay-go-sdk` for backend services
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python">
+    `openpay-sdk` with async httpx support
+  </Card>
+  <Card title="PHP" icon="php" href="/sdks/php">
+    `openpay/sdk` via Composer
+  </Card>
+  <Card title="Java" icon="java" href="/sdks/java">
+    `com.openpay:openpay-sdk` for JVM applications
+  </Card>
+  <Card title="CLI" icon="terminal" href="/sdks/cli">
+    `openpay` command-line tool
+  </Card>
+</CardGroup>
+
+## Common Features
+
+All SDKs share the same capabilities:
+
+| Feature | Description |
+|---|---|
+| **Create Payments** | Generate payment requests with amount, currency, and metadata |
+| **Checkout Sessions** | Create hosted checkout pages with success/cancel URLs |
+| **Webhook Verification** | Verify ED25519-signed webhook payloads |
+| **HMAC Authentication** | Automatic request signing with your API key and secret |
+| **Error Handling** | Typed errors with status codes and descriptive messages |
+| **Retry Logic** | Automatic retries with exponential backoff for transient failures |
+
+## Authentication
+
+Every SDK uses HMAC-SHA256 to sign requests. You provide your API key (public identifier) and API secret (signing key), and the SDK handles the rest.
+
+The signature is computed as:
+
+```
+message = timestamp + method + path + body
+signing_key = SHA256(api_secret)
+signature = HMAC-SHA256(message, signing_key)
+```
+
+These headers are sent with each request:
+
+| Header | Value |
+|---|---|
+| `x-api-key` | Your API key (`ak_live_xxx`) |
+| `x-timestamp` | Unix timestamp in milliseconds |
+| `x-signature` | HMAC-SHA256 hex digest |
+
+<Info>
+  Get your API key and secret from the [Merchant Portal](https://olp-merchant.nipuntheekshana.com/integrations) under **Integrations**.
+</Info>
+
+## Quick Comparison
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { OpenPay } from "@openpay/sdk";
+
+    const client = new OpenPay({
+      apiKey: process.env.OPENPAY_API_KEY!,
+      apiSecret: process.env.OPENPAY_API_SECRET!,
+    });
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    client := openpay.NewClient(
+        os.Getenv("OPENPAY_API_KEY"),
+        os.Getenv("OPENPAY_API_SECRET"),
+    )
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from openpay import OpenPayClient
+
+    client = OpenPayClient(
+        api_key=os.environ["OPENPAY_API_KEY"],
+        api_secret=os.environ["OPENPAY_API_SECRET"],
+    )
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $client = new \OpenPay\OpenPayClient(
+        apiKey: getenv('OPENPAY_API_KEY'),
+        apiSecret: getenv('OPENPAY_API_SECRET'),
+    );
+    ```
+  </Tab>
+  <Tab title="Java">
+    ```java
+    OpenPayClient client = OpenPayClient.builder()
+        .apiKey(System.getenv("OPENPAY_API_KEY"))
+        .apiSecret(System.getenv("OPENPAY_API_SECRET"))
+        .build();
+    ```
+  </Tab>
+</Tabs>
+
+## API Base URL
+
+All SDKs default to the production API:
+
+```
+https://olp-api.nipuntheekshana.com
+```
+
+You can override this by passing a `baseUrl` option during client initialization if you are targeting a different environment.

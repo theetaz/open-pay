@@ -1,0 +1,187 @@
+---
+title: PHP SDK
+description: "Official PHP SDK for the Open Pay API"
+---
+
+# PHP SDK
+
+The `openpay/sdk` Composer package provides a PHP client for the Open Pay API. Requires PHP 8.1+.
+
+## Installation
+
+```bash
+composer require openpay/sdk
+```
+
+## Initialization
+
+```php
+<?php
+
+use OpenPay\OpenPayClient;
+
+$client = new OpenPayClient(
+    apiKey: getenv('OPENPAY_API_KEY'),
+    apiSecret: getenv('OPENPAY_API_SECRET'),
+    baseUrl: 'https://olp-api.nipuntheekshana.com', // optional, this is the default
+);
+```
+
+<Warning>
+  Store your API credentials in environment variables or a `.env` file. Never commit them to version control.
+</Warning>
+
+## Create a Payment
+
+```php
+$payment = $client->payments->create([
+    'amount' => 50.00,
+    'currency' => 'USD',
+    'description' => 'Invoice #1234',
+    'metadata' => [
+        'orderId' => 'order_abc123',
+        'customerId' => 'cust_456',
+    ],
+]);
+
+echo "Payment ID: " . $payment['id'] . "\n";
+echo "Status: " . $payment['status'] . "\n";
+echo "Wallet: " . $payment['walletAddress'] . "\n";
+```
+
+## Create a Checkout Session
+
+```php
+$session = $client->checkout->createSession([
+    'amount' => 25.00,
+    'currency' => 'USD',
+    'description' => 'Premium Plan - Monthly',
+    'metadata' => [
+        'orderId' => 'order_12345',
+        'customerId' => 'cust_67890',
+    ],
+    'successUrl' => 'https://yoursite.com/payment/success',
+    'cancelUrl' => 'https://yoursite.com/payment/cancel',
+]);
+
+// Redirect the customer
+header('Location: ' . $session['checkoutUrl']);
+exit;
+```
+
+## Verify Webhook Signature
+
+```php
+<?php
+
+// Read the raw POST body
+$payload = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';
+$timestamp = $_SERVER['HTTP_X_WEBHOOK_TIMESTAMP'] ?? '';
+
+$isValid = $client->webhooks->verifySignature(
+    payload: $payload,
+    signature: $signature,
+    timestamp: $timestamp,
+);
+
+if (!$isValid) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Invalid signature']);
+    exit;
+}
+
+$event = json_decode($payload, true);
+
+switch ($event['type']) {
+    case 'payment.completed':
+        // Fulfill the order
+        error_log('Payment completed: ' . $event['data']['paymentId']);
+        break;
+
+    case 'payment.failed':
+        error_log('Payment failed: ' . $event['data']['paymentId']);
+        break;
+
+    case 'payment.expired':
+        error_log('Payment expired: ' . $event['data']['paymentId']);
+        break;
+}
+
+http_response_code(200);
+echo json_encode(['received' => true]);
+```
+
+<Info>
+  For Laravel, use `$request->getContent()` instead of `file_get_contents('php://input')` and access headers with `$request->header('X-Webhook-Signature')`.
+</Info>
+
+## List Payments
+
+```php
+$payments = $client->payments->list([
+    'page' => 1,
+    'limit' => 20,
+    'status' => 'completed',
+]);
+
+foreach ($payments['data'] as $payment) {
+    echo sprintf(
+        "%s: %.2f %s - %s\n",
+        $payment['id'],
+        $payment['amount'],
+        $payment['currency'],
+        $payment['status']
+    );
+}
+```
+
+## Error Handling
+
+```php
+use OpenPay\Exceptions\OpenPayException;
+
+try {
+    $payment = $client->payments->create([
+        'amount' => 50.00,
+        'currency' => 'USD',
+    ]);
+} catch (OpenPayException $e) {
+    echo "API Error {$e->getStatusCode()}: {$e->getMessage()}\n";
+    echo "Error code: {$e->getErrorCode()}\n";
+} catch (\Exception $e) {
+    echo "Unexpected error: {$e->getMessage()}\n";
+}
+```
+
+| Method | Return Type | Description |
+|---|---|---|
+| `getStatusCode()` | `int` | HTTP status code |
+| `getMessage()` | `string` | Human-readable error message |
+| `getErrorCode()` | `string` | Machine-readable error code |
+
+## Laravel Integration
+
+If you are using Laravel, publish the config and set your credentials in `.env`:
+
+```bash
+# .env
+OPENPAY_API_KEY=ak_live_your_key_here
+OPENPAY_API_SECRET=sk_live_your_secret_here
+```
+
+```php
+// config/services.php
+'openpay' => [
+    'api_key' => env('OPENPAY_API_KEY'),
+    'api_secret' => env('OPENPAY_API_SECRET'),
+],
+```
+
+```php
+// In a controller or service
+$client = new OpenPayClient(
+    apiKey: config('services.openpay.api_key'),
+    apiSecret: config('services.openpay.api_secret'),
+);
+```
