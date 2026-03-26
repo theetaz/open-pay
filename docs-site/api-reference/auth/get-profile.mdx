@@ -1,0 +1,38 @@
+---
+title: "Get Profile"
+api: "GET /v1/auth/me"
+description: "Retrieve the authenticated merchant's profile"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "businessName": "Acme Payments Ltd",
+  "email": "admin@acmepay.com",
+  "phone": "+94771234567",
+  "businessType": "company",
+  "status": "active",
+  "twoFactorEnabled": false,
+  "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
+  "webhookUrl": "https://acmepay.com/webhooks/openpay",
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T12:30:00Z"
+}
+```
+
+### Error Responses
+
+```json 401 Unauthorized
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Missing or expired authentication token"
+  }
+}
+```

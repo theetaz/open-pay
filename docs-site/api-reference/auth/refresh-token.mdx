@@ -1,0 +1,43 @@
+---
+title: "Refresh Token"
+api: "POST /v1/auth/refresh"
+description: "Exchange a refresh token for a new access token and refresh token pair"
+---
+
+## Request Body
+
+<ParamField body="refreshToken" type="string" required>
+  The refresh token received from a previous login or token refresh.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "refreshToken": "rt_def456..."
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "rt_ghi789..."
+}
+```
+
+<Note>
+  The previous refresh token is invalidated after use. Always store the new refresh token returned in the response.
+</Note>
+
+### Error Responses
+
+```json 401 Invalid Token
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Refresh token is invalid or expired"
+  }
+}
+```

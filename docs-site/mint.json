@@ -1,0 +1,200 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Open Pay",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#6366F1",
+    "light": "#818CF8",
+    "dark": "#4F46E5",
+    "anchors": {
+      "from": "#6366F1",
+      "to": "#8B5CF6"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://olp-merchant.nipuntheekshana.com"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get API Keys",
+    "url": "https://olp-merchant.nipuntheekshana.com/integrations"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    },
+    {
+      "name": "SDKs",
+      "url": "sdks"
+    },
+    {
+      "name": "Smart Contracts",
+      "url": "smart-contracts"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/theetaz/open-pay"
+    },
+    {
+      "name": "Merchant Portal",
+      "icon": "store",
+      "url": "https://olp-merchant.nipuntheekshana.com"
+    },
+    {
+      "name": "Admin Dashboard",
+      "icon": "shield",
+      "url": "https://olp-admin.nipuntheekshana.com"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "architecture",
+        "quickstart",
+        "authentication"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/payment-flow",
+        "guides/webhooks",
+        "guides/pos-integration",
+        "guides/error-handling",
+        "guides/security"
+      ]
+    },
+    {
+      "group": "Plugins",
+      "pages": [
+        "plugins/woocommerce"
+      ]
+    },
+    {
+      "group": "Overview",
+      "pages": [
+        "api-reference/overview"
+      ]
+    },
+    {
+      "group": "Authentication",
+      "pages": [
+        "api-reference/auth/register",
+        "api-reference/auth/login",
+        "api-reference/auth/refresh-token",
+        "api-reference/auth/get-profile",
+        "api-reference/auth/change-password",
+        "api-reference/auth/setup-2fa",
+        "api-reference/auth/verify-2fa",
+        "api-reference/auth/disable-2fa"
+      ]
+    },
+    {
+      "group": "Merchants",
+      "pages": [
+        "api-reference/merchants/get-merchant",
+        "api-reference/merchants/update-merchant",
+        "api-reference/merchants/list-merchants",
+        "api-reference/merchants/manage-api-keys",
+        "api-reference/merchants/branches",
+        "api-reference/merchants/payment-links"
+      ]
+    },
+    {
+      "group": "Payments",
+      "pages": [
+        "api-reference/payments/create-payment",
+        "api-reference/payments/get-payment",
+        "api-reference/payments/list-payments"
+      ]
+    },
+    {
+      "group": "Checkout Sessions",
+      "pages": [
+        "api-reference/checkout/create-session"
+      ]
+    },
+    {
+      "group": "Settlements",
+      "pages": [
+        "api-reference/settlements/get-balance",
+        "api-reference/settlements/create-withdrawal",
+        "api-reference/settlements/list-withdrawals"
+      ]
+    },
+    {
+      "group": "Webhooks",
+      "pages": [
+        "api-reference/webhooks/configure",
+        "api-reference/webhooks/get-public-key",
+        "api-reference/webhooks/test-webhook",
+        "api-reference/webhooks/list-deliveries"
+      ]
+    },
+    {
+      "group": "Subscriptions",
+      "pages": [
+        "api-reference/subscriptions/create-plan",
+        "api-reference/subscriptions/list-plans",
+        "api-reference/subscriptions/subscribe",
+        "api-reference/subscriptions/manage-subscription"
+      ]
+    },
+    {
+      "group": "Exchange Rates",
+      "pages": [
+        "api-reference/exchange/get-rates"
+      ]
+    },
+    {
+      "group": "Admin",
+      "pages": [
+        "api-reference/admin/overview",
+        "api-reference/admin/merchant-management",
+        "api-reference/admin/withdrawal-management",
+        "api-reference/admin/audit-logs",
+        "api-reference/admin/settings",
+        "api-reference/admin/user-management"
+      ]
+    },
+    {
+      "group": "SDKs",
+      "pages": [
+        "sdks/overview",
+        "sdks/typescript",
+        "sdks/go",
+        "sdks/python",
+        "sdks/php",
+        "sdks/java",
+        "sdks/cli"
+      ]
+    },
+    {
+      "group": "Smart Contracts",
+      "pages": [
+        "smart-contracts/overview",
+        "smart-contracts/escrow",
+        "smart-contracts/price-feed",
+        "smart-contracts/deployment"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/theetaz/open-pay"
+  },
+  "api": {
+    "baseUrl": "https://olp-api.nipuntheekshana.com"
+  }
+}

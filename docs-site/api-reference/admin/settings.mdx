@@ -1,0 +1,473 @@
+---
+title: "Platform Settings"
+description: "Configure platform settings, email templates, and legal documents"
+---
+
+## Get All Settings
+
+Retrieve all platform settings grouped by category.
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/settings" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "general": {
+    "platformName": "Open Pay",
+    "supportEmail": "support@openpay.com",
+    "maintenanceMode": false
+  },
+  "payments": {
+    "minimumPaymentAmount": "1.00",
+    "maximumPaymentAmount": "50000.00",
+    "platformFeePercent": "1.5",
+    "supportedNetworks": ["BSC", "Ethereum", "Polygon"],
+    "supportedTokens": ["USDT", "USDC", "BUSD"]
+  },
+  "security": {
+    "maxLoginAttempts": 5,
+    "sessionTimeoutMinutes": 30,
+    "requireTwoFactor": false,
+    "ipWhitelistEnabled": false
+  },
+  "notifications": {
+    "emailNotificationsEnabled": true,
+    "webhookRetryAttempts": 3,
+    "webhookTimeoutSeconds": 30
+  }
+}
+```
+
+---
+
+## Get Settings by Category
+
+<ParamField path="category" type="string" required>
+  The settings category. One of `general`, `payments`, `security`, `notifications`.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/settings/payments" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Example Response (200)
+
+```json
+{
+  "minimumPaymentAmount": "1.00",
+  "maximumPaymentAmount": "50000.00",
+  "platformFeePercent": "1.5",
+  "supportedNetworks": ["BSC", "Ethereum", "Polygon"],
+  "supportedTokens": ["USDT", "USDC", "BUSD"]
+}
+```
+
+---
+
+## Update Settings
+
+Update one or more platform settings. Only the fields provided will be updated.
+
+<ParamField body="general" type="object">
+  General platform settings.
+</ParamField>
+
+<ParamField body="general.platformName" type="string">
+  The display name of the platform.
+</ParamField>
+
+<ParamField body="general.supportEmail" type="string">
+  Platform support email address.
+</ParamField>
+
+<ParamField body="general.maintenanceMode" type="boolean">
+  Enable or disable maintenance mode.
+</ParamField>
+
+<ParamField body="payments" type="object">
+  Payment-related settings.
+</ParamField>
+
+<ParamField body="payments.minimumPaymentAmount" type="string">
+  Minimum accepted payment amount.
+</ParamField>
+
+<ParamField body="payments.maximumPaymentAmount" type="string">
+  Maximum accepted payment amount.
+</ParamField>
+
+<ParamField body="payments.platformFeePercent" type="string">
+  Platform fee as a percentage.
+</ParamField>
+
+<ParamField body="security" type="object">
+  Security-related settings.
+</ParamField>
+
+<ParamField body="security.maxLoginAttempts" type="integer">
+  Maximum failed login attempts before lockout.
+</ParamField>
+
+<ParamField body="security.sessionTimeoutMinutes" type="integer">
+  Session timeout in minutes.
+</ParamField>
+
+<ParamField body="notifications" type="object">
+  Notification-related settings.
+</ParamField>
+
+<ParamField body="notifications.emailNotificationsEnabled" type="boolean">
+  Enable or disable email notifications.
+</ParamField>
+
+<ParamField body="notifications.webhookRetryAttempts" type="integer">
+  Number of retry attempts for failed webhooks.
+</ParamField>
+
+### Example Request
+
+```bash
+curl -X PUT "https://olp-api.nipuntheekshana.com/v1/admin/settings" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "payments": {
+      "platformFeePercent": "2.0",
+      "minimumPaymentAmount": "5.00"
+    },
+    "security": {
+      "maxLoginAttempts": 3
+    }
+  }'
+```
+
+### Example Response (200)
+
+```json
+{
+  "message": "Settings updated successfully",
+  "updated": ["payments.platformFeePercent", "payments.minimumPaymentAmount", "security.maxLoginAttempts"]
+}
+```
+
+---
+
+## Email Templates
+
+### List Email Templates
+
+Retrieve all configured email templates.
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/email-templates" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+#### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "tmpl_001",
+      "name": "merchant_welcome",
+      "subject": "Welcome to Open Pay",
+      "body": "<html>...<p>Welcome, {{merchantName}}!</p>...</html>",
+      "variables": ["merchantName", "loginUrl"],
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-03-20T10:00:00Z"
+    },
+    {
+      "id": "tmpl_002",
+      "name": "withdrawal_approved",
+      "subject": "Withdrawal Approved",
+      "body": "<html>...<p>Your withdrawal of {{amount}} has been approved.</p>...</html>",
+      "variables": ["amount", "currency", "merchantName"],
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-03-15T08:00:00Z"
+    }
+  ]
+}
+```
+
+### Create Email Template
+
+<ParamField body="name" type="string" required>
+  Unique template identifier name (e.g., `payment_confirmation`).
+</ParamField>
+
+<ParamField body="subject" type="string" required>
+  Email subject line. Supports `{{variable}}` placeholders.
+</ParamField>
+
+<ParamField body="body" type="string" required>
+  HTML email body. Supports `{{variable}}` placeholders.
+</ParamField>
+
+<ParamField body="variables" type="string[]">
+  List of variable names used in the template.
+</ParamField>
+
+<ParamField body="isActive" type="boolean" default="true">
+  Whether the template is active.
+</ParamField>
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/email-templates" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "kyc_rejected",
+    "subject": "KYC Application Update",
+    "body": "<html><body><p>Dear {{merchantName}}, your KYC application has been reviewed. Reason: {{reason}}</p></body></html>",
+    "variables": ["merchantName", "reason"],
+    "isActive": true
+  }'
+```
+
+#### Example Response (201)
+
+```json
+{
+  "id": "tmpl_003",
+  "name": "kyc_rejected",
+  "subject": "KYC Application Update",
+  "body": "<html><body><p>Dear {{merchantName}}, your KYC application has been reviewed. Reason: {{reason}}</p></body></html>",
+  "variables": ["merchantName", "reason"],
+  "isActive": true,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T10:00:00Z"
+}
+```
+
+### Update Email Template
+
+<ParamField path="id" type="string" required>
+  The unique email template identifier.
+</ParamField>
+
+<ParamField body="subject" type="string">
+  Updated email subject line.
+</ParamField>
+
+<ParamField body="body" type="string">
+  Updated HTML email body.
+</ParamField>
+
+<ParamField body="variables" type="string[]">
+  Updated list of variable names.
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Enable or disable the template.
+</ParamField>
+
+```bash
+curl -X PUT "https://olp-api.nipuntheekshana.com/v1/admin/email-templates/tmpl_003" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "KYC Application - Action Required",
+    "isActive": true
+  }'
+```
+
+#### Example Response (200)
+
+```json
+{
+  "id": "tmpl_003",
+  "name": "kyc_rejected",
+  "subject": "KYC Application - Action Required",
+  "body": "<html><body><p>Dear {{merchantName}}, your KYC application has been reviewed. Reason: {{reason}}</p></body></html>",
+  "variables": ["merchantName", "reason"],
+  "isActive": true,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T11:30:00Z"
+}
+```
+
+---
+
+## Legal Documents
+
+### List Legal Documents (Admin)
+
+Retrieve all legal documents including drafts.
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/admin/legal-documents" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+#### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "legal_001",
+      "type": "terms_of_service",
+      "title": "Terms of Service",
+      "content": "## Terms of Service\n\nLast updated: March 2026...",
+      "version": "2.1",
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-03-01T00:00:00Z"
+    },
+    {
+      "id": "legal_002",
+      "type": "privacy_policy",
+      "title": "Privacy Policy",
+      "content": "## Privacy Policy\n\nLast updated: March 2026...",
+      "version": "1.3",
+      "isActive": true,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-03-10T00:00:00Z"
+    }
+  ]
+}
+```
+
+### Create Legal Document
+
+<ParamField body="type" type="string" required>
+  Document type. One of `terms_of_service`, `privacy_policy`, `aml_policy`, `refund_policy`.
+</ParamField>
+
+<ParamField body="title" type="string" required>
+  Document title.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Document content in Markdown format.
+</ParamField>
+
+<ParamField body="version" type="string" required>
+  Version string (e.g., `1.0`, `2.1`).
+</ParamField>
+
+<ParamField body="isActive" type="boolean" default="false">
+  Whether to immediately publish this document. Setting to `true` deactivates the previous active version of the same type.
+</ParamField>
+
+```bash
+curl -X POST "https://olp-api.nipuntheekshana.com/v1/admin/legal-documents" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "refund_policy",
+    "title": "Refund Policy",
+    "content": "## Refund Policy\n\nAll refunds are processed within 7 business days...",
+    "version": "1.0",
+    "isActive": true
+  }'
+```
+
+#### Example Response (201)
+
+```json
+{
+  "id": "legal_003",
+  "type": "refund_policy",
+  "title": "Refund Policy",
+  "content": "## Refund Policy\n\nAll refunds are processed within 7 business days...",
+  "version": "1.0",
+  "isActive": true,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T10:00:00Z"
+}
+```
+
+### Update Legal Document
+
+<ParamField path="id" type="string" required>
+  The unique legal document identifier.
+</ParamField>
+
+<ParamField body="title" type="string">
+  Updated document title.
+</ParamField>
+
+<ParamField body="content" type="string">
+  Updated document content.
+</ParamField>
+
+<ParamField body="version" type="string">
+  Updated version string.
+</ParamField>
+
+<ParamField body="isActive" type="boolean">
+  Activate or deactivate the document.
+</ParamField>
+
+```bash
+curl -X PUT "https://olp-api.nipuntheekshana.com/v1/admin/legal-documents/legal_003" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "## Refund Policy\n\nUpdated: All refunds are processed within 5 business days...",
+    "version": "1.1"
+  }'
+```
+
+#### Example Response (200)
+
+```json
+{
+  "id": "legal_003",
+  "type": "refund_policy",
+  "title": "Refund Policy",
+  "content": "## Refund Policy\n\nUpdated: All refunds are processed within 5 business days...",
+  "version": "1.1",
+  "isActive": true,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T12:00:00Z"
+}
+```
+
+---
+
+## Public Active Legal Documents
+
+Retrieve all currently active legal documents. This endpoint is **public** and does not require authentication.
+
+```bash
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/legal-documents/active"
+```
+
+### Example Response (200)
+
+```json
+{
+  "data": [
+    {
+      "id": "legal_001",
+      "type": "terms_of_service",
+      "title": "Terms of Service",
+      "content": "## Terms of Service\n\nLast updated: March 2026...",
+      "version": "2.1",
+      "updatedAt": "2026-03-01T00:00:00Z"
+    },
+    {
+      "id": "legal_002",
+      "type": "privacy_policy",
+      "title": "Privacy Policy",
+      "content": "## Privacy Policy\n\nLast updated: March 2026...",
+      "version": "1.3",
+      "updatedAt": "2026-03-10T00:00:00Z"
+    }
+  ]
+}
+```

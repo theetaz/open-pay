@@ -1,0 +1,75 @@
+---
+title: "Login"
+api: "POST /v1/auth/login"
+description: "Authenticate a merchant and obtain access and refresh tokens"
+---
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  The merchant's registered email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The merchant's account password.
+</ParamField>
+
+<ParamField body="twoFactorCode" type="string">
+  Six-digit TOTP code. Required only if the merchant has two-factor authentication enabled.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "email": "admin@acmepay.com",
+  "password": "SecureP@ss123"
+}
+```
+
+### Example Request with 2FA
+
+```json
+{
+  "email": "admin@acmepay.com",
+  "password": "SecureP@ss123",
+  "twoFactorCode": "482910"
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "rt_def456...",
+  "merchant": {
+    "id": "merch_abc123",
+    "businessName": "Acme Payments Ltd",
+    "email": "admin@acmepay.com",
+    "businessType": "company",
+    "status": "active",
+    "twoFactorEnabled": false
+  }
+}
+```
+
+### Error Responses
+
+```json 401 Invalid Credentials
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid email or password"
+  }
+}
+```
+
+```json 401 2FA Required
+{
+  "error": {
+    "code": "TWO_FACTOR_REQUIRED",
+    "message": "Two-factor authentication code is required"
+  }
+}
+```

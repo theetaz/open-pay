@@ -1,0 +1,224 @@
+---
+title: CLI Tool
+description: "Command-line interface for managing Open Pay payments and configuration"
+---
+
+# CLI Tool
+
+The `openpay` CLI lets you manage payments, webhooks, and configuration directly from your terminal.
+
+## Installation
+
+<Tabs>
+  <Tab title="Go Install">
+    ```bash
+    go install github.com/openlankapay/openpay-cli@latest
+    ```
+  </Tab>
+  <Tab title="Download Binary">
+    Download the latest release for your platform from the [GitHub releases page](https://github.com/theetaz/open-pay/releases):
+
+    ```bash
+    # macOS (Apple Silicon)
+    curl -L https://github.com/theetaz/open-pay/releases/latest/download/openpay-darwin-arm64 -o openpay
+    chmod +x openpay
+    sudo mv openpay /usr/local/bin/
+
+    # macOS (Intel)
+    curl -L https://github.com/theetaz/open-pay/releases/latest/download/openpay-darwin-amd64 -o openpay
+    chmod +x openpay
+    sudo mv openpay /usr/local/bin/
+
+    # Linux (amd64)
+    curl -L https://github.com/theetaz/open-pay/releases/latest/download/openpay-linux-amd64 -o openpay
+    chmod +x openpay
+    sudo mv openpay /usr/local/bin/
+    ```
+  </Tab>
+</Tabs>
+
+Verify the installation:
+
+```bash
+openpay --version
+```
+
+## Authentication
+
+Log in with your API credentials. The CLI stores them locally in `~/.openpay/config.yaml`.
+
+```bash
+openpay login
+```
+
+You will be prompted for your API key and secret:
+
+```
+Enter API Key: ak_live_abc123
+Enter API Secret: ********
+Authenticated successfully. Credentials saved to ~/.openpay/config.yaml
+```
+
+Alternatively, set credentials via environment variables:
+
+```bash
+export OPENPAY_API_KEY=ak_live_abc123
+export OPENPAY_API_SECRET=sk_live_xyz789
+```
+
+## Configuration
+
+Manage CLI settings with `openpay config`:
+
+```bash
+# Set the API base URL
+openpay config set api_url https://olp-api.nipuntheekshana.com
+
+# Set default output format
+openpay config set output json
+
+# View current configuration
+openpay config list
+```
+
+| Setting | Default | Description |
+|---|---|---|
+| `api_url` | `https://olp-api.nipuntheekshana.com` | API base URL |
+| `output` | `table` | Output format: `table`, `json`, or `yaml` |
+| `api_key` | (none) | Your API key |
+| `api_secret` | (none) | Your API secret (stored securely) |
+
+## Payments
+
+### List Payments
+
+```bash
+# List recent payments
+openpay payments list
+
+# Filter by status
+openpay payments list --status completed
+
+# Limit results
+openpay payments list --limit 10 --page 1
+
+# Output as JSON
+openpay payments list --output json
+```
+
+Example output:
+
+```
+ID                  AMOUNT    CURRENCY  STATUS      CREATED
+pay_8f3a1b2c...     50.00     USD       completed   2026-03-25T10:30:00Z
+pay_9d4e2f3a...     25.00     USD       pending     2026-03-25T11:15:00Z
+pay_1a5b3c4d...     100.00    USD       expired     2026-03-24T09:00:00Z
+```
+
+### Create a Payment
+
+```bash
+openpay payments create \
+  --amount 50.00 \
+  --currency USD \
+  --description "Invoice #1234"
+```
+
+Output:
+
+```
+Payment created successfully.
+
+ID:             pay_8f3a1b2c4d5e6f7a
+Amount:         50.00 USD
+Status:         pending
+Wallet:         0x1234...abcd
+Expires:        2026-03-26T11:00:00Z
+```
+
+### Get Payment Details
+
+```bash
+openpay payments get pay_8f3a1b2c4d5e6f7a
+```
+
+## Webhooks
+
+### Configure a Webhook
+
+```bash
+openpay webhooks configure \
+  --url https://yoursite.com/api/webhooks/openpay \
+  --events payment.completed,payment.failed,payment.expired
+```
+
+### List Webhook Deliveries
+
+```bash
+openpay webhooks deliveries --limit 20
+```
+
+### Test a Webhook
+
+Send a test event to your configured endpoint:
+
+```bash
+openpay webhooks test --event payment.completed
+```
+
+## Checkout Sessions
+
+### Create a Checkout Session
+
+```bash
+openpay checkout create \
+  --amount 25.00 \
+  --currency USD \
+  --description "Premium Plan" \
+  --success-url https://yoursite.com/success \
+  --cancel-url https://yoursite.com/cancel
+```
+
+Output:
+
+```
+Checkout session created.
+
+Session ID:     cs_abc123def456
+Checkout URL:   https://olp-api.nipuntheekshana.com/checkout/cs_abc123def456
+Payment ID:     pay_8f3a1b2c4d5e6f7a
+Expires:        2026-03-26T11:30:00Z
+```
+
+## Global Flags
+
+These flags work with any command:
+
+| Flag | Short | Description |
+|---|---|---|
+| `--output` | `-o` | Output format: `table`, `json`, `yaml` |
+| `--verbose` | `-v` | Enable verbose logging |
+| `--help` | `-h` | Show help for any command |
+| `--version` | | Show CLI version |
+
+## Shell Completion
+
+Generate shell completion scripts:
+
+<Tabs>
+  <Tab title="Bash">
+    ```bash
+    openpay completion bash > /etc/bash_completion.d/openpay
+    ```
+  </Tab>
+  <Tab title="Zsh">
+    ```bash
+    openpay completion zsh > "${fpath[1]}/_openpay"
+    ```
+  </Tab>
+  <Tab title="Fish">
+    ```bash
+    openpay completion fish > ~/.config/fish/completions/openpay.fish
+    ```
+  </Tab>
+</Tabs>

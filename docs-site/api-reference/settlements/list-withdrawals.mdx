@@ -1,0 +1,94 @@
+---
+title: "List Withdrawals"
+api: "GET /v1/withdrawals"
+description: "Retrieve a paginated list of withdrawal requests"
+---
+
+## Authentication
+
+This endpoint requires a **Bearer token** in the `Authorization` header.
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  The page number for pagination.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  The number of withdrawals per page. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by withdrawal status. Accepted values: `pending`, `approved`, `rejected`, `completed`.
+</ParamField>
+
+## Response
+
+<ResponseField name="withdrawals" type="array">
+  An array of withdrawal objects.
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata.
+
+  <Expandable title="pagination fields">
+    <ResponseField name="page" type="integer">
+      Current page number.
+    </ResponseField>
+    <ResponseField name="limit" type="integer">
+      Number of items per page.
+    </ResponseField>
+    <ResponseField name="total" type="integer">
+      Total number of matching withdrawals.
+    </ResponseField>
+    <ResponseField name="totalPages" type="integer">
+      Total number of pages.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/withdrawals?page=1&limit=10" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "withdrawals": [
+    {
+      "id": "wd_abc123def456",
+      "amount": 500.00,
+      "status": "completed",
+      "bankAccountNumber": "1234567890",
+      "bankName": "Commercial Bank",
+      "bankBranch": "Colombo Main",
+      "createdAt": "2026-03-20T10:00:00Z",
+      "processedAt": "2026-03-21T09:15:00Z"
+    },
+    {
+      "id": "wd_xyz789ghi012",
+      "amount": 250.00,
+      "status": "pending",
+      "bankAccountNumber": "0987654321",
+      "bankName": "Sampath Bank",
+      "bankBranch": "Kandy",
+      "createdAt": "2026-03-26T14:30:00Z",
+      "processedAt": null
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 12,
+    "totalPages": 2
+  }
+}
+```
+</ResponseExample>

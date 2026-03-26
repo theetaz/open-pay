@@ -1,0 +1,187 @@
+---
+title: Go SDK
+description: "Official Go SDK for the Open Pay API"
+---
+
+# Go SDK
+
+The `openlankapay-go-sdk` package provides an idiomatic Go client for the Open Pay API with full error handling and context support.
+
+## Installation
+
+```bash
+go get github.com/openlankapay/openlankapay-go-sdk
+```
+
+## Initialization
+
+```go
+package main
+
+import (
+    "os"
+
+    openpay "github.com/openlankapay/openlankapay-go-sdk"
+)
+
+func main() {
+    client := openpay.NewClient(
+        os.Getenv("OPENPAY_API_KEY"),
+        os.Getenv("OPENPAY_API_SECRET"),
+    )
+
+    // Optionally override the base URL
+    client.BaseURL = "https://olp-api.nipuntheekshana.com"
+}
+```
+
+## Create a Payment
+
+```go
+ctx := context.Background()
+
+payment, err := client.Payments.Create(ctx, &openpay.CreatePaymentRequest{
+    Amount:      50.00,
+    Currency:    "USD",
+    Description: "Invoice #1234",
+    Metadata: map[string]string{
+        "orderId":    "order_abc123",
+        "customerId": "cust_456",
+    },
+})
+if err != nil {
+    log.Fatalf("failed to create payment: %v", err)
+}
+
+fmt.Printf("Payment ID: %s\n", payment.ID)
+fmt.Printf("Status: %s\n", payment.Status)
+fmt.Printf("Wallet: %s\n", payment.WalletAddress)
+```
+
+## Create a Checkout Session
+
+```go
+session, err := client.Checkout.CreateSession(ctx, &openpay.CreateCheckoutSessionRequest{
+    Amount:      25.00,
+    Currency:    "USD",
+    Description: "Premium Plan - Monthly",
+    Metadata: map[string]string{
+        "orderId":    "order_12345",
+        "customerId": "cust_67890",
+    },
+    SuccessURL: "https://yoursite.com/payment/success",
+    CancelURL:  "https://yoursite.com/payment/cancel",
+})
+if err != nil {
+    log.Fatalf("failed to create checkout session: %v", err)
+}
+
+fmt.Printf("Redirect to: %s\n", session.CheckoutURL)
+```
+
+## Verify Webhook Signature
+
+```go
+package main
+
+import (
+    "io"
+    "net/http"
+
+    openpay "github.com/openlankapay/openlankapay-go-sdk"
+)
+
+func webhookHandler(w http.ResponseWriter, r *http.Request) {
+    payload, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "failed to read body", http.StatusBadRequest)
+        return
+    }
+
+    signature := r.Header.Get("X-Webhook-Signature")
+    timestamp := r.Header.Get("X-Webhook-Timestamp")
+
+    valid, err := client.Webhooks.VerifySignature(payload, signature, timestamp)
+    if err != nil || !valid {
+        http.Error(w, "invalid signature", http.StatusUnauthorized)
+        return
+    }
+
+    event, err := openpay.ParseWebhookEvent(payload)
+    if err != nil {
+        http.Error(w, "invalid payload", http.StatusBadRequest)
+        return
+    }
+
+    switch event.Type {
+    case "payment.completed":
+        log.Printf("Payment completed: %s", event.Data.PaymentID)
+        // Fulfill the order
+    case "payment.failed":
+        log.Printf("Payment failed: %s", event.Data.PaymentID)
+    case "payment.expired":
+        log.Printf("Payment expired: %s", event.Data.PaymentID)
+    }
+
+    w.WriteHeader(http.StatusOK)
+    w.Write([]byte(`{"received": true}`))
+}
+```
+
+## List Payments
+
+```go
+payments, err := client.Payments.List(ctx, &openpay.ListPaymentsRequest{
+    Page:   1,
+    Limit:  20,
+    Status: "completed",
+})
+if err != nil {
+    log.Fatalf("failed to list payments: %v", err)
+}
+
+for _, p := range payments.Data {
+    fmt.Printf("%s: %.2f %s - %s\n", p.ID, p.Amount, p.Currency, p.Status)
+}
+```
+
+## Error Handling
+
+The SDK returns typed errors that you can inspect for status codes and error details.
+
+```go
+payment, err := client.Payments.Create(ctx, &openpay.CreatePaymentRequest{
+    Amount:   50.00,
+    Currency: "USD",
+})
+if err != nil {
+    var apiErr *openpay.APIError
+    if errors.As(err, &apiErr) {
+        fmt.Printf("API Error %d: %s (code: %s)\n",
+            apiErr.StatusCode, apiErr.Message, apiErr.Code)
+    } else {
+        fmt.Printf("Unexpected error: %v\n", err)
+    }
+    return
+}
+```
+
+| Error Field | Type | Description |
+|---|---|---|
+| `StatusCode` | `int` | HTTP status code |
+| `Message` | `string` | Human-readable message |
+| `Code` | `string` | Machine-readable code (e.g., `INVALID_AMOUNT`) |
+
+## Context Support
+
+All methods accept a `context.Context` for cancellation and timeouts:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+payment, err := client.Payments.Create(ctx, &openpay.CreatePaymentRequest{
+    Amount:   50.00,
+    Currency: "USD",
+})
+```

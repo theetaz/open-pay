@@ -1,0 +1,85 @@
+---
+title: "Update Merchant"
+api: "PUT /v1/merchants/{id}"
+description: "Update a merchant's profile information"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header. Merchants can only update their own profile.
+</Note>
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique merchant identifier (e.g., `merch_abc123`).
+</ParamField>
+
+## Request Body
+
+<ParamField body="businessName" type="string">
+  Updated business name.
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Updated phone number in international format.
+</ParamField>
+
+<ParamField body="walletAddress" type="string">
+  Blockchain wallet address for receiving payments.
+</ParamField>
+
+<ParamField body="webhookUrl" type="string">
+  URL to receive webhook event notifications.
+</ParamField>
+
+<ParamField body="businessType" type="string">
+  Type of business. One of `individual`, `company`, `nonprofit`.
+</ParamField>
+
+### Example Request
+
+```json
+{
+  "businessName": "Acme Payments International",
+  "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
+  "webhookUrl": "https://acmepay.com/webhooks/openpay"
+}
+```
+
+### Example Response (200)
+
+```json
+{
+  "id": "merch_abc123",
+  "businessName": "Acme Payments International",
+  "email": "admin@acmepay.com",
+  "phone": "+94771234567",
+  "businessType": "company",
+  "status": "active",
+  "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
+  "webhookUrl": "https://acmepay.com/webhooks/openpay",
+  "twoFactorEnabled": true,
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T14:00:00Z"
+}
+```
+
+### Error Responses
+
+```json 400 Validation Error
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid wallet address format"
+  }
+}
+```
+
+```json 403 Forbidden
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You do not have permission to update this merchant"
+  }
+}
+```

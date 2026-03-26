@@ -1,0 +1,332 @@
+---
+title: Webhooks
+description: "Receive real-time payment notifications with cryptographically signed webhooks"
+---
+
+# Webhooks
+
+Webhooks let your application receive real-time notifications when events occur in Open Pay. Every webhook is signed with ED25519 so you can verify its authenticity.
+
+## Configure Your Webhook Endpoint
+
+Register your webhook URL using the API:
+
+```bash
+curl -X POST https://olp-api.nipuntheekshana.com/v1/webhooks/configure \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.com/webhooks/openpay",
+    "events": [
+      "payment.completed",
+      "payment.failed",
+      "payment.expired",
+      "subscription.renewed",
+      "subscription.cancelled"
+    ]
+  }'
+```
+
+<Info>
+  Your endpoint must return a `2xx` status code within 10 seconds. Any other response is treated as a failure and triggers a retry.
+</Info>
+
+## Event Types
+
+| Event | Description |
+|---|---|
+| `payment.completed` | Payment confirmed on-chain and settled |
+| `payment.failed` | Transaction reverted or rejected |
+| `payment.expired` | Payment TTL exceeded without completion |
+| `subscription.renewed` | Recurring subscription payment collected |
+| `subscription.cancelled` | Subscription cancelled by merchant or customer |
+
+## Webhook Payload
+
+Every webhook delivery includes these headers:
+
+| Header | Description |
+|---|---|
+| `X-OpenPay-Signature` | ED25519 signature of the payload (base64-encoded) |
+| `X-OpenPay-Timestamp` | Unix timestamp of when the webhook was sent |
+| `Content-Type` | `application/json` |
+
+**Example payload:**
+
+```json
+{
+  "id": "evt_xyz789",
+  "event": "payment.completed",
+  "created_at": "2026-03-26T13:02:15Z",
+  "data": {
+    "payment_id": "pay_abc123",
+    "status": "paid",
+    "amount": "25.00",
+    "currency": "USD",
+    "token": "USDT",
+    "tx_hash": "0xabc123...",
+    "metadata": {
+      "order_id": "1042"
+    }
+  }
+}
+```
+
+## Signature Verification
+
+<Steps>
+  <Step title="Get the Public Key">
+    Retrieve Open Pay's ED25519 public key for verification:
+
+    ```bash
+    curl https://olp-api.nipuntheekshana.com/v1/webhooks/public-key \
+      -H "Authorization: Bearer sk_live_..."
+    ```
+
+    ```json
+    {
+      "public_key": "MCowBQYDK2VwAyEA...",
+      "algorithm": "ED25519",
+      "format": "base64"
+    }
+    ```
+
+    <Tip>
+      Cache the public key in your application. It only rotates during key rotation events, which are announced in advance.
+    </Tip>
+  </Step>
+
+  <Step title="Construct the Signed Message">
+    The signed message is the concatenation of the timestamp and the raw request body:
+
+    ```
+    signed_message = timestamp + "." + raw_body
+    ```
+  </Step>
+
+  <Step title="Verify the Signature">
+    Verify the ED25519 signature against the signed message using the public key.
+  </Step>
+
+  <Step title="Validate the Timestamp">
+    Reject any webhook where the timestamp is more than 5 minutes old to prevent replay attacks.
+  </Step>
+</Steps>
+
+## Code Examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createServer } from 'http';
+    import { verify } from '@noble/ed25519';
+
+    const PUBLIC_KEY = process.env.OPENPAY_WEBHOOK_PUBLIC_KEY!;
+    const TOLERANCE_SECONDS = 300; // 5 minutes
+
+    async function verifyWebhook(
+      signature: string,
+      timestamp: string,
+      body: string
+    ): Promise<boolean> {
+      // 1. Check timestamp freshness
+      const ts = parseInt(timestamp, 10);
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - ts) > TOLERANCE_SECONDS) {
+        console.error('Webhook timestamp too old');
+        return false;
+      }
+
+      // 2. Construct signed message
+      const message = new TextEncoder().encode(`${timestamp}.${body}`);
+
+      // 3. Verify ED25519 signature
+      const sig = Buffer.from(signature, 'base64');
+      const pubKey = Buffer.from(PUBLIC_KEY, 'base64');
+
+      return await verify(sig, message, pubKey);
+    }
+
+    // Express example
+    import express from 'express';
+    const app = express();
+
+    app.post(
+      '/webhooks/openpay',
+      express.raw({ type: 'application/json' }),
+      async (req, res) => {
+        const signature = req.headers['x-openpay-signature'] as string;
+        const timestamp = req.headers['x-openpay-timestamp'] as string;
+        const body = req.body.toString();
+
+        const isValid = await verifyWebhook(signature, timestamp, body);
+        if (!isValid) {
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+
+        const event = JSON.parse(body);
+
+        switch (event.event) {
+          case 'payment.completed':
+            await fulfillOrder(event.data.payment_id, event.data.metadata);
+            break;
+          case 'payment.failed':
+            await handleFailedPayment(event.data.payment_id);
+            break;
+          case 'payment.expired':
+            await handleExpiredPayment(event.data.payment_id);
+            break;
+          case 'subscription.renewed':
+            await extendSubscription(event.data);
+            break;
+          case 'subscription.cancelled':
+            await cancelSubscription(event.data);
+            break;
+        }
+
+        res.status(200).json({ received: true });
+      }
+    );
+    ```
+  </Tab>
+
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "crypto/ed25519"
+        "encoding/base64"
+        "encoding/json"
+        "fmt"
+        "io"
+        "math"
+        "net/http"
+        "os"
+        "strconv"
+        "time"
+    )
+
+    var publicKey ed25519.PublicKey
+
+    func init() {
+        keyBytes, err := base64.StdEncoding.DecodeString(
+            os.Getenv("OPENPAY_WEBHOOK_PUBLIC_KEY"),
+        )
+        if err != nil {
+            panic("invalid public key: " + err.Error())
+        }
+        publicKey = ed25519.PublicKey(keyBytes)
+    }
+
+    func verifyWebhook(signature, timestamp, body string) bool {
+        // 1. Check timestamp freshness
+        ts, err := strconv.ParseInt(timestamp, 10, 64)
+        if err != nil {
+            return false
+        }
+        now := time.Now().Unix()
+        if math.Abs(float64(now-ts)) > 300 {
+            return false
+        }
+
+        // 2. Construct signed message
+        message := []byte(fmt.Sprintf("%s.%s", timestamp, body))
+
+        // 3. Verify ED25519 signature
+        sig, err := base64.StdEncoding.DecodeString(signature)
+        if err != nil {
+            return false
+        }
+
+        return ed25519.Verify(publicKey, message, sig)
+    }
+
+    func webhookHandler(w http.ResponseWriter, r *http.Request) {
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "Failed to read body", http.StatusBadRequest)
+            return
+        }
+
+        signature := r.Header.Get("X-OpenPay-Signature")
+        timestamp := r.Header.Get("X-OpenPay-Timestamp")
+
+        if !verifyWebhook(signature, timestamp, string(body)) {
+            http.Error(w, "Invalid signature", http.StatusUnauthorized)
+            return
+        }
+
+        var event struct {
+            Event string          `json:"event"`
+            Data  json.RawMessage `json:"data"`
+        }
+        json.Unmarshal(body, &event)
+
+        switch event.Event {
+        case "payment.completed":
+            // Fulfill the order
+        case "payment.failed":
+            // Handle failed payment
+        case "payment.expired":
+            // Handle expired payment
+        }
+
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte(`{"received": true}`))
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Retry Policy
+
+If your endpoint does not return a `2xx` response, Open Pay retries with exponential backoff:
+
+| Retry | Delay | Cumulative Time |
+|---|---|---|
+| 1st | 30 seconds | 30s |
+| 2nd | 1 minute | 1m 30s |
+| 3rd | 5 minutes | 6m 30s |
+| 4th | 15 minutes | 21m 30s |
+| 5th | 1 hour | 1h 21m 30s |
+
+<Warning>
+  After 5 failed retries, the webhook delivery is marked as `failed`. You can view failed deliveries and manually retry them from the Merchant Portal or via `GET /v1/webhooks/deliveries`.
+</Warning>
+
+## Testing Webhooks
+
+Use the test endpoint to send a sample webhook to your configured URL:
+
+```bash
+curl -X POST https://olp-api.nipuntheekshana.com/v1/webhooks/test \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "payment.completed"
+  }'
+```
+
+This sends a test payload with dummy data to your webhook URL, signed with the same key used in production. Use it to validate your signature verification logic.
+
+<Tip>
+  During development, use a tool like [ngrok](https://ngrok.com) to expose your local server and receive webhooks.
+</Tip>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Verify Every Signature" icon="shield-check">
+    Never process a webhook without verifying the ED25519 signature and checking the timestamp window.
+  </Card>
+  <Card title="Respond Quickly" icon="bolt">
+    Return `200 OK` immediately and process the event asynchronously. Webhook delivery times out after 10 seconds.
+  </Card>
+  <Card title="Handle Duplicates" icon="clone">
+    Use the `id` field to deduplicate events. The same event may be delivered more than once during retries.
+  </Card>
+  <Card title="Log Deliveries" icon="list-check">
+    Store webhook payloads for debugging. You can also review delivery history at `GET /v1/webhooks/deliveries`.
+  </Card>
+</CardGroup>

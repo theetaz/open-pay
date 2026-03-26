@@ -1,0 +1,112 @@
+---
+title: "API Overview"
+description: "Learn how to authenticate and interact with the Open Pay REST API"
+---
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://olp-api.nipuntheekshana.com
+```
+
+## Versioning
+
+The API is versioned via URL path prefix. The current version is **v1**.
+
+```
+https://olp-api.nipuntheekshana.com/v1/{resource}
+```
+
+## Content Type
+
+All requests and responses use JSON. Set the following header on every request:
+
+```
+Content-Type: application/json
+```
+
+## Authentication
+
+Most endpoints require a Bearer token obtained via the [Login](/api-reference/auth/login) or [Register](/api-reference/auth/register) endpoints.
+
+Include the token in the `Authorization` header:
+
+```
+Authorization: Bearer <your_token>
+```
+
+For server-to-server integrations, you can authenticate using API keys created through the [Manage API Keys](/api-reference/merchants/manage-api-keys) endpoint. Pass the API key in the `X-API-Key` header:
+
+```
+X-API-Key: <your_api_key>
+X-API-Secret: <your_api_secret>
+```
+
+## Rate Limits
+
+API requests are rate-limited to protect the platform from abuse.
+
+| Tier     | Limit            | Window  |
+| -------- | ---------------- | ------- |
+| Default  | 100 requests     | 1 minute |
+| Auth     | 20 requests      | 1 minute |
+| Checkout | 50 requests      | 1 minute |
+
+When you exceed a rate limit, the API returns a `429 Too Many Requests` response with the following headers:
+
+| Header                | Description                              |
+| --------------------- | ---------------------------------------- |
+| `X-RateLimit-Limit`   | Maximum requests allowed in the window   |
+| `X-RateLimit-Remaining` | Requests remaining in the current window |
+| `X-RateLimit-Reset`   | Unix timestamp when the window resets    |
+
+## Error Format
+
+All errors follow a consistent structure:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "email is required",
+    "details": {}
+  }
+}
+```
+
+### Common Error Codes
+
+| HTTP Status | Code                  | Description                        |
+| ----------- | --------------------- | ---------------------------------- |
+| 400         | `VALIDATION_ERROR`    | Request body or params are invalid |
+| 401         | `UNAUTHORIZED`        | Missing or expired token           |
+| 403         | `FORBIDDEN`           | Insufficient permissions           |
+| 404         | `NOT_FOUND`           | Resource does not exist            |
+| 409         | `CONFLICT`            | Resource already exists            |
+| 429         | `RATE_LIMITED`        | Too many requests                  |
+| 500         | `INTERNAL_ERROR`      | Unexpected server error            |
+
+## Pagination
+
+List endpoints support cursor-based pagination with the following query parameters:
+
+| Parameter | Type    | Default | Description                |
+| --------- | ------- | ------- | -------------------------- |
+| `page`    | integer | 1       | Page number                |
+| `limit`   | integer | 20      | Items per page (max 100)   |
+
+Paginated responses include:
+
+```json
+{
+  "data": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 85,
+    "totalPages": 5
+  }
+}
+```

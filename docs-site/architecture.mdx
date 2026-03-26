@@ -1,0 +1,126 @@
+---
+title: Architecture
+description: "Microservices architecture powering the Open Pay platform"
+---
+
+# Platform Architecture
+
+Open Pay is built as a distributed microservices system with 8 backend services, 2 frontend applications, and on-chain smart contracts.
+
+## System Overview
+
+```
+                          ┌─────────────────┐
+                          │   Merchant       │
+                          │   Portal (React) │
+                          └────────┬─────────┘
+                                   │
+                          ┌────────┴─────────┐
+                          │   Admin          │
+                          │   Dashboard      │
+                          └────────┬─────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │       API Gateway (8080)      │
+                    │   JWT + HMAC Auth, Rate Limit │
+                    └──────────────┬──────────────┘
+                                   │
+        ┌──────────┬──────────┬────┴────┬──────────┬──────────┐
+        ▼          ▼          ▼         ▼          ▼          ▼
+   ┌─────────┐┌─────────┐┌────────┐┌─────────┐┌────────┐┌────────┐
+   │Merchant ││Payment  ││Settle- ││Webhook  ││Exchange││Subscr- │
+   │ (8082)  ││ (8081)  ││ment    ││ (8084)  ││ (8085) ││iption  │
+   │         ││         ││(8083)  ││         ││        ││(8086)  │
+   └────┬────┘└────┬────┘└───┬────┘└────┬────┘└───┬────┘└───┬────┘
+        │          │         │          │         │         │
+        ▼          ▼         ▼          ▼         ▼         ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │                    PostgreSQL 16 (per-service DBs)            │
+   └──────────────────────────────────────────────────────────────┘
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │  Redis 7     │  │ NATS         │  │ MinIO        │
+   │  (cache/rate)│  │ JetStream    │  │ (file store) │
+   └──────────────┘  └──────────────┘  └──────────────┘
+```
+
+## Services
+
+<CardGroup cols={2}>
+  <Card title="Gateway" icon="shield-halved">
+    API gateway handling JWT/HMAC authentication, rate limiting, CORS, and request routing to downstream services. Port 8080.
+  </Card>
+  <Card title="Payment Service" icon="credit-card">
+    Payment creation, QR code generation, status tracking, checkout sessions, and crypto provider integrations (Bybit, Binance, KuCoin). Port 8081.
+  </Card>
+  <Card title="Merchant Service" icon="store">
+    Merchant registration, KYC management, API key generation, payment links, branch management, and user roles. Port 8082.
+  </Card>
+  <Card title="Settlement Service" icon="building-columns">
+    Balance tracking, withdrawal requests, treasury management, and fiat settlement processing. Port 8083.
+  </Card>
+  <Card title="Webhook Service" icon="bell">
+    ED25519-signed webhook delivery with exponential backoff retries, delivery logs, and signature verification. Port 8084.
+  </Card>
+  <Card title="Exchange Service" icon="chart-line">
+    Real-time USDT/LKR exchange rates via CoinGecko. Background fetcher updates every 5 minutes. Port 8085.
+  </Card>
+  <Card title="Subscription Service" icon="repeat">
+    Recurring billing plans, subscriber management, trial periods, and automatic payment scheduling. Port 8086.
+  </Card>
+  <Card title="Notification Service" icon="envelope">
+    Email notifications via SMTP (Resend), with template management and NATS JetStream async processing. Port 8087.
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Backend** | Go 1.24, chi router, pgx/v5, NATS JetStream |
+| **Frontend** | React, Vite, TanStack (Start, Query, Table), shadcn/ui, Tailwind CSS v4 |
+| **Database** | PostgreSQL 16 (database-per-service pattern) |
+| **Cache** | Redis 7 (rate limiting, session cache) |
+| **Messaging** | NATS JetStream (event-driven async processing) |
+| **File Storage** | MinIO (S3-compatible object storage) |
+| **Smart Contracts** | Solidity 0.8.24, Hardhat, OpenZeppelin, Chainlink |
+| **Auth** | JWT (merchant/admin), HMAC-SHA256 (SDK), ED25519 (webhooks) |
+| **Monitoring** | Prometheus, Grafana, zerolog, OpenTelemetry |
+| **CI/CD** | GitHub Actions, Vercel (frontends), Docker Compose (backend) |
+
+## Authentication Layers
+
+Open Pay uses three authentication mechanisms:
+
+<Steps>
+  <Step title="JWT (Merchant & Admin Portals)">
+    Login with email/password returns an access token (15 min) and refresh token (7 days). Supports 2FA via TOTP.
+  </Step>
+  <Step title="HMAC-SHA256 (SDK / API Keys)">
+    For server-to-server integrations. Each request is signed with `HMAC-SHA256(apiSecret, timestamp + method + path + body)`. Prevents replay attacks with timestamp validation.
+  </Step>
+  <Step title="ED25519 (Webhooks)">
+    Outgoing webhooks are signed with the platform's ED25519 private key. Merchants verify using the public key from `/v1/webhooks/public-key`.
+  </Step>
+</Steps>
+
+## Database-per-Service
+
+Each microservice owns its database schema, enforcing data isolation:
+
+| Service | Database | Key Tables |
+|---|---|---|
+| Merchant | `merchant_db` | merchants, users, api_keys, payment_links, branches |
+| Payment | `payment_db` | payments, payment_statuses |
+| Settlement | `settlement_db` | balances, withdrawals |
+| Webhook | `webhook_db` | webhook_configs, delivery_logs |
+| Subscription | `subscription_db` | plans, subscriptions |
+| Notification | `notification_db` | notifications, email_templates |
+| Exchange | `exchange_db` | exchange_rates |
+| Admin | `admin_db` | admin_users, roles, audit_logs, settings, legal_documents |
+
+## Deployment
+
+- **Backend**: Docker Compose on DigitalOcean (8 services + infra)
+- **Frontends**: Vercel with automatic deploys from GitHub
+- **Smart Contracts**: BSC Testnet (Hardhat deployment)
+- **DNS**: Custom domains via Cloudflare

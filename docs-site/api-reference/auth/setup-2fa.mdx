@@ -1,0 +1,38 @@
+---
+title: "Setup 2FA"
+api: "POST /v1/auth/2fa/setup"
+description: "Generate a TOTP secret and QR code URI for setting up two-factor authentication"
+---
+
+<Note>
+  This endpoint requires a valid Bearer token in the `Authorization` header.
+</Note>
+
+Initiates two-factor authentication setup for the merchant's account. Returns a TOTP secret and an `otpauth://` URI that can be rendered as a QR code for authenticator apps like Google Authenticator or Authy.
+
+After scanning the QR code, the merchant must call [Verify 2FA](/api-reference/auth/verify-2fa) with a valid code to complete the setup.
+
+### Example Response (200)
+
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",
+  "otpauthUrl": "otpauth://totp/OpenPay:admin@acmepay.com?secret=JBSWY3DPEHPK3PXP&issuer=OpenPay",
+  "qrCode": "data:image/png;base64,iVBORw0KGgo..."
+}
+```
+
+<Warning>
+  The `secret` is shown only once during setup. If the merchant loses it, they will need to disable and re-enable 2FA.
+</Warning>
+
+### Error Responses
+
+```json 409 Already Enabled
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Two-factor authentication is already enabled"
+  }
+}
+```

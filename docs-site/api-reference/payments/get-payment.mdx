@@ -1,0 +1,123 @@
+---
+title: "Get Payment"
+api: "GET /v1/payments/{id}"
+description: "Retrieve the details and current status of a specific payment"
+---
+
+## Authentication
+
+This endpoint supports two authentication methods:
+
+- **Bearer token** via the `Authorization` header
+- **HMAC signature** via `X-API-Key` and `X-Signature` headers
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+or
+
+```
+X-API-Key: <your_api_key>
+X-Signature: <hmac_sha256_signature>
+```
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the payment (e.g., `pay_abc123def456`).
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the payment.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current payment status: `initiated`, `pending`, `confirming`, `paid`, `failed`, or `expired`.
+</ResponseField>
+
+<ResponseField name="amount" type="number">
+  The fiat amount of the payment.
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  The fiat currency (`USD` or `LKR`).
+</ResponseField>
+
+<ResponseField name="cryptoAmount" type="string">
+  The equivalent USDT amount.
+</ResponseField>
+
+<ResponseField name="cryptoAddress" type="string">
+  The blockchain wallet address for the payment.
+</ResponseField>
+
+<ResponseField name="qrCodeUrl" type="string">
+  URL to the QR code image.
+</ResponseField>
+
+<ResponseField name="checkoutUrl" type="string">
+  The hosted checkout page URL.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  The payment description.
+</ResponseField>
+
+<ResponseField name="customerEmail" type="string">
+  The customer's email address, if provided.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Custom key-value metadata attached to the payment.
+</ResponseField>
+
+<ResponseField name="txHash" type="string">
+  The on-chain transaction hash, available once the payment is detected.
+</ResponseField>
+
+<ResponseField name="paidAt" type="string">
+  ISO 8601 timestamp of when the payment was confirmed, if applicable.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp indicating when the payment expires.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of when the payment was created.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X GET "https://olp-api.nipuntheekshana.com/v1/payments/pay_abc123def456" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "id": "pay_abc123def456",
+  "status": "paid",
+  "amount": 25.00,
+  "currency": "USD",
+  "cryptoAmount": "25.032500",
+  "cryptoAddress": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
+  "qrCodeUrl": "https://olp-api.nipuntheekshana.com/qr/pay_abc123def456.png",
+  "checkoutUrl": "https://olp-checkout.nipuntheekshana.com/pay/pay_abc123def456",
+  "description": "Order #1234 - Premium Plan",
+  "customerEmail": "customer@example.com",
+  "metadata": {
+    "orderId": "order_1234",
+    "plan": "premium"
+  },
+  "txHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+  "paidAt": "2026-03-26T14:55:12Z",
+  "expiresAt": "2026-03-26T15:30:00Z",
+  "createdAt": "2026-03-26T14:30:00Z"
+}
+```
+</ResponseExample>
