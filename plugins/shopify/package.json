@@ -1,0 +1,17 @@
+{
+  "name": "@openpay/shopify-plugin",
+  "version": "1.0.0",
+  "description": "Open Pay payment gateway for Shopify stores",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "crypto": "^1.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

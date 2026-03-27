@@ -79,7 +79,8 @@
     {
       "group": "Plugins",
       "pages": [
-        "plugins/woocommerce"
+        "plugins/woocommerce",
+        "plugins/shopify"
       ]
     },
     {
