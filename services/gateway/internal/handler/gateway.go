@@ -112,6 +112,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/payments", p.ProxyToPayment)
 	r.Get("/v1/payments", p.ProxyToPayment)
 	r.Get("/v1/payments/{id}", p.ProxyToPayment)
+	r.Get("/v1/payments/export/csv", p.ProxyToPayment)
 
 	// Public payment routes → payment service (no auth)
 	r.Post("/v1/public/payments", p.ProxyToPayment)

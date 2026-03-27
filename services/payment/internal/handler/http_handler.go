@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -59,6 +61,7 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 		r.Post("/v1/payments", h.CreatePayment)
 		r.Get("/v1/payments", h.ListPayments)
 		r.Get("/v1/payments/{id}", h.GetPayment)
+		r.Get("/v1/payments/export/csv", h.ExportPaymentsCSV)
 	})
 
 	// Checkout sessions (SDK — uses X-Merchant-ID header from gateway)
@@ -344,6 +347,68 @@ func (h *PaymentHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 			"perPage": params.PerPage,
 		},
 	})
+}
+
+// ExportPaymentsCSV handles GET /v1/payments/export/csv.
+func (h *PaymentHandler) ExportPaymentsCSV(w http.ResponseWriter, r *http.Request) {
+	merchantID, ok := merchantIDFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	params := service.ListParams{
+		Page:    1,
+		PerPage: 10000,
+		Search:  r.URL.Query().Get("search"),
+	}
+	if statusStr := r.URL.Query().Get("status"); statusStr != "" {
+		status := domain.PaymentStatus(statusStr)
+		params.Status = &status
+	}
+	if df := r.URL.Query().Get("dateFrom"); df != "" {
+		if t, err := time.Parse(time.RFC3339, df); err == nil {
+			params.DateFrom = &t
+		}
+	}
+	if dt := r.URL.Query().Get("dateTo"); dt != "" {
+		if t, err := time.Parse(time.RFC3339, dt); err == nil {
+			params.DateTo = &t
+		}
+	}
+
+	payments, _, err := h.svc.ListPayments(r.Context(), merchantID, params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list payments")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=payments-%s.csv", time.Now().Format("2006-01-02")))
+
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"Payment No", "Amount", "Currency", "Amount USDT", "Status", "Provider", "Customer Email", "Created At", "Paid At", "Net Amount USDT", "Total Fees USDT"})
+
+	for _, p := range payments {
+		paidAt := ""
+		if p.PaidAt != nil {
+			paidAt = p.PaidAt.Format(time.RFC3339)
+		}
+		_ = writer.Write([]string{
+			p.PaymentNo,
+			p.Amount.String(),
+			p.Currency,
+			p.AmountUSDT.String(),
+			string(p.Status),
+			p.Provider,
+			p.CustomerEmail,
+			p.CreatedAt.Format(time.RFC3339),
+			paidAt,
+			p.NetAmountUSDT.String(),
+			p.TotalFeesUSDT.String(),
+		})
+	}
+	writer.Flush()
 }
 
 // GetCheckout handles GET /v1/payments/{id}/checkout (public, for customer).
