@@ -10,6 +10,7 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/audit"
 	"github.com/openlankapay/openlankapay/pkg/database"
+	"github.com/openlankapay/openlankapay/pkg/fraud"
 	"github.com/openlankapay/openlankapay/pkg/observability"
 	exchangeclient "github.com/openlankapay/openlankapay/services/payment/internal/adapter/exchange"
 	merchantclient "github.com/openlankapay/openlankapay/services/payment/internal/adapter/merchant"
@@ -93,8 +94,13 @@ func main() {
 	adminServiceURL := getEnv("ADMIN_SERVICE_URL", "http://localhost:8088")
 	auditClient := audit.NewClient(adminServiceURL)
 
+	// Fraud engine
+	fraudEngine := fraud.NewEngine()
+	logger.Info().Msg("fraud detection engine initialized")
+
 	// Service
 	svc := service.NewPaymentService(paymentRepo, providers, exchClient, eventPub, merchClient)
+	svc.SetFraudEngine(fraudEngine)
 
 	// HTTP Handler
 	h := handler.NewPaymentHandler(svc, mockProv, auditClient)

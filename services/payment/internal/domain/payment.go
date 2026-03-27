@@ -128,6 +128,8 @@ type Payment struct {
 	TxHash          string
 	BlockNumber     int64
 	WalletAddress   string
+	RiskScore       int
+	RiskFlags       []string
 	// LKR-specific fee fields (populated when currency is LKR)
 	LKRAmount       *decimal.Decimal
 	LKRExchangeFee  *decimal.Decimal
