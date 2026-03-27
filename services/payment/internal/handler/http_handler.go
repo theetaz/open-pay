@@ -612,6 +612,10 @@ func paymentResponse(p *domain.Payment) map[string]any {
 	if p.CancelURL != "" {
 		resp["cancelUrl"] = p.CancelURL
 	}
+	if p.RiskScore > 0 {
+		resp["riskScore"] = p.RiskScore
+		resp["riskFlags"] = p.RiskFlags
+	}
 	return resp
 }
 
