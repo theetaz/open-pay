@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-plugin-artifacts:
+    name: Build Plugin Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # ─── WooCommerce Plugin ───
+      - name: Package WooCommerce Plugin
+        run: |
+          mkdir -p dist
+          cd plugins/woocommerce
+          zip -r ../../dist/openpay-woocommerce-${{ github.ref_name }}.zip \
+            . \
+            -x "*.git*" -x "node_modules/*" -x ".DS_Store"
+          cd ../..
+          echo "WooCommerce plugin packaged"
+
+      # ─── Shopify Plugin ───
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Package Shopify Plugin
+        run: |
+          cd plugins/shopify
+          npm install --production
+          cd ..
+          zip -r ../dist/openpay-shopify-${{ github.ref_name }}.zip \
+            shopify/ \
+            -x "shopify/node_modules/.cache/*" -x "*.git*" -x ".DS_Store"
+          cd ..
+          echo "Shopify plugin packaged"
+
+      # ─── Upload Artifacts ───
+      - name: Upload WooCommerce Plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpay-woocommerce-${{ github.ref_name }}
+          path: dist/openpay-woocommerce-${{ github.ref_name }}.zip
+
+      - name: Upload Shopify Plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpay-shopify-${{ github.ref_name }}
+          path: dist/openpay-shopify-${{ github.ref_name }}.zip
+
+      # ─── Create GitHub Release ───
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/openpay-woocommerce-${{ github.ref_name }}.zip
+            dist/openpay-shopify-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
