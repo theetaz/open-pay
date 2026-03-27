@@ -22,6 +22,7 @@ import { CheckoutPage } from '#/pages/checkout'
 import { SandboxPayPage } from '#/pages/sandbox-pay'
 import { VerifyDirectorPage } from '#/pages/verify-director'
 import { DirectDebitPage } from '#/pages/direct-debit'
+import { RefundsPage } from '#/pages/refunds'
 
 export function App() {
   return (
@@ -38,6 +39,7 @@ export function App() {
         <Route path="subscriptions" element={<SubscriptionsPage />} />
         <Route path="direct-debit" element={<DirectDebitPage />} />
         <Route path="withdrawal" element={<WithdrawalPage />} />
+        <Route path="refunds" element={<RefundsPage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="profile" element={<ProfilePage />} />

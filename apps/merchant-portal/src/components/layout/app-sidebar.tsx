@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Plug,
   FileSignature,
+  RotateCcw,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -36,6 +37,7 @@ const navItems = [
   { title: 'Subscriptions', href: '/subscriptions', icon: RefreshCw },
   { title: 'Direct Debit', href: '/direct-debit', icon: FileSignature },
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
+  { title: 'Refunds', href: '/refunds', icon: RotateCcw },
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },
   { title: 'Integrations', href: '/integrations', icon: Plug },
