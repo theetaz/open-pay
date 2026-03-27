@@ -129,3 +129,91 @@ func TestWithdrawalReject(t *testing.T) {
 	assert.Equal(t, domain.WithdrawalRejected, w.Status)
 	assert.Equal(t, "Suspicious activity", w.RejectedReason)
 }
+
+func TestBalanceDebit(t *testing.T) {
+	merchantID := uuid.New()
+
+	t.Run("debit within available", func(t *testing.T) {
+		b := domain.NewMerchantBalance(merchantID)
+		b.Credit(decimal.NewFromFloat(100), decimal.Zero)
+		err := b.Debit(decimal.NewFromFloat(25))
+		require.NoError(t, err)
+		assert.True(t, decimal.NewFromFloat(75).Equal(b.AvailableUSDT))
+	})
+
+	t.Run("debit exceeding available fails", func(t *testing.T) {
+		b := domain.NewMerchantBalance(merchantID)
+		b.Credit(decimal.NewFromFloat(10), decimal.Zero)
+		err := b.Debit(decimal.NewFromFloat(20))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrInsufficientBalance)
+	})
+}
+
+func TestNewRefund(t *testing.T) {
+	merchantID := uuid.New()
+	paymentID := uuid.New()
+
+	t.Run("valid refund", func(t *testing.T) {
+		r, err := domain.NewRefund(merchantID, paymentID, "PAY-001", decimal.NewFromFloat(25), "Customer requested")
+		require.NoError(t, err)
+		assert.Equal(t, domain.RefundPending, r.Status)
+		assert.True(t, decimal.NewFromFloat(25).Equal(r.AmountUSDT))
+		assert.Equal(t, "Customer requested", r.Reason)
+	})
+
+	t.Run("zero amount", func(t *testing.T) {
+		_, err := domain.NewRefund(merchantID, paymentID, "PAY-001", decimal.Zero, "reason")
+		require.Error(t, err)
+	})
+
+	t.Run("empty reason", func(t *testing.T) {
+		_, err := domain.NewRefund(merchantID, paymentID, "PAY-001", decimal.NewFromFloat(25), "")
+		require.Error(t, err)
+	})
+
+	t.Run("empty payment number", func(t *testing.T) {
+		_, err := domain.NewRefund(merchantID, paymentID, "", decimal.NewFromFloat(25), "reason")
+		require.Error(t, err)
+	})
+}
+
+func TestRefundLifecycle(t *testing.T) {
+	merchantID := uuid.New()
+	paymentID := uuid.New()
+
+	t.Run("approve and complete", func(t *testing.T) {
+		r, _ := domain.NewRefund(merchantID, paymentID, "PAY-001", decimal.NewFromFloat(25), "Duplicate charge")
+		adminID := uuid.New()
+
+		err := r.Approve(adminID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.RefundApproved, r.Status)
+		assert.Equal(t, &adminID, r.ApprovedBy)
+
+		err = r.Complete()
+		require.NoError(t, err)
+		assert.Equal(t, domain.RefundCompleted, r.Status)
+		assert.NotNil(t, r.CompletedAt)
+	})
+
+	t.Run("reject", func(t *testing.T) {
+		r, _ := domain.NewRefund(merchantID, paymentID, "PAY-002", decimal.NewFromFloat(25), "reason")
+		err := r.Reject("Not eligible")
+		require.NoError(t, err)
+		assert.Equal(t, domain.RefundRejected, r.Status)
+	})
+
+	t.Run("cannot approve non-pending", func(t *testing.T) {
+		r, _ := domain.NewRefund(merchantID, paymentID, "PAY-003", decimal.NewFromFloat(25), "reason")
+		_ = r.Reject("no")
+		err := r.Approve(uuid.New())
+		require.Error(t, err)
+	})
+
+	t.Run("cannot complete non-approved", func(t *testing.T) {
+		r, _ := domain.NewRefund(merchantID, paymentID, "PAY-004", decimal.NewFromFloat(25), "reason")
+		err := r.Complete()
+		require.Error(t, err)
+	})
+}

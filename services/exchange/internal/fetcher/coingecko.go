@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -16,7 +17,19 @@ type RateUpdater interface {
 	UpdateRate(ctx context.Context, base, quote string, rate decimal.Decimal, source string) error
 }
 
-// CoinGeckoFetcher periodically fetches USDT/LKR rate from CoinGecko.
+// cryptoPair maps our currency code to CoinGecko's coin ID.
+var cryptoPairs = []struct {
+	Base       string // Our currency code
+	CoinGeckoID string // CoinGecko API ID
+}{
+	{"USDT", "tether"},
+	{"USDC", "usd-coin"},
+	{"BTC", "bitcoin"},
+	{"ETH", "ethereum"},
+	{"BNB", "binancecoin"},
+}
+
+// CoinGeckoFetcher periodically fetches crypto/LKR rates from CoinGecko.
 type CoinGeckoFetcher struct {
 	svc      RateUpdater
 	logger   zerolog.Logger
@@ -54,59 +67,71 @@ func (f *CoinGeckoFetcher) Start(ctx context.Context) {
 }
 
 func (f *CoinGeckoFetcher) fetchAndUpdate(ctx context.Context) {
-	rate, err := f.fetchUSDTLKR(ctx)
+	rates, err := f.fetchAllRates(ctx)
 	if err != nil {
-		f.logger.Warn().Err(err).Msg("failed to fetch USDT/LKR rate from CoinGecko")
+		f.logger.Warn().Err(err).Msg("failed to fetch rates from CoinGecko")
 		return
 	}
 
-	if err := f.svc.UpdateRate(ctx, "USDT", "LKR", rate, "COINGECKO"); err != nil {
-		f.logger.Warn().Err(err).Msg("failed to update USDT/LKR rate")
-		return
+	for base, lkrRate := range rates {
+		if err := f.svc.UpdateRate(ctx, base, "LKR", lkrRate, "COINGECKO"); err != nil {
+			f.logger.Warn().Err(err).Str("pair", base+"/LKR").Msg("failed to update rate")
+			continue
+		}
+		f.logger.Info().Str("pair", base+"/LKR").Str("rate", lkrRate.String()).Msg("updated rate from CoinGecko")
 	}
-
-	f.logger.Info().Str("rate", rate.String()).Msg("updated USDT/LKR rate from CoinGecko")
 }
 
-// fetchUSDTLKR gets the USDT price in LKR from CoinGecko's free API.
-// CoinGecko uses "tether" for USDT and "lkr" for Sri Lankan Rupee.
-func (f *CoinGeckoFetcher) fetchUSDTLKR(ctx context.Context) (decimal.Decimal, error) {
-	url := "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=lkr"
+// fetchAllRates gets prices for all supported cryptocurrencies in LKR from CoinGecko.
+func (f *CoinGeckoFetcher) fetchAllRates(ctx context.Context) (map[string]decimal.Decimal, error) {
+	// Build comma-separated list of CoinGecko IDs
+	ids := make([]string, len(cryptoPairs))
+	for i, p := range cryptoPairs {
+		ids[i] = p.CoinGeckoID
+	}
+
+	url := fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=lkr", strings.Join(ids, ","))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("creating request: %w", err)
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("fetching rate: %w", err)
+		return nil, fmt.Errorf("fetching rates: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return decimal.Zero, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 
-	// Response: {"tether":{"lkr":325.50}}
+	// Response: {"tether":{"lkr":325.50},"bitcoin":{"lkr":30000000},...}
 	var result map[string]map[string]float64
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return decimal.Zero, fmt.Errorf("decoding response: %w", err)
+		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
-	tether, ok := result["tether"]
-	if !ok {
-		return decimal.Zero, fmt.Errorf("missing tether data in response")
-	}
-	lkr, ok := tether["lkr"]
-	if !ok {
-		return decimal.Zero, fmt.Errorf("missing lkr rate in response")
+	rates := make(map[string]decimal.Decimal)
+	for _, pair := range cryptoPairs {
+		coinData, ok := result[pair.CoinGeckoID]
+		if !ok {
+			f.logger.Warn().Str("coin", pair.CoinGeckoID).Msg("missing data in CoinGecko response")
+			continue
+		}
+		lkr, ok := coinData["lkr"]
+		if !ok {
+			f.logger.Warn().Str("coin", pair.CoinGeckoID).Msg("missing LKR rate in response")
+			continue
+		}
+		rate := decimal.NewFromFloat(lkr)
+		if rate.LessThanOrEqual(decimal.Zero) {
+			f.logger.Warn().Str("coin", pair.CoinGeckoID).Msg("invalid rate (<=0)")
+			continue
+		}
+		rates[pair.Base] = rate
 	}
 
-	rate := decimal.NewFromFloat(lkr)
-	if rate.LessThanOrEqual(decimal.Zero) {
-		return decimal.Zero, fmt.Errorf("invalid rate: %s", rate.String())
-	}
-
-	return rate, nil
+	return rates, nil
 }

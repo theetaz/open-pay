@@ -504,7 +504,11 @@ function CreatePaymentLinkDialog({ open, onOpenChange }: { open: boolean; onOpen
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="LKR">LKR (Rs.)</SelectItem>
-                <SelectItem value="USDT">USDT (T)</SelectItem>
+                <SelectItem value="USDT">USDT</SelectItem>
+                <SelectItem value="USDC">USDC</SelectItem>
+                <SelectItem value="BTC">BTC</SelectItem>
+                <SelectItem value="ETH">ETH</SelectItem>
+                <SelectItem value="BNB">BNB</SelectItem>
               </SelectContent>
             </Select>
           </div>

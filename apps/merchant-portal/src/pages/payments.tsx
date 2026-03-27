@@ -4,7 +4,8 @@ import { StatCard } from '#/components/dashboard/stat-card'
 import { StatusBadge } from '#/components/dashboard/status-badge'
 import { PageHeader } from '#/components/dashboard/page-header'
 import { DataTable, type FilterConfig } from '#/components/data-table'
-import { DollarSign, CreditCard, Clock, AlertTriangle } from 'lucide-react'
+import { DollarSign, CreditCard, Clock, AlertTriangle, Download } from 'lucide-react'
+import { Button } from '#/components/ui/button'
 import { usePayments } from '#/hooks/use-payments'
 import { useMe } from '#/hooks/use-auth'
 import { useExchangeRate } from '#/hooks/use-exchange-rate'
@@ -182,7 +183,21 @@ export function PaymentsPage() {
 
   return (
     <>
-      <PageHeader title="Payments" description="View and manage all payment transactions" />
+      <PageHeader
+        title="Payments"
+        description="View and manage all payment transactions"
+        action={
+          <Button variant="outline" onClick={() => {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+            const token = localStorage.getItem('token')
+            const params = new URLSearchParams()
+            if (statusFilter) params.set('status', statusFilter)
+            window.open(`${apiUrl}/v1/payments/export/csv?${params.toString()}`, '_blank')
+          }}>
+            <Download className="mr-2 size-4" /> Export CSV
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         <StatCard

@@ -10,44 +10,35 @@ import (
 
 	"github.com/openlankapay/openlankapay/pkg/database"
 	"github.com/openlankapay/openlankapay/pkg/observability"
-	pgadapter "github.com/openlankapay/openlankapay/services/settlement/internal/adapter/postgres"
-	"github.com/openlankapay/openlankapay/services/settlement/internal/handler"
-	"github.com/openlankapay/openlankapay/services/settlement/internal/service"
+	pgadapter "github.com/openlankapay/openlankapay/services/directdebit/internal/adapter/postgres"
+	"github.com/openlankapay/openlankapay/services/directdebit/internal/handler"
+	"github.com/openlankapay/openlankapay/services/directdebit/internal/service"
 )
 
 func main() {
-	logger := observability.NewLogger("settlement", getEnv("LOG_LEVEL", "info"))
+	logger := observability.NewLogger("directdebit", getEnv("LOG_LEVEL", "info"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Database
-	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/settlement_db?sslmode=disable")
+	dbURL := getEnv("DATABASE_URL", "postgres://olp:olp_dev_password@localhost:5433/directdebit_db?sslmode=disable")
 	pool, err := database.NewPool(ctx, database.DefaultConfig(dbURL), logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 	defer pool.Close()
 
-	// JWT secret
 	jwtSecret := getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min32chars")
 
-	// Repositories
-	balanceRepo := pgadapter.NewBalanceRepository(pool)
-	withdrawalRepo := pgadapter.NewWithdrawalRepository(pool)
+	scenarioRepo := pgadapter.NewScenarioRepository(pool)
+	contractRepo := pgadapter.NewContractRepository(pool)
+	paymentRepo := pgadapter.NewPaymentRepository(pool)
 
-	refundRepo := pgadapter.NewRefundRepository(pool)
-
-	// Service
-	svc := service.NewSettlementService(balanceRepo, withdrawalRepo)
-	svc.SetRefundRepository(refundRepo)
-
-	// HTTP Handler
-	h := handler.NewSettlementHandler(svc)
+	svc := service.NewDirectDebitService(scenarioRepo, contractRepo, paymentRepo)
+	h := handler.NewDirectDebitHandler(svc)
 	router := handler.NewRouter(h, jwtSecret)
 
-	// Server
-	port := getEnv("PORT", "8083")
+	port := getEnv("PORT", "8089")
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,
@@ -56,20 +47,18 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		logger.Info().Msg("shutting down settlement service...")
+		logger.Info().Msg("shutting down direct debit service...")
 		cancel()
-
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	logger.Info().Str("port", port).Msg("settlement service started")
+	logger.Info().Str("port", port).Msg("direct debit service started")
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatal().Err(err).Msg("server error")
 	}
