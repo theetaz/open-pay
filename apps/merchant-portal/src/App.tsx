@@ -21,6 +21,7 @@ import { PaymentLinkCheckout } from '#/pages/pay-slug'
 import { CheckoutPage } from '#/pages/checkout'
 import { SandboxPayPage } from '#/pages/sandbox-pay'
 import { VerifyDirectorPage } from '#/pages/verify-director'
+import { POSPage } from '#/pages/pos'
 
 export function App() {
   return (
@@ -42,6 +43,7 @@ export function App() {
         <Route path="security" element={<SecurityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
+        <Route path="pos" element={<POSPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
         <Route path="example" element={<ExamplePage />} />
       </Route>

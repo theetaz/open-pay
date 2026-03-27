@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Plug,
+  QrCode,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -36,6 +37,7 @@ const navItems = [
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },
+  { title: 'POS', href: '/pos', icon: QrCode },
   { title: 'Integrations', href: '/integrations', icon: Plug },
   { title: 'Audit Log', href: '/audit-log', icon: ScrollText },
   { title: 'Settings', href: '/settings', icon: Settings },
