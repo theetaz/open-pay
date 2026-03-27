@@ -36,8 +36,11 @@ func main() {
 	balanceRepo := pgadapter.NewBalanceRepository(pool)
 	withdrawalRepo := pgadapter.NewWithdrawalRepository(pool)
 
+	refundRepo := pgadapter.NewRefundRepository(pool)
+
 	// Service
 	svc := service.NewSettlementService(balanceRepo, withdrawalRepo)
+	svc.SetRefundRepository(refundRepo)
 
 	// HTTP Handler
 	h := handler.NewSettlementHandler(svc)

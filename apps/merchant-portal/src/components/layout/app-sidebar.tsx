@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Plug,
+  RotateCcw,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -34,6 +35,7 @@ const navItems = [
   { title: 'Payment Links', href: '/payment-links', icon: Link2 },
   { title: 'Subscriptions', href: '/subscriptions', icon: RefreshCw },
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
+  { title: 'Refunds', href: '/refunds', icon: RotateCcw },
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },
   { title: 'Integrations', href: '/integrations', icon: Plug },

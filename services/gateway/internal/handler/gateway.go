@@ -138,6 +138,13 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/withdrawals/{id}/reject", p.ProxyToSettlement)
 	r.Post("/v1/withdrawals/{id}/complete", p.ProxyToSettlement)
 
+	// Refund routes → settlement service
+	r.Post("/v1/refunds", p.ProxyToSettlement)
+	r.Get("/v1/refunds", p.ProxyToSettlement)
+	r.Get("/v1/refunds/{id}", p.ProxyToSettlement)
+	r.Post("/v1/refunds/{id}/approve", p.ProxyToSettlement)
+	r.Post("/v1/refunds/{id}/reject", p.ProxyToSettlement)
+
 	// Webhook routes → webhook service (auth handled by webhook service)
 	r.Post("/v1/webhooks/configure", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/public-key", p.ProxyToWebhook)

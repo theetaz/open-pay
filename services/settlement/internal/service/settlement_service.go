@@ -25,15 +25,29 @@ type WithdrawalRepository interface {
 	ListByMerchant(ctx context.Context, merchantID uuid.UUID, status *domain.WithdrawalStatus) ([]*domain.Withdrawal, error)
 }
 
+// RefundRepository defines the data access contract for refunds.
+type RefundRepository interface {
+	Create(ctx context.Context, r *domain.Refund) error
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Refund, error)
+	ListByMerchant(ctx context.Context, merchantID uuid.UUID) ([]*domain.Refund, error)
+	Update(ctx context.Context, r *domain.Refund) error
+}
+
 // SettlementService orchestrates settlement and withdrawal operations.
 type SettlementService struct {
 	balances    BalanceRepository
 	withdrawals WithdrawalRepository
+	refunds     RefundRepository
 }
 
 // NewSettlementService creates a new SettlementService.
 func NewSettlementService(balances BalanceRepository, withdrawals WithdrawalRepository) *SettlementService {
 	return &SettlementService{balances: balances, withdrawals: withdrawals}
+}
+
+// SetRefundRepository sets the refund repository (optional, added for backwards compatibility).
+func (s *SettlementService) SetRefundRepository(r RefundRepository) {
+	s.refunds = r
 }
 
 // GetBalance returns a merchant's current balance, creating one if it doesn't exist.
@@ -159,4 +173,82 @@ func (s *SettlementService) ListWithdrawals(ctx context.Context, merchantID uuid
 // GetWithdrawal returns a single withdrawal by ID.
 func (s *SettlementService) GetWithdrawal(ctx context.Context, id uuid.UUID) (*domain.Withdrawal, error) {
 	return s.withdrawals.GetByID(ctx, id)
+}
+
+// RequestRefund creates a new refund request and debits the merchant balance.
+func (s *SettlementService) RequestRefund(ctx context.Context, merchantID, paymentID uuid.UUID, paymentNo string, amountUSDT decimal.Decimal, reason string) (*domain.Refund, error) {
+	balance, err := s.GetBalance(ctx, merchantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := balance.Debit(amountUSDT); err != nil {
+		return nil, err
+	}
+
+	refund, err := domain.NewRefund(merchantID, paymentID, paymentNo, amountUSDT, reason)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.refunds.Create(ctx, refund); err != nil {
+		return nil, fmt.Errorf("storing refund: %w", err)
+	}
+
+	if err := s.balances.Update(ctx, balance); err != nil {
+		return nil, fmt.Errorf("updating balance: %w", err)
+	}
+
+	return refund, nil
+}
+
+// ListRefunds returns refunds for a merchant.
+func (s *SettlementService) ListRefunds(ctx context.Context, merchantID uuid.UUID) ([]*domain.Refund, error) {
+	return s.refunds.ListByMerchant(ctx, merchantID)
+}
+
+// GetRefund returns a single refund by ID.
+func (s *SettlementService) GetRefund(ctx context.Context, id uuid.UUID) (*domain.Refund, error) {
+	return s.refunds.GetByID(ctx, id)
+}
+
+// ApproveRefund approves a pending refund.
+func (s *SettlementService) ApproveRefund(ctx context.Context, refundID, adminID uuid.UUID) error {
+	refund, err := s.refunds.GetByID(ctx, refundID)
+	if err != nil {
+		return err
+	}
+	if err := refund.Approve(adminID); err != nil {
+		return err
+	}
+	// Auto-complete after approval (crypto refunds are instant)
+	if err := refund.Complete(); err != nil {
+		return err
+	}
+	return s.refunds.Update(ctx, refund)
+}
+
+// RejectRefund rejects a pending refund and credits back the merchant balance.
+func (s *SettlementService) RejectRefund(ctx context.Context, refundID uuid.UUID, reason string) error {
+	refund, err := s.refunds.GetByID(ctx, refundID)
+	if err != nil {
+		return err
+	}
+
+	balance, err := s.balances.GetByMerchantID(ctx, refund.MerchantID)
+	if err != nil {
+		return err
+	}
+
+	if err := refund.Reject(reason); err != nil {
+		return err
+	}
+
+	// Credit back the refund amount
+	balance.Credit(refund.AmountUSDT, decimal.Zero)
+
+	if err := s.refunds.Update(ctx, refund); err != nil {
+		return err
+	}
+	return s.balances.Update(ctx, balance)
 }
