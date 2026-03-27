@@ -37,6 +37,18 @@ Open Pay is a full-stack crypto payment processing platform that enables merchan
   <Accordion title="Receive Webhooks">
     Get notified of payment events in real-time with ED25519-signed webhooks and automatic retries with exponential backoff.
   </Accordion>
+  <Accordion title="Direct Debit">
+    Create pre-authorized contracts for recurring or on-demand charges. Customers approve once, and you can execute payments against the contract without further interaction.
+  </Accordion>
+  <Accordion title="Issue Refunds">
+    Merchant-initiated refund system with balance management. Request, approve, or reject refunds with automatic balance adjustments.
+  </Accordion>
+  <Accordion title="POS Payments">
+    Generate QR codes for in-store crypto payments. Optimized interface for retail counters and tablet displays.
+  </Accordion>
+  <Accordion title="Fraud Detection">
+    Built-in rule-based fraud detection engine with velocity checks, amount anomaly detection, and configurable risk scoring.
+  </Accordion>
   <Accordion title="On-Chain Escrow">
     Smart contracts hold funds in escrow until confirmed, with Chainlink oracle price verification and slippage protection.
   </Accordion>
@@ -48,7 +60,7 @@ Open Pay is a full-stack crypto payment processing platform that enables merchan
 |---|---|
 | **Merchant Portal** | Web dashboard for managing payments, API keys, webhooks, and settlement |
 | **Admin Dashboard** | Platform administration: merchant approval, audit logs, system settings |
-| **REST API** | 80+ endpoints across 8 microservices |
+| **REST API** | 100+ endpoints across 10 microservices |
 | **SDKs** | TypeScript, Go, Python, PHP, Java — all with HMAC authentication |
 | **CLI** | `openpay` command-line tool for terminal-based payment management |
 | **Smart Contracts** | Solidity escrow on BSC with Chainlink price feeds |

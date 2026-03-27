@@ -1,0 +1,46 @@
+---
+title: "Refunds Overview"
+description: "Merchant-initiated refund system for completed payments"
+---
+
+# Refund API
+
+The Refund API allows merchants to issue refunds for completed payments. When a refund is created, the amount is debited from the merchant's available balance. If the refund is rejected, the amount is credited back.
+
+## Refund Lifecycle
+
+```
+PENDING → APPROVED → COMPLETED
+    ↓
+  REJECTED (balance credited back)
+```
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/refunds` | Request a refund |
+| `GET` | `/v1/refunds` | List merchant refunds |
+| `GET` | `/v1/refunds/{id}` | Get refund details |
+| `POST` | `/v1/refunds/{id}/approve` | Approve a pending refund |
+| `POST` | `/v1/refunds/{id}/reject` | Reject a pending refund |
+
+## Creating a Refund
+
+```json
+POST /v1/refunds
+{
+  "paymentId": "uuid-of-original-payment",
+  "paymentNo": "PAY-xxxx",
+  "amountUsdt": "25.00",
+  "reason": "Customer requested refund - duplicate charge"
+}
+```
+
+## Important Notes
+
+- Refund amount is immediately debited from merchant's available balance
+- Rejected refunds automatically credit the amount back to the merchant
+- Approved refunds auto-complete (crypto refunds are processed instantly)
+- Partial refunds are supported (amount can be less than original payment)
+- Merchants must have sufficient available balance to create a refund

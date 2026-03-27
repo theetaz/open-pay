@@ -1,0 +1,48 @@
+---
+title: "Direct Debit Overview"
+description: "Pre-authorized recurring and on-demand crypto charges"
+---
+
+# Direct Debit API
+
+The Direct Debit API enables merchants to establish pre-authorization contracts with customers, allowing recurring or on-demand cryptocurrency charges without requiring user interaction for each payment.
+
+## How It Works
+
+1. **Scenario Discovery** - Retrieve supported scenario codes that define transaction types and limits
+2. **Contract Creation** - Generate a pre-authorization contract with QR code and deep link
+3. **User Signing** - Customer approves the contract via their payment provider app
+4. **Status Verification** - Query the provider to confirm the contract has been signed
+5. **Payment Execution** - Charge amounts against the signed contract
+6. **Contract Management** - Sync status, execute payments, or terminate as needed
+
+## Contract Lifecycle
+
+```
+INITIATED → SIGNED → TERMINATED
+    ↓                    ↑
+  EXPIRED           (by merchant)
+```
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/direct-debit/scenario-codes` | List available scenario codes |
+| `POST` | `/v1/direct-debit` | Create a new contract |
+| `GET` | `/v1/direct-debit/list` | List contracts with pagination |
+| `GET` | `/v1/direct-debit/{id}` | Get contract details |
+| `POST` | `/v1/direct-debit/{id}/sync` | Sync contract status from provider |
+| `POST` | `/v1/direct-debit/{id}/terminate` | Terminate a signed contract |
+| `POST` | `/v1/direct-debit/{id}/payment` | Execute payment against contract |
+
+## Key Concepts
+
+### Scenario Codes
+Provider-specific pre-authorization types that define maximum transaction limits. Each scenario has a unique ID and is associated with a payment provider (Binance Pay, Bybit Pay, KuCoin Pay).
+
+### Single Upper Limit
+The maximum amount that can be charged in a single payment execution against the contract.
+
+### Fee Breakdown
+Each executed payment includes a detailed fee breakdown with exchange fees and platform fees, showing gross amount, deductions, and net settlement amount.
