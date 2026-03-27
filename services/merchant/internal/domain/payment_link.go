@@ -64,8 +64,9 @@ func NewPaymentLink(merchantID uuid.UUID, name, slug, currency string, amount de
 	if len(slug) < 2 || len(slug) > 100 {
 		return nil, fmt.Errorf("%w: slug must be between 2 and 100 characters", ErrInvalidPaymentLink)
 	}
-	if currency != "LKR" && currency != "USDT" {
-		return nil, fmt.Errorf("%w: currency must be LKR or USDT", ErrInvalidPaymentLink)
+	supportedCurrencies := map[string]bool{"LKR": true, "USDT": true, "USDC": true, "BTC": true, "ETH": true, "BNB": true}
+	if !supportedCurrencies[currency] {
+		return nil, fmt.Errorf("%w: unsupported currency %s", ErrInvalidPaymentLink, currency)
 	}
 	if amount.LessThanOrEqual(decimal.Zero) {
 		return nil, fmt.Errorf("%w: amount must be greater than zero", ErrInvalidPaymentLink)

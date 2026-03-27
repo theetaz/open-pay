@@ -1,15 +1,36 @@
 /**
+ * Currency symbol and decimal configuration.
+ */
+const currencyConfig: Record<string, { symbol: string; prefix: boolean; decimals: number }> = {
+  LKR: { symbol: 'Rs.', prefix: true, decimals: 2 },
+  USDT: { symbol: 'USDT', prefix: false, decimals: 6 },
+  USDC: { symbol: 'USDC', prefix: false, decimals: 6 },
+  BTC: { symbol: 'BTC', prefix: false, decimals: 8 },
+  ETH: { symbol: 'ETH', prefix: false, decimals: 8 },
+  BNB: { symbol: 'BNB', prefix: false, decimals: 6 },
+}
+
+/**
  * Formats an amount with currency symbol.
- * LKR amounts use "Rs." prefix, USDT uses "T" prefix.
  */
 export function formatAmount(amount: string | number, currency: string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount
   if (isNaN(num)) return `0.00 ${currency}`
 
-  if (currency === 'LKR') {
-    return `Rs. ${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const config = currencyConfig[currency]
+  if (!config) {
+    return `${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${currency}`
   }
-  return `${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDT`
+
+  const formatted = num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: config.decimals,
+  })
+
+  if (config.prefix) {
+    return `${config.symbol} ${formatted}`
+  }
+  return `${formatted} ${config.symbol}`
 }
 
 /**
@@ -47,4 +68,18 @@ export function formatDualAmount(
     primary: formatAmount(usdt, 'USDT'),
     secondary: lkr !== null ? formatAmount(lkr, 'LKR') : '',
   }
+}
+
+/**
+ * Returns all supported cryptocurrency codes (excluding fiat).
+ */
+export function getSupportedCryptoCurrencies(): string[] {
+  return ['USDT', 'USDC', 'BTC', 'ETH', 'BNB']
+}
+
+/**
+ * Returns all supported currencies including fiat.
+ */
+export function getAllSupportedCurrencies(): string[] {
+  return ['USDT', 'USDC', 'BTC', 'ETH', 'BNB', 'LKR']
 }
