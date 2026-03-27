@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: olp
       POSTGRES_PASSWORD: olp_dev_password
       POSTGRES_DB: olp_default
-      POSTGRES_MULTIPLE_DATABASES: payment_db,merchant_db,settlement_db,subscription_db,exchange_db,webhook_db,admin_db,notification_db
+      POSTGRES_MULTIPLE_DATABASES: payment_db,merchant_db,settlement_db,subscription_db,exchange_db,webhook_db,admin_db,notification_db,directdebit_db
     ports:
       - "5433:5432"
     volumes:

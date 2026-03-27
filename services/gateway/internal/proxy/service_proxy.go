@@ -16,6 +16,7 @@ type ServiceProxy struct {
 	SubscriptionProxy *httputil.ReverseProxy
 	NotificationProxy *httputil.ReverseProxy
 	AdminProxy        *httputil.ReverseProxy
+	DirectDebitProxy  *httputil.ReverseProxy
 
 	// URLs for health checks
 	MerchantURL     string
@@ -26,6 +27,7 @@ type ServiceProxy struct {
 	SubscriptionURL string
 	NotificationURL string
 	AdminURL        string
+	DirectDebitURL  string
 }
 
 // Config holds the URLs for downstream services.
@@ -38,6 +40,7 @@ type Config struct {
 	SubscriptionServiceURL string
 	NotificationServiceURL string
 	AdminServiceURL        string
+	DirectDebitServiceURL  string
 }
 
 // NewServiceProxy creates a proxy that forwards requests to downstream services.
@@ -51,6 +54,7 @@ func NewServiceProxy(cfg Config) *ServiceProxy {
 		SubscriptionProxy: newProxy(cfg.SubscriptionServiceURL),
 		NotificationProxy: newProxy(cfg.NotificationServiceURL),
 		AdminProxy:        newProxy(cfg.AdminServiceURL),
+		DirectDebitProxy:  newProxy(cfg.DirectDebitServiceURL),
 		MerchantURL:       cfg.MerchantServiceURL,
 		PaymentURL:        cfg.PaymentServiceURL,
 		ExchangeURL:       cfg.ExchangeServiceURL,
@@ -59,6 +63,7 @@ func NewServiceProxy(cfg Config) *ServiceProxy {
 		SubscriptionURL:   cfg.SubscriptionServiceURL,
 		NotificationURL:   cfg.NotificationServiceURL,
 		AdminURL:          cfg.AdminServiceURL,
+		DirectDebitURL:    cfg.DirectDebitServiceURL,
 	}
 }
 
@@ -124,4 +129,9 @@ func (p *ServiceProxy) ProxyToNotification(w http.ResponseWriter, r *http.Reques
 // ProxyToAdmin forwards the request to the admin service.
 func (p *ServiceProxy) ProxyToAdmin(w http.ResponseWriter, r *http.Request) {
 	p.AdminProxy.ServeHTTP(w, r)
+}
+
+// ProxyToDirectDebit forwards the request to the direct debit service.
+func (p *ServiceProxy) ProxyToDirectDebit(w http.ResponseWriter, r *http.Request) {
+	p.DirectDebitProxy.ServeHTTP(w, r)
 }

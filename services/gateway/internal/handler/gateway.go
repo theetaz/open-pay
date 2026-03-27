@@ -144,6 +144,15 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Post("/v1/webhooks/test", p.ProxyToWebhook)
 	r.Get("/v1/webhooks/deliveries", p.ProxyToWebhook)
 
+	// Direct debit routes → direct debit service
+	r.Get("/v1/direct-debit/scenario-codes", p.ProxyToDirectDebit)
+	r.Post("/v1/direct-debit", p.ProxyToDirectDebit)
+	r.Get("/v1/direct-debit/list", p.ProxyToDirectDebit)
+	r.Get("/v1/direct-debit/{id}", p.ProxyToDirectDebit)
+	r.Post("/v1/direct-debit/{id}/sync", p.ProxyToDirectDebit)
+	r.Post("/v1/direct-debit/{id}/terminate", p.ProxyToDirectDebit)
+	r.Post("/v1/direct-debit/{id}/payment", p.ProxyToDirectDebit)
+
 	// Subscription routes → subscription service
 	r.Post("/v1/subscription-plans", p.ProxyToSubscription)
 	r.Get("/v1/subscription-plans", p.ProxyToSubscription)
@@ -305,6 +314,7 @@ func systemHealth(cfg GatewayConfig) http.HandlerFunc {
 			"subscription": cfg.ServiceProxy.SubscriptionURL,
 			"notification": cfg.ServiceProxy.NotificationURL,
 			"admin":        cfg.ServiceProxy.AdminURL,
+			"directdebit":  cfg.ServiceProxy.DirectDebitURL,
 		}
 
 		results := make(map[string]any, len(services))
