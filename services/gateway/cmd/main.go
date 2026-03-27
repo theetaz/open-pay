@@ -30,6 +30,7 @@ func main() {
 		SubscriptionServiceURL: getEnv("SUBSCRIPTION_SERVICE_URL", "http://localhost:8086"),
 		NotificationServiceURL: getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087"),
 		AdminServiceURL:        getEnv("ADMIN_SERVICE_URL", "http://localhost:8088"),
+		DirectDebitServiceURL:  getEnv("DIRECTDEBIT_SERVICE_URL", "http://localhost:8089"),
 	})
 
 	port := getEnv("PORT", "8080")

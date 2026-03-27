@@ -44,7 +44,7 @@ up-observability: ## Start observability stack (Prometheus, Grafana)
 
 # ─── Build ───
 build: ## Build all Go services
-	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin; do \
+	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do \
 		echo "Building $$svc..."; \
 		go build -o bin/$$svc ./services/$$svc/cmd/; \
 	done
@@ -82,14 +82,14 @@ vet: ## Run go vet
 DB_URL_BASE=postgres://olp:olp_dev_password@localhost:5433
 
 migrate: ## Run all database migrations
-	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
 		echo "Migrating $$db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
 	done
 	@echo "All migrations complete."
 
 migrate-down: ## Rollback last migration for all databases
-	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
 		echo "Rolling back $$db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" down 1; \
 	done
@@ -100,12 +100,12 @@ migrate-create: ## Create migration (usage: make migrate-create svc=payment name
 
 db-reset: ## Reset all databases (drop all, re-run migrations with seeds)
 	@echo "Resetting all databases..."
-	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
 		echo "Dropping all tables in $${db}_db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" drop -f 2>/dev/null || true; \
 	done
 	@echo ""
-	@for db in merchant payment settlement exchange webhook subscription admin notification; do \
+	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
 		echo "Migrating $${db}_db..."; \
 		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
 	done

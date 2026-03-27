@@ -153,6 +153,18 @@
       ]
     },
     {
+      "group": "Direct Debit",
+      "pages": [
+        "api-reference/direct-debit/overview"
+      ]
+    },
+    {
+      "group": "Refunds",
+      "pages": [
+        "api-reference/refunds/overview"
+      ]
+    },
+    {
       "group": "Exchange Rates",
       "pages": [
         "api-reference/exchange/get-rates"
