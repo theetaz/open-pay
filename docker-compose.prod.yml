@@ -1,0 +1,143 @@
+# Production Docker Compose — all Open Pay services
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      MERCHANT_SERVICE_URL: http://merchant:8082
+      PAYMENT_SERVICE_URL: http://payment:8081
+      EXCHANGE_SERVICE_URL: http://exchange:8085
+      SETTLEMENT_SERVICE_URL: http://settlement:8083
+      WEBHOOK_SERVICE_URL: http://webhook:8084
+      SUBSCRIPTION_SERVICE_URL: http://subscription:8086
+      NOTIFICATION_SERVICE_URL: http://notification:8087
+      ADMIN_SERVICE_URL: http://admin:8088
+      DIRECTDEBIT_SERVICE_URL: http://directdebit:8089
+      REDIS_URL: redis:6379
+    depends_on:
+      - redis
+      - merchant
+      - payment
+
+  payment:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: payment
+    environment:
+      PORT: "8081"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/payment_db?sslmode=disable
+      EXCHANGE_SERVICE_URL: http://exchange:8085
+      MERCHANT_SERVICE_URL: http://merchant:8082
+      ADMIN_SERVICE_URL: http://admin:8088
+    depends_on:
+      - postgres
+
+  merchant:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: merchant
+    environment:
+      PORT: "8082"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/merchant_db?sslmode=disable
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      - postgres
+      - minio
+
+  settlement:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: settlement
+    environment:
+      PORT: "8083"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/settlement_db?sslmode=disable
+    depends_on:
+      - postgres
+
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: webhook
+    environment:
+      PORT: "8084"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/webhook_db?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      - postgres
+      - nats
+
+  exchange:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: exchange
+    environment:
+      PORT: "8085"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/exchange_db?sslmode=disable
+    depends_on:
+      - postgres
+
+  subscription:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: subscription
+    environment:
+      PORT: "8086"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/subscription_db?sslmode=disable
+    depends_on:
+      - postgres
+
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: notification
+    environment:
+      PORT: "8087"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/notification_db?sslmode=disable
+    depends_on:
+      - postgres
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: admin
+    environment:
+      PORT: "8088"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/admin_db?sslmode=disable
+    depends_on:
+      - postgres
+
+  directdebit:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: directdebit
+    environment:
+      PORT: "8089"
+      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/directdebit_db?sslmode=disable
+    depends_on:
+      - postgres

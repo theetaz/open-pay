@@ -70,6 +70,18 @@ func HMACAuth(validator KeyValidator) func(http.Handler) http.Handler {
 				return
 			}
 
+			// IP whitelisting check
+			if rv, ok := validator.(interface{ GetAllowedIPs(string) []string }); ok {
+				allowedIPs := rv.GetAllowedIPs(apiKey)
+				if len(allowedIPs) > 0 {
+					clientIP := extractClientIP(r)
+					if !isIPAllowed(clientIP, allowedIPs) {
+						writeForbiddenError(w, "IP address not allowed for this API key")
+						return
+					}
+				}
+			}
+
 			// Pass merchant info to downstream services via headers
 			if rv, ok := validator.(interface{ GetMerchantID(string) string }); ok {
 				r.Header.Set("X-Merchant-ID", rv.GetMerchantID(apiKey))
@@ -78,6 +90,42 @@ func HMACAuth(validator KeyValidator) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func extractClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	// RemoteAddr is "ip:port"
+	addr := r.RemoteAddr
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		return addr[:idx]
+	}
+	return addr
+}
+
+func isIPAllowed(clientIP string, allowedIPs []string) bool {
+	for _, ip := range allowedIPs {
+		if strings.TrimSpace(ip) == clientIP {
+			return true
+		}
+	}
+	return false
+}
+
+func writeForbiddenError(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]string{
+			"code":    "IP_NOT_ALLOWED",
+			"message": message,
+		},
+	})
 }
 
 func writeAuthError(w http.ResponseWriter, message string) {

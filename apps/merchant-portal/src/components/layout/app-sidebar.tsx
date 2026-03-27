@@ -15,6 +15,7 @@ import {
   Plug,
   FileSignature,
   RotateCcw,
+  BarChart3,
   QrCode,
 } from 'lucide-react'
 import {
@@ -42,6 +43,7 @@ const navItems = [
   { title: 'Branches', href: '/branches', icon: Building2 },
   { title: 'Users', href: '/users', icon: Users },
   { title: 'POS', href: '/pos', icon: QrCode },
+  { title: 'Analytics', href: '/analytics', icon: BarChart3 },
   { title: 'Integrations', href: '/integrations', icon: Plug },
   { title: 'Audit Log', href: '/audit-log', icon: ScrollText },
   { title: 'Settings', href: '/settings', icon: Settings },

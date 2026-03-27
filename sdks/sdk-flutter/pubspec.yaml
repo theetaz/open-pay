@@ -1,0 +1,12 @@
+name: openpay_flutter
+description: Official Open Pay SDK for Flutter. Accept crypto payments with automatic LKR conversion in your mobile apps.
+version: 0.1.0
+homepage: https://github.com/theetaz/open-lanka-payment
+repository: https://github.com/theetaz/open-lanka-payment/tree/main/sdks/sdk-flutter
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  http: ^1.2.0
+  crypto: ^3.0.3

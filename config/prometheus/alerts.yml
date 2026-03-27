@@ -1,0 +1,83 @@
+groups:
+  - name: service_health
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.job }}."
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on {{ $labels.job }}"
+          description: "p95 latency is {{ $value }}s on {{ $labels.job }}."
+
+  - name: business_alerts
+    rules:
+      - alert: PaymentExpirationRateHigh
+        expr: rate(payments_expired_total[1h]) / rate(payments_created_total[1h]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Payment expiration rate above 20%"
+          description: "{{ $value | humanizePercentage }} of payments are expiring."
+
+      - alert: WithdrawalQueueLarge
+        expr: withdrawals_pending_count > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Withdrawal approval queue has {{ $value }} pending items"
+
+      - alert: ExchangeRateStale
+        expr: time() - exchange_rate_last_update_timestamp > 600
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Exchange rate is stale"
+          description: "No rate update for more than 10 minutes."
+
+  - name: infrastructure
+    rules:
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_pool_available_connections == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool exhausted for {{ $labels.database }}"
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 90%"
+
+      - alert: NATSMessageLag
+        expr: nats_consumer_pending_messages > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "NATS consumer has {{ $value }} pending messages"

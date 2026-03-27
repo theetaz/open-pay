@@ -14,7 +14,14 @@ var (
 	ErrInvalidStatusTransition = errors.New("invalid payment status transition")
 	ErrPaymentNotFound         = errors.New("payment not found")
 	ErrPaymentExpired          = errors.New("payment has expired")
+	ErrInvalidSplitPercentage  = errors.New("split percentages must total <= 100")
 )
+
+// SplitRule defines how a payment should be distributed to a merchant.
+type SplitRule struct {
+	MerchantID uuid.UUID
+	Percentage decimal.Decimal
+}
 
 // PaymentStatus represents the state of a payment.
 type PaymentStatus string
@@ -91,6 +98,7 @@ type CreatePaymentInput struct {
 	CustomerPhone     string
 	CustomerAddress   string
 	Goods             []GoodItem
+	Splits            []SplitRule
 }
 
 // Payment represents a payment order.
@@ -128,6 +136,9 @@ type Payment struct {
 	TxHash          string
 	BlockNumber     int64
 	WalletAddress   string
+	Splits          []SplitRule
+	RiskScore       int
+	RiskFlags       []string
 	// LKR-specific fee fields (populated when currency is LKR)
 	LKRAmount       *decimal.Decimal
 	LKRExchangeFee  *decimal.Decimal
@@ -158,6 +169,10 @@ func NewPayment(input CreatePaymentInput) (*Payment, error) {
 		return nil, fmt.Errorf("%w: unsupported provider %s", ErrInvalidPayment, input.Provider)
 	}
 
+	if err := ValidateSplits(input.Splits); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	expireTime := now.Add(DefaultExpiration)
 	if input.ExpireTime != nil {
@@ -181,6 +196,7 @@ func NewPayment(input CreatePaymentInput) (*Payment, error) {
 		CustomerPhone:     input.CustomerPhone,
 		CustomerAddress:   input.CustomerAddress,
 		Goods:             input.Goods,
+		Splits:            input.Splits,
 		WebhookURL:        input.WebhookURL,
 		SuccessURL:        input.SuccessURL,
 		CancelURL:         input.CancelURL,
@@ -261,6 +277,29 @@ func (p *Payment) SetExchangeRate(rate decimal.Decimal) {
 	if p.Currency == "LKR" {
 		p.AmountUSDT = p.Amount.Div(rate)
 	}
+}
+
+// ValidateSplits ensures the split rules are valid.
+// The sum of all percentages must be <= 100 and each percentage must be positive.
+func ValidateSplits(splits []SplitRule) error {
+	if len(splits) == 0 {
+		return nil
+	}
+
+	hundred := decimal.NewFromInt(100)
+	total := decimal.Zero
+	for _, s := range splits {
+		if s.Percentage.LessThanOrEqual(decimal.Zero) {
+			return fmt.Errorf("%w: each split percentage must be positive", ErrInvalidSplitPercentage)
+		}
+		total = total.Add(s.Percentage)
+	}
+
+	if total.GreaterThan(hundred) {
+		return fmt.Errorf("%w: total is %s%%", ErrInvalidSplitPercentage, total.StringFixed(2))
+	}
+
+	return nil
 }
 
 func generatePaymentNo(t time.Time) string {

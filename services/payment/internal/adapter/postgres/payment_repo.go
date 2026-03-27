@@ -42,6 +42,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			webhook_url, success_url, cancel_url,
 			tx_hash, block_number, wallet_address,
 			lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
+			risk_score, risk_flags,
 			expire_time, paid_at, failed_at, idempotency_key,
 			created_at, updated_at
 		) VALUES (
@@ -55,8 +56,9 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			$28, $29, $30,
 			$31, $32, $33,
 			$34, $35, $36, $37, $38,
-			$39, $40, $41, $42,
-			$43, $44
+			$39, $40,
+			$41, $42, $43, $44,
+			$45, $46
 		)`
 
 	_, err := r.pool.Exec(ctx, query,
@@ -70,6 +72,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 		p.WebhookURL, p.SuccessURL, p.CancelURL,
 		p.TxHash, p.BlockNumber, p.WalletAddress,
 		p.LKRAmount, p.LKRExchangeFee, p.LKRPlatformFee, p.LKRTotalFees, p.LKRNetAmount,
+		p.RiskScore, p.RiskFlags,
 		p.ExpireTime, p.PaidAt, p.FailedAt, nilIfEmpty(p.IdempotencyKey),
 		p.CreatedAt, p.UpdatedAt,
 	)
@@ -89,6 +92,7 @@ const paymentSelectCols = `id, merchant_id, branch_id, payment_no, COALESCE(merc
 	COALESCE(webhook_url,''), COALESCE(success_url,''), COALESCE(cancel_url,''),
 	COALESCE(tx_hash,''), COALESCE(block_number,0), COALESCE(wallet_address,''),
 	lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
+	COALESCE(risk_score, 0), risk_flags,
 	expire_time, paid_at, failed_at, COALESCE(idempotency_key,''),
 	created_at, updated_at, deleted_at`
 
@@ -257,6 +261,7 @@ func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
 		&p.WebhookURL, &p.SuccessURL, &p.CancelURL,
 		&p.TxHash, &p.BlockNumber, &p.WalletAddress,
 		&p.LKRAmount, &p.LKRExchangeFee, &p.LKRPlatformFee, &p.LKRTotalFees, &p.LKRNetAmount,
+		&p.RiskScore, &p.RiskFlags,
 		&p.ExpireTime, &p.PaidAt, &p.FailedAt, &p.IdempotencyKey,
 		&p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 	)

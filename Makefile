@@ -112,6 +112,31 @@ db-reset: ## Reset all databases (drop all, re-run migrations with seeds)
 	@echo ""
 	@echo "All databases reset with seed data."
 
+# ─── Docker ───
+docker-build: ## Build all service Docker images
+	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do \
+		echo "Building openpay/$$svc..."; \
+		docker build --build-arg SERVICE=$$svc -t openpay/$$svc -f Dockerfile.service . ; \
+	done
+	@echo "All Docker images built."
+
+docker-push: ## Push all service Docker images to registry
+	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do \
+		echo "Pushing openpay/$$svc..."; \
+		docker push openpay/$$svc; \
+	done
+
+# ─── Load Testing ───
+load-test: ## Run k6 load tests (requires k6 installed)
+	@echo "Running exchange rates load test..."
+	k6 run tests/load/exchange-rates.js --quiet
+	@echo ""
+	@echo "Running list payments load test..."
+	k6 run tests/load/list-payments.js --quiet
+	@echo ""
+	@echo "Running create payment load test..."
+	k6 run tests/load/create-payment.js --quiet
+
 # ─── Cleanup ───
 clean: ## Remove build artifacts
 	rm -rf bin/ coverage.out coverage.html

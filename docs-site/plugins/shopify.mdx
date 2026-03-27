@@ -1,0 +1,40 @@
+---
+title: "Shopify Plugin"
+description: "Accept crypto payments in your Shopify store"
+---
+
+# Shopify Integration
+
+The Open Pay Shopify plugin enables your Shopify store to accept cryptocurrency payments. Customers pay with USDT, BTC, ETH, or other supported tokens, and you receive settlement in LKR.
+
+## Quick Setup
+
+1. Deploy the plugin to your server or cloud platform
+2. Configure environment variables with your Open Pay API credentials
+3. In Shopify Admin, add the plugin as an alternative payment method
+4. Start accepting crypto payments
+
+## Payment Flow
+
+```
+Customer → Shopify Checkout → Open Pay Plugin → Crypto Payment
+    ↓
+Payment confirmed → Webhook → Shopify order marked as paid
+```
+
+## Configuration
+
+| Variable | Description |
+|----------|-------------|
+| `OPENPAY_API_KEY` | Your API key from the merchant portal |
+| `OPENPAY_API_SECRET` | Your API secret |
+| `OPENPAY_PROVIDER` | Payment provider: BYBIT, BINANCE, KUCOIN |
+| `APP_URL` | Public URL where the plugin is hosted |
+
+## Webhook Security
+
+All webhooks are verified using ED25519 signature verification. The plugin automatically fetches and caches the public key from the Open Pay API.
+
+## Supported Currencies
+
+USDT, USDC, BTC, ETH, BNB — customers choose their preferred cryptocurrency at checkout.
