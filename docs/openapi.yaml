@@ -1,0 +1,3808 @@
+openapi: 3.0.3
+info:
+  title: Open Pay API
+  version: 1.0.0
+  description: |
+    Open Pay is a crypto payment gateway platform that enables merchants to accept
+    cryptocurrency payments (USDT) with automatic fiat conversion. This specification
+    documents all public and SDK REST API endpoints exposed through the API gateway.
+  contact:
+    name: Open Pay Support
+    url: https://olp-api.nipuntheekshana.com
+  license:
+    name: MIT
+
+servers:
+  - url: https://olp-api.nipuntheekshana.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Merchant authentication (register, login, token refresh, 2FA)
+  - name: Merchants
+    description: Merchant profile and management
+  - name: API Keys
+    description: API key management for SDK access
+  - name: Payments
+    description: Payment creation, listing, and checkout
+  - name: Payment Links
+    description: Reusable and single-use payment link management
+  - name: Settlements
+    description: Merchant balance and settlement credit
+  - name: Withdrawals
+    description: Withdrawal requests and lifecycle
+  - name: Refunds
+    description: Refund requests and lifecycle
+  - name: Webhooks
+    description: Webhook configuration, testing, and delivery logs
+  - name: Subscriptions
+    description: Subscription plans and subscriber management
+  - name: Direct Debit
+    description: Direct debit contracts and payments
+  - name: Exchange Rates
+    description: Live exchange rate queries
+  - name: SDK
+    description: HMAC-authenticated SDK endpoints
+  - name: System
+    description: Health checks and platform configuration
+
+security: []
+
+paths:
+  # ─── System ──────────────────────────────────────────────
+  /healthz:
+    get:
+      tags: [System]
+      summary: Liveness probe
+      operationId: healthz
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /readyz:
+    get:
+      tags: [System]
+      summary: Readiness probe
+      operationId: readyz
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/system/health:
+    get:
+      tags: [System]
+      summary: Downstream service health check
+      operationId: systemHealth
+      responses:
+        "200":
+          description: Health status of all services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum: [healthy, unhealthy]
+                        responseTime:
+                          type: integer
+                          description: Response time in milliseconds
+
+  /v1/platform/config:
+    get:
+      tags: [System]
+      summary: Platform fee configuration
+      operationId: platformConfig
+      responses:
+        "200":
+          description: Current platform fee percentages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      platformFeePct:
+                        type: string
+                        example: "1.5"
+                      exchangeFeePct:
+                        type: string
+                        example: "0.5"
+
+  # ─── Auth ────────────────────────────────────────────────
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new merchant account
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Merchant registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate a merchant user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account inactive, frozen, or terminated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user and merchant profile
+      operationId: getMe
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      merchant:
+                        $ref: "#/components/schemas/Merchant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Account frozen or terminated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change current user password
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: password_changed
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/2fa/setup:
+    post:
+      tags: [Auth]
+      summary: Generate TOTP secret for 2FA setup
+      operationId: setup2fa
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: TOTP setup details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      secret:
+                        type: string
+                      uri:
+                        type: string
+                        description: OTP auth URI for QR code generation
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/2fa/verify:
+    post:
+      tags: [Auth]
+      summary: Verify TOTP code and enable 2FA
+      operationId: verify2fa
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 6-digit TOTP code
+      responses:
+        "200":
+          description: 2FA enabled, returns recovery codes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      recoveryCodes:
+                        type: array
+                        items:
+                          type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/2fa/disable:
+    post:
+      tags: [Auth]
+      summary: Disable 2FA
+      operationId: disable2fa
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: 2FA disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: 2fa_disabled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Merchants ───────────────────────────────────────────
+  /v1/merchants:
+    get:
+      tags: [Merchants]
+      summary: List merchants
+      operationId: listMerchants
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, ACTIVE, INACTIVE, FROZEN, TERMINATED]
+      responses:
+        "200":
+          description: Paginated merchant list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Merchant"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/merchants/{id}:
+    get:
+      tags: [Merchants]
+      summary: Get merchant by ID
+      operationId: getMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Merchant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Merchant"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Merchants]
+      summary: Update merchant profile
+      operationId: updateMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMerchantRequest"
+      responses:
+        "200":
+          description: Merchant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Merchant"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/merchants/{id}/approve:
+    post:
+      tags: [Merchants]
+      summary: Approve a merchant
+      operationId: approveMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                forceReason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/reject:
+    post:
+      tags: [Merchants]
+      summary: Reject a merchant
+      operationId: rejectMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/deactivate:
+    post:
+      tags: [Merchants]
+      summary: Deactivate a merchant
+      operationId: deactivateMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/freeze:
+    post:
+      tags: [Merchants]
+      summary: Freeze a merchant account
+      operationId: freezeMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/unfreeze:
+    post:
+      tags: [Merchants]
+      summary: Unfreeze a merchant account
+      operationId: unfreezeMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/terminate:
+    post:
+      tags: [Merchants]
+      summary: Terminate a merchant account
+      operationId: terminateMerchant
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/documents:
+    get:
+      tags: [Merchants]
+      summary: Get merchant KYC documents
+      operationId: getMerchantDocuments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: List of merchant documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        type:
+                          type: string
+                        url:
+                          type: string
+                        uploadedAt:
+                          type: string
+                          format: date-time
+
+  /v1/merchants/{id}/directors:
+    post:
+      tags: [Merchants]
+      summary: Add a director to a merchant
+      operationId: createDirector
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "201":
+          description: Director created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Director"
+    get:
+      tags: [Merchants]
+      summary: List directors for a merchant
+      operationId: listDirectors
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: List of directors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Director"
+
+  /v1/merchants/{id}/directors/{directorId}/resend:
+    post:
+      tags: [Merchants]
+      summary: Resend director verification email
+      operationId: resendDirectorVerification
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - name: directorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/merchants/{id}/directors/{directorId}:
+    delete:
+      tags: [Merchants]
+      summary: Remove a director
+      operationId: removeDirector
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - name: directorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── API Keys ────────────────────────────────────────────
+  /v1/api-keys:
+    post:
+      tags: [API Keys]
+      summary: Create a new API key
+      operationId: createApiKey
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [environment, name]
+              properties:
+                environment:
+                  type: string
+                  enum: [sandbox, production]
+                name:
+                  type: string
+      responses:
+        "201":
+          description: API key created (secret shown only once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      keyId:
+                        type: string
+                      secret:
+                        type: string
+                        description: Only returned on creation
+                      name:
+                        type: string
+                      environment:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+    get:
+      tags: [API Keys]
+      summary: List API keys
+      operationId: listApiKeys
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of API keys (secrets masked)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+
+  /v1/api-keys/{id}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      operationId: revokeApiKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── Payments ────────────────────────────────────────────
+  /v1/payments:
+    post:
+      tags: [Payments]
+      summary: Create a new payment
+      operationId: createPayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      tags: [Payments]
+      summary: List payments for current merchant
+      operationId: listPayments
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PAID, EXPIRED, FAILED]
+        - name: branchId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Paginated payment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Get payment by ID
+      operationId: getPayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/payments/export/csv:
+    get:
+      tags: [Payments]
+      summary: Export payments as CSV
+      operationId: exportPaymentsCsv
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /v1/public/payments:
+    post:
+      tags: [Payments]
+      summary: Create a payment via payment link (no auth)
+      operationId: createPublicPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId, amount]
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: string
+                  example: "100.00"
+                currency:
+                  type: string
+                  default: USDT
+                provider:
+                  type: string
+                  default: TEST
+                merchantTradeNo:
+                  type: string
+                customerEmail:
+                  type: string
+                  format: email
+                branchId:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+
+  /v1/payments/{id}/checkout:
+    get:
+      tags: [Payments]
+      summary: Get checkout details for customer (public)
+      operationId: getCheckout
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Checkout details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CheckoutResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/payments/{id}/callback:
+    post:
+      tags: [Payments]
+      summary: Handle provider payment callback
+      operationId: handlePaymentCallback
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Callback processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: processed
+
+  # ─── Payment Links ──────────────────────────────────────
+  /v1/payment-links:
+    post:
+      tags: [Payment Links]
+      summary: Create a payment link
+      operationId: createPaymentLink
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentLinkRequest"
+      responses:
+        "201":
+          description: Payment link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentLink"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          description: Duplicate slug
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags: [Payment Links]
+      summary: List payment links
+      operationId: listPaymentLinks
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: branchId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Paginated payment links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentLink"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+
+  /v1/payment-links/check-slug/{slug}:
+    get:
+      tags: [Payment Links]
+      summary: Check slug availability
+      operationId: checkPaymentLinkSlug
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Slug availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      available:
+                        type: boolean
+
+  /v1/payment-links/{id}:
+    get:
+      tags: [Payment Links]
+      summary: Get payment link by ID
+      operationId: getPaymentLink
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Payment link details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentLink"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Payment Links]
+      summary: Update a payment link
+      operationId: updatePaymentLink
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentLinkRequest"
+      responses:
+        "200":
+          description: Payment link updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentLink"
+    delete:
+      tags: [Payment Links]
+      summary: Delete a payment link
+      operationId: deletePaymentLink
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/public/payment-links/by-slug/{slug}:
+    get:
+      tags: [Payment Links]
+      summary: Resolve payment link by slug (public)
+      operationId: getPaymentLinkBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment link details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentLink"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: Payment link expired or consumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── Settlements ─────────────────────────────────────────
+  /v1/settlements/balance:
+    get:
+      tags: [Settlements]
+      summary: Get merchant balance
+      operationId: getBalance
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Merchant balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MerchantBalance"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/settlements/credit:
+    post:
+      tags: [Settlements]
+      summary: Credit a payment to merchant balance (internal)
+      operationId: creditPayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId, netUsdt, feesUsdt]
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                netUsdt:
+                  type: string
+                  example: "95.00"
+                feesUsdt:
+                  type: string
+                  example: "5.00"
+      responses:
+        "200":
+          description: Payment credited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: credited
+
+  # ─── Withdrawals ─────────────────────────────────────────
+  /v1/withdrawals:
+    post:
+      tags: [Withdrawals]
+      summary: Request a withdrawal
+      operationId: requestWithdrawal
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalRequest"
+      responses:
+        "201":
+          description: Withdrawal requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Withdrawal"
+        "400":
+          description: Insufficient balance or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags: [Withdrawals]
+      summary: List withdrawals
+      operationId: listWithdrawals
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, COMPLETED, REJECTED]
+      responses:
+        "200":
+          description: List of withdrawals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Withdrawal"
+
+  /v1/withdrawals/{id}:
+    get:
+      tags: [Withdrawals]
+      summary: Get withdrawal by ID
+      operationId: getWithdrawal
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Withdrawal details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Withdrawal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/withdrawals/{id}/approve:
+    post:
+      tags: [Withdrawals]
+      summary: Approve a withdrawal
+      operationId: approveWithdrawal
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+        "400":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/withdrawals/{id}/reject:
+    post:
+      tags: [Withdrawals]
+      summary: Reject a withdrawal
+      operationId: rejectWithdrawal
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/withdrawals/{id}/complete:
+    post:
+      tags: [Withdrawals]
+      summary: Mark withdrawal as completed
+      operationId: completeWithdrawal
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bankReference]
+              properties:
+                bankReference:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── Refunds ─────────────────────────────────────────────
+  /v1/refunds:
+    post:
+      tags: [Refunds]
+      summary: Request a refund
+      operationId: requestRefund
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+      responses:
+        "201":
+          description: Refund requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Refund"
+        "400":
+          description: Insufficient balance or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags: [Refunds]
+      summary: List refunds
+      operationId: listRefunds
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of refunds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Refund"
+
+  /v1/refunds/{id}:
+    get:
+      tags: [Refunds]
+      summary: Get refund by ID
+      operationId: getRefund
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Refund details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Refund"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/refunds/{id}/approve:
+    post:
+      tags: [Refunds]
+      summary: Approve a refund
+      operationId: approveRefund
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/refunds/{id}/reject:
+    post:
+      tags: [Refunds]
+      summary: Reject a refund
+      operationId: rejectRefund
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── Webhooks ────────────────────────────────────────────
+  /v1/webhooks/configure:
+    post:
+      tags: [Webhooks]
+      summary: Configure webhook URL
+      operationId: configureWebhook
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://example.com/webhooks/openpay
+      responses:
+        "201":
+          description: Webhook configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookConfig"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/webhooks/public-key:
+    get:
+      tags: [Webhooks]
+      summary: Get webhook signing public key
+      operationId: getWebhookPublicKey
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Public key for verifying webhook signatures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      publicKey:
+                        type: string
+        "404":
+          description: Webhook not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/webhooks/test:
+    post:
+      tags: [Webhooks]
+      summary: Send a test webhook
+      operationId: testWebhook
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Test webhook result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      deliveryId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum: [DELIVERED, FAILED]
+                      deliveryTime:
+                        type: integer
+                        description: Delivery time in milliseconds
+                      message:
+                        type: string
+        "404":
+          description: Webhook not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/webhooks/deliveries:
+    get:
+      tags: [Webhooks]
+      summary: List webhook deliveries
+      operationId: listWebhookDeliveries
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Paginated delivery list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WebhookDelivery"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+
+  # ─── Subscriptions ──────────────────────────────────────
+  /v1/subscription-plans:
+    post:
+      tags: [Subscriptions]
+      summary: Create a subscription plan
+      operationId: createSubscriptionPlan
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanRequest"
+      responses:
+        "201":
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SubscriptionPlan"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    get:
+      tags: [Subscriptions]
+      summary: List subscription plans
+      operationId: listSubscriptionPlans
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SubscriptionPlan"
+
+  /v1/subscription-plans/{id}:
+    get:
+      tags: [Subscriptions]
+      summary: Get subscription plan by ID
+      operationId: getSubscriptionPlan
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Plan details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SubscriptionPlan"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/subscription-plans/{id}/archive:
+    post:
+      tags: [Subscriptions]
+      summary: Archive a subscription plan
+      operationId: archiveSubscriptionPlan
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  /v1/subscription-plans/{id}/subscribe:
+    post:
+      tags: [Subscriptions]
+      summary: Subscribe to a plan
+      operationId: subscribe
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, wallet]
+              properties:
+                email:
+                  type: string
+                  format: email
+                wallet:
+                  type: string
+                  description: Crypto wallet address
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Subscription"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: List subscriptions
+      operationId: listSubscriptions
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Subscription"
+
+  /v1/subscriptions/{id}:
+    get:
+      tags: [Subscriptions]
+      summary: Get subscription by ID
+      operationId: getSubscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Subscription"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/subscriptions/{id}/cancel:
+    post:
+      tags: [Subscriptions]
+      summary: Cancel a subscription
+      operationId: cancelSubscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── Direct Debit ────────────────────────────────────────
+  /v1/direct-debit/scenario-codes:
+    get:
+      tags: [Direct Debit]
+      summary: List available scenario codes
+      operationId: listScenarioCodes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: provider
+          in: query
+          schema:
+            type: string
+        - name: active
+          in: query
+          schema:
+            type: string
+            default: "true"
+      responses:
+        "200":
+          description: Scenario codes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScenarioCode"
+
+  /v1/direct-debit:
+    post:
+      tags: [Direct Debit]
+      summary: Create a direct debit contract
+      operationId: createDirectDebitContract
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContractRequest"
+      responses:
+        "201":
+          description: Contract created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DirectDebitContract"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/direct-debit/list:
+    get:
+      tags: [Direct Debit]
+      summary: List direct debit contracts
+      operationId: listDirectDebitContracts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated contracts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DirectDebitContract"
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      totalItems:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /v1/direct-debit/{id}:
+    get:
+      tags: [Direct Debit]
+      summary: Get direct debit contract by ID
+      operationId: getDirectDebitContract
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Contract details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DirectDebitContract"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/direct-debit/{id}/sync:
+    post:
+      tags: [Direct Debit]
+      summary: Sync contract status with payment provider
+      operationId: syncDirectDebitContract
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Synced contract
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DirectDebitContract"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/direct-debit/{id}/terminate:
+    post:
+      tags: [Direct Debit]
+      summary: Terminate a direct debit contract
+      operationId: terminateDirectDebitContract
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                terminationNotes:
+                  type: string
+      responses:
+        "200":
+          description: Terminated contract
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DirectDebitContract"
+        "400":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/direct-debit/{id}/payment:
+    post:
+      tags: [Direct Debit]
+      summary: Execute a direct debit payment
+      operationId: executeDirectDebitPayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteDirectDebitPaymentRequest"
+      responses:
+        "201":
+          description: Payment executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DirectDebitPayment"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Exchange Rates ──────────────────────────────────────
+  /v1/exchange-rates/active:
+    get:
+      tags: [Exchange Rates]
+      summary: Get active exchange rate
+      operationId: getActiveExchangeRate
+      parameters:
+        - name: base
+          in: query
+          schema:
+            type: string
+            default: USDT
+        - name: quote
+          in: query
+          schema:
+            type: string
+            default: LKR
+      responses:
+        "200":
+          description: Current exchange rate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExchangeRate"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Notifications ───────────────────────────────────────
+  /v1/notifications:
+    get:
+      tags: [System]
+      summary: List notifications for current merchant
+      operationId: listNotifications
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        type:
+                          type: string
+                        title:
+                          type: string
+                        message:
+                          type: string
+                        isRead:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+
+  # ─── Branches ────────────────────────────────────────────
+  /v1/branches:
+    post:
+      tags: [Merchants]
+      summary: Create a branch
+      operationId: createBranch
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                address:
+                  type: string
+      responses:
+        "201":
+          description: Branch created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      merchantId:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      address:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+    get:
+      tags: [Merchants]
+      summary: List branches
+      operationId: listBranches
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        merchantId:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        address:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+
+  /v1/branches/{id}:
+    get:
+      tags: [Merchants]
+      summary: Get branch by ID
+      operationId: getBranch
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Branch details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      address:
+                        type: string
+    delete:
+      tags: [Merchants]
+      summary: Delete a branch
+      operationId: deleteBranch
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── File Uploads ────────────────────────────────────────
+  /v1/uploads:
+    post:
+      tags: [Merchants]
+      summary: Upload a file (KYC documents, logos, etc.)
+      operationId: uploadFile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  description: Document type
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      key:
+                        type: string
+    delete:
+      tags: [Merchants]
+      summary: Delete an uploaded file
+      operationId: deleteFile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/StatusOk"
+
+  # ─── Public Director Verification ───────────────────────
+  /v1/public/directors/verify/{token}:
+    get:
+      tags: [Merchants]
+      summary: Get director verification details by token (public)
+      operationId: getDirectorByToken
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Director and merchant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      director:
+                        $ref: "#/components/schemas/Director"
+                      merchant:
+                        $ref: "#/components/schemas/Merchant"
+    post:
+      tags: [Merchants]
+      summary: Submit director verification (public)
+      operationId: submitDirectorVerification
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                nicNumber:
+                  type: string
+                nicFrontUrl:
+                  type: string
+                nicBackUrl:
+                  type: string
+      responses:
+        "200":
+          description: Verification submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Director"
+
+  # ─── Sandbox ─────────────────────────────────────────────
+  /test/simulate/{providerPayID}:
+    post:
+      tags: [System]
+      summary: Simulate a payment confirmation (sandbox only)
+      operationId: simulatePayment
+      parameters:
+        - name: providerPayID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment simulated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: simulated
+                      providerPayId:
+                        type: string
+
+  # ─── SDK Routes (HMAC Auth) ─────────────────────────────
+  /v1/sdk/payments:
+    post:
+      tags: [SDK]
+      summary: Create a payment via SDK
+      operationId: sdkCreatePayment
+      security:
+        - HmacAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+    get:
+      tags: [SDK]
+      summary: List payments via SDK
+      operationId: sdkListPayments
+      security:
+        - HmacAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated payment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+
+  /v1/sdk/payments/{id}:
+    get:
+      tags: [SDK]
+      summary: Get payment via SDK
+      operationId: sdkGetPayment
+      security:
+        - HmacAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+
+  /v1/sdk/checkout/sessions:
+    post:
+      tags: [SDK]
+      summary: Create a checkout session (Stripe-like flow)
+      operationId: sdkCreateCheckoutSession
+      security:
+        - HmacAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutSessionRequest"
+      responses:
+        "201":
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CheckoutSession"
+
+  /v1/sdk/webhooks/configure:
+    post:
+      tags: [SDK]
+      summary: Configure webhook via SDK
+      operationId: sdkConfigureWebhook
+      security:
+        - HmacAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+      responses:
+        "201":
+          description: Webhook configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WebhookConfig"
+
+  /v1/sdk/webhooks/public-key:
+    get:
+      tags: [SDK]
+      summary: Get webhook public key via SDK
+      operationId: sdkGetWebhookPublicKey
+      security:
+        - HmacAuth: []
+      responses:
+        "200":
+          description: Public key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      publicKey:
+                        type: string
+
+  /v1/sdk/webhooks/test:
+    post:
+      tags: [SDK]
+      summary: Test webhook via SDK
+      operationId: sdkTestWebhook
+      security:
+        - HmacAuth: []
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      deliveryId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                      deliveryTime:
+                        type: integer
+
+  # ─── Merchant Audit Logs ─────────────────────────────────
+  /v1/merchant/audit-logs:
+    get:
+      tags: [Merchants]
+      summary: Get audit logs for current merchant
+      operationId: getMerchantAuditLogs
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditLogEntry"
+
+  # ─── Admin Auth ──────────────────────────────────────────
+  /v1/admin/auth/login:
+    post:
+      tags: [System]
+      summary: Admin login
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+
+  /v1/admin/auth/refresh:
+    post:
+      tags: [System]
+      summary: Admin token refresh
+      operationId: adminRefreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+
+  # ─── Legal Documents (public) ────────────────────────────
+  /v1/legal-documents/active:
+    get:
+      tags: [System]
+      summary: Get active legal documents (public)
+      operationId: getActiveLegalDocuments
+      responses:
+        "200":
+          description: Active legal documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        type:
+                          type: string
+                        title:
+                          type: string
+                        content:
+                          type: string
+                        version:
+                          type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /v1/auth/login or /v1/auth/refresh
+
+    HmacAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: |
+        HMAC-SHA256 authentication for SDK access. Requires three headers:
+        - `x-api-key`: Your API key ID
+        - `x-timestamp`: Unix timestamp (seconds)
+        - `x-signature`: HMAC-SHA256(apiSecret, timestamp + method + path + body)
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PerPage:
+      name: perPage
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: missing authentication
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: NOT_FOUND
+              message: resource not found
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: invalid input
+
+    StatusOk:
+      description: Operation successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+
+    RegisterRequest:
+      type: object
+      required: [businessName, email, password, name]
+      properties:
+        businessName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        phone:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+        merchant:
+          $ref: "#/components/schemas/Merchant"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+        isActive:
+          type: boolean
+        branchId:
+          type: string
+          format: uuid
+
+    Merchant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        businessName:
+          type: string
+        businessType:
+          type: string
+        registrationNo:
+          type: string
+        website:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        contactName:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        district:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        kycStatus:
+          type: string
+          enum: [PENDING, SUBMITTED, APPROVED, REJECTED]
+        status:
+          type: string
+          enum: [PENDING, ACTIVE, INACTIVE, FROZEN, TERMINATED]
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateMerchantRequest:
+      type: object
+      properties:
+        businessName:
+          type: string
+        businessType:
+          type: string
+        registrationNo:
+          type: string
+        website:
+          type: string
+        contactPhone:
+          type: string
+        contactName:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        district:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        logoUrl:
+          type: string
+
+    Director:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, VERIFIED]
+        createdAt:
+          type: string
+          format: date-time
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        keyId:
+          type: string
+        name:
+          type: string
+        environment:
+          type: string
+          enum: [sandbox, production]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: string
+          description: Payment amount as a decimal string
+          example: "100.00"
+        currency:
+          type: string
+          default: USDT
+          description: Payment currency (USDT, LKR)
+        provider:
+          type: string
+          default: TEST
+          description: Payment provider
+        merchantTradeNo:
+          type: string
+          description: Merchant-assigned order reference
+        webhookUrl:
+          type: string
+          format: uri
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+        customerEmail:
+          type: string
+          format: email
+        branchId:
+          type: string
+          format: uuid
+        orderExpireTime:
+          type: string
+          format: date-time
+        customerBilling:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+            address:
+              type: string
+        goods:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              mccCode:
+                type: string
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        paymentNo:
+          type: string
+        merchantTradeNo:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        amountUsdt:
+          type: string
+        provider:
+          type: string
+        providerPayId:
+          type: string
+        qrContent:
+          type: string
+        checkoutLink:
+          type: string
+        deepLink:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PAID, EXPIRED, FAILED]
+        customerEmail:
+          type: string
+        txHash:
+          type: string
+        feeBreakdown:
+          $ref: "#/components/schemas/FeeBreakdown"
+        exchangeRate:
+          type: string
+        expireTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+        branchId:
+          type: string
+          format: uuid
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+
+    FeeBreakdown:
+      type: object
+      properties:
+        grossAmountUSDT:
+          type: string
+        exchangeFeePercentage:
+          type: string
+        exchangeFeeAmountUSDT:
+          type: string
+        ceypayFeePercentage:
+          type: string
+        ceypayFeeAmountUSDT:
+          type: string
+        totalFeesUSDT:
+          type: string
+        netAmountUSDT:
+          type: string
+        grossAmountLKR:
+          type: string
+        exchangeFeeAmountLKR:
+          type: string
+        ceypayFeeAmountLKR:
+          type: string
+        totalFeesLKR:
+          type: string
+        netAmountLKR:
+          type: string
+
+    CheckoutResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentNo:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        amountUsdt:
+          type: string
+        qrContent:
+          type: string
+        deepLink:
+          type: string
+        status:
+          type: string
+        exchangeRate:
+          type: string
+        expireTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+
+    CreateCheckoutSessionRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: string
+          example: "1500.00"
+        currency:
+          type: string
+          default: LKR
+        provider:
+          type: string
+          default: TEST
+        merchantTradeNo:
+          type: string
+        description:
+          type: string
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+        customerEmail:
+          type: string
+          format: email
+        lineItems:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              amount:
+                type: string
+        expiresInMinutes:
+          type: integer
+          description: Session expiry in minutes
+
+    CheckoutSession:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Session ID (prefixed with cs_)
+        paymentId:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+          description: Hosted checkout URL to redirect customer to
+        amount:
+          type: string
+        currency:
+          type: string
+        amountUsdt:
+          type: string
+        status:
+          type: string
+          example: open
+        qrContent:
+          type: string
+        deepLink:
+          type: string
+        merchantTradeNo:
+          type: string
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+        exchangeRate:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePaymentLinkRequest:
+      type: object
+      required: [name, slug, currency, amount]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          description: URL-safe slug for the payment link
+        description:
+          type: string
+        currency:
+          type: string
+        amount:
+          type: string
+          example: "50.00"
+        allowCustomAmount:
+          type: boolean
+          default: false
+        minAmount:
+          type: string
+        maxAmount:
+          type: string
+        allowQuantityBuy:
+          type: boolean
+          default: false
+        maxQuantity:
+          type: integer
+        isReusable:
+          type: boolean
+          default: false
+        showOnQrPage:
+          type: boolean
+          default: false
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+        webhookUrl:
+          type: string
+          format: uri
+        merchantTradeNo:
+          type: string
+        orderExpireMinutes:
+          type: integer
+        expireAt:
+          type: string
+          format: date-time
+
+    UpdatePaymentLinkRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        allowQuantityBuy:
+          type: boolean
+        maxQuantity:
+          type: integer
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+        webhookUrl:
+          type: string
+        orderExpireMinutes:
+          type: integer
+
+    PaymentLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        currency:
+          type: string
+        amount:
+          type: string
+        allowCustomAmount:
+          type: boolean
+        allowQuantityBuy:
+          type: boolean
+        maxQuantity:
+          type: integer
+        isReusable:
+          type: boolean
+        showOnQrPage:
+          type: boolean
+        usageCount:
+          type: integer
+        status:
+          type: string
+        branchId:
+          type: string
+          format: uuid
+        expireAt:
+          type: string
+          format: date-time
+        minAmount:
+          type: string
+        maxAmount:
+          type: string
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+        webhookUrl:
+          type: string
+        merchantTradeNo:
+          type: string
+        orderExpireMinutes:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MerchantBalance:
+      type: object
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        availableUsdt:
+          type: string
+        pendingUsdt:
+          type: string
+        totalEarnedUsdt:
+          type: string
+        totalWithdrawnUsdt:
+          type: string
+        totalFeesUsdt:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    WithdrawalRequest:
+      type: object
+      required: [amountUsdt, exchangeRate, bankName, bankAccountNo, bankAccountName]
+      properties:
+        amountUsdt:
+          type: string
+          example: "100.00"
+        exchangeRate:
+          type: string
+          example: "320.50"
+        bankName:
+          type: string
+        bankAccountNo:
+          type: string
+        bankAccountName:
+          type: string
+
+    Withdrawal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        amountUsdt:
+          type: string
+        exchangeRate:
+          type: string
+        amountLkr:
+          type: string
+        bankName:
+          type: string
+        bankAccountNo:
+          type: string
+        bankAccountName:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, COMPLETED, REJECTED]
+        bankReference:
+          type: string
+        rejectedReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    RefundRequest:
+      type: object
+      required: [paymentId, amountUsdt, reason]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        paymentNo:
+          type: string
+        amountUsdt:
+          type: string
+          example: "25.00"
+        reason:
+          type: string
+
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        paymentNo:
+          type: string
+        amountUsdt:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, COMPLETED, REJECTED]
+        approvedBy:
+          type: string
+          format: uuid
+        approvedAt:
+          type: string
+          format: date-time
+        rejectedReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    RejectRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+
+    WebhookConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        publicKey:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, DELIVERED, FAILED]
+        attemptCount:
+          type: integer
+        maxAttempts:
+          type: integer
+        lastResponseCode:
+          type: integer
+        lastError:
+          type: string
+        nextAttemptAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePlanRequest:
+      type: object
+      required: [name, amount, currency, intervalType]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        amount:
+          type: string
+          example: "9.99"
+        currency:
+          type: string
+          example: USDT
+        intervalType:
+          type: string
+          enum: [DAY, WEEK, MONTH, YEAR]
+        intervalCount:
+          type: integer
+          default: 1
+          description: Number of intervals between billings
+        trialDays:
+          type: integer
+          default: 0
+
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        intervalType:
+          type: string
+          enum: [DAY, WEEK, MONTH, YEAR]
+        intervalCount:
+          type: integer
+        trialDays:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+        createdAt:
+          type: string
+          format: date-time
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        subscriberEmail:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [ACTIVE, TRIAL, PAST_DUE, CANCELLED]
+        nextBillingDate:
+          type: string
+          format: date-time
+        totalPaidUsdt:
+          type: string
+        billingCount:
+          type: integer
+        trialEnd:
+          type: string
+          format: date-time
+        cancelledAt:
+          type: string
+          format: date-time
+        cancellationReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ScenarioCode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        scenarioId:
+          type: string
+        scenarioName:
+          type: string
+        paymentProvider:
+          type: string
+        maxLimit:
+          type: string
+        isActive:
+          type: boolean
+
+    CreateContractRequest:
+      type: object
+      required: [merchantContractCode, serviceName, scenarioId, singleUpperLimit]
+      properties:
+        merchantContractCode:
+          type: string
+        branchId:
+          type: string
+          format: uuid
+        serviceName:
+          type: string
+        scenarioId:
+          type: string
+          format: uuid
+        singleUpperLimit:
+          type: string
+          example: "5000.00"
+        webhookUrl:
+          type: string
+          format: uri
+        returnUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+
+    DirectDebitContract:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        merchantContractCode:
+          type: string
+        serviceName:
+          type: string
+        scenarioId:
+          type: string
+          format: uuid
+        paymentProvider:
+          type: string
+        currency:
+          type: string
+        singleUpperLimit:
+          type: string
+        status:
+          type: string
+        qrContent:
+          type: string
+        deepLink:
+          type: string
+        periodic:
+          type: boolean
+        paymentCount:
+          type: integer
+        totalAmountCharged:
+          type: string
+        branchId:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+        openUserId:
+          type: string
+        webhookUrl:
+          type: string
+        terminationTime:
+          type: string
+          format: date-time
+        terminationNotes:
+          type: string
+        lastPaymentAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ExecuteDirectDebitPaymentRequest:
+      type: object
+      required: [amount, productName]
+      properties:
+        amount:
+          type: string
+          example: "250.00"
+        productName:
+          type: string
+        productDetail:
+          type: string
+        webhookUrl:
+          type: string
+          format: uri
+        customerFirstName:
+          type: string
+        customerLastName:
+          type: string
+        customerEmail:
+          type: string
+          format: email
+        customerPhone:
+          type: string
+        customerAddress:
+          type: string
+
+    DirectDebitPayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        contractId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        payId:
+          type: string
+        paymentNo:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+        productName:
+          type: string
+        paymentProvider:
+          type: string
+        feeBreakdown:
+          type: object
+          properties:
+            grossAmountUSDT:
+              type: string
+            exchangeFeePercentage:
+              type: string
+            exchangeFeeAmountUSDT:
+              type: string
+            platformFeePercentage:
+              type: string
+            platformFeeAmountUSDT:
+              type: string
+            totalFeesUSDT:
+              type: string
+            netAmountUSDT:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ExchangeRate:
+      type: object
+      properties:
+        baseCurrency:
+          type: string
+          example: USDT
+        quoteCurrency:
+          type: string
+          example: LKR
+        rate:
+          type: string
+          example: "320.50"
+        source:
+          type: string
+        fetchedAt:
+          type: string
+          format: date-time
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorId:
+          type: string
+          format: uuid
+        actorType:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        ipAddress:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
