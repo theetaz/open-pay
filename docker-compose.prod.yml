@@ -1,5 +1,6 @@
-# Production Docker Compose — all Open Pay services
+# Production Docker Compose — Open Pay service containers
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Note: Infrastructure (postgres, redis, nats, minio) must be running from docker-compose.yml
 
 services:
   gateway:
@@ -22,10 +23,7 @@ services:
       ADMIN_SERVICE_URL: http://admin:8088
       DIRECTDEBIT_SERVICE_URL: http://directdebit:8089
       REDIS_URL: redis:6379
-    depends_on:
-      - redis
-      - merchant
-      - payment
+    restart: unless-stopped
 
   payment:
     build:
@@ -35,12 +33,11 @@ services:
         SERVICE: payment
     environment:
       PORT: "8081"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/payment_db?sslmode=disable
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/payment_db?sslmode=disable
       EXCHANGE_SERVICE_URL: http://exchange:8085
       MERCHANT_SERVICE_URL: http://merchant:8082
       ADMIN_SERVICE_URL: http://admin:8088
-    depends_on:
-      - postgres
+    restart: unless-stopped
 
   merchant:
     build:
@@ -50,11 +47,9 @@ services:
         SERVICE: merchant
     environment:
       PORT: "8082"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/merchant_db?sslmode=disable
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/merchant_db?sslmode=disable
       S3_ENDPOINT: http://minio:9000
-    depends_on:
-      - postgres
-      - minio
+    restart: unless-stopped
 
   settlement:
     build:
@@ -64,9 +59,8 @@ services:
         SERVICE: settlement
     environment:
       PORT: "8083"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/settlement_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/settlement_db?sslmode=disable
+    restart: unless-stopped
 
   webhook:
     build:
@@ -76,11 +70,9 @@ services:
         SERVICE: webhook
     environment:
       PORT: "8084"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/webhook_db?sslmode=disable
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/webhook_db?sslmode=disable
       NATS_URL: nats://nats:4222
-    depends_on:
-      - postgres
-      - nats
+    restart: unless-stopped
 
   exchange:
     build:
@@ -90,9 +82,8 @@ services:
         SERVICE: exchange
     environment:
       PORT: "8085"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/exchange_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/exchange_db?sslmode=disable
+    restart: unless-stopped
 
   subscription:
     build:
@@ -102,9 +93,8 @@ services:
         SERVICE: subscription
     environment:
       PORT: "8086"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/subscription_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/subscription_db?sslmode=disable
+    restart: unless-stopped
 
   notification:
     build:
@@ -114,9 +104,8 @@ services:
         SERVICE: notification
     environment:
       PORT: "8087"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/notification_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/notification_db?sslmode=disable
+    restart: unless-stopped
 
   admin:
     build:
@@ -126,9 +115,8 @@ services:
         SERVICE: admin
     environment:
       PORT: "8088"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/admin_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/admin_db?sslmode=disable
+    restart: unless-stopped
 
   directdebit:
     build:
@@ -138,6 +126,5 @@ services:
         SERVICE: directdebit
     environment:
       PORT: "8089"
-      DATABASE_URL: postgres://olp:${DB_PASSWORD}@postgres:5432/directdebit_db?sslmode=disable
-    depends_on:
-      - postgres
+      DATABASE_URL: postgres://olp:${DB_PASSWORD:-olp_dev_password}@postgres:5432/directdebit_db?sslmode=disable
+    restart: unless-stopped
