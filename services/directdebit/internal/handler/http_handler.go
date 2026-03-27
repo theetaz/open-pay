@@ -71,11 +71,7 @@ func NewRouter(h *DirectDebitHandler, jwtSecret string) http.Handler {
 
 func (h *DirectDebitHandler) ListScenarioCodes(w http.ResponseWriter, r *http.Request) {
 	provider := r.URL.Query().Get("provider")
-	activeStr := r.URL.Query().Get("active")
-	activeOnly := true
-	if activeStr == "false" {
-		activeOnly = false
-	}
+	activeOnly := r.URL.Query().Get("active") != "false"
 
 	scenarios, err := h.svc.ListScenarioCodes(r.Context(), provider, activeOnly)
 	if err != nil {
