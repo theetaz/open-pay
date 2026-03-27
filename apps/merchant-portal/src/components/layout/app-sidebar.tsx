@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Plug,
+  FileSignature,
   RotateCcw,
 } from 'lucide-react'
 import {
@@ -34,6 +35,7 @@ const navItems = [
   { title: 'Payments', href: '/payments', icon: CreditCard },
   { title: 'Payment Links', href: '/payment-links', icon: Link2 },
   { title: 'Subscriptions', href: '/subscriptions', icon: RefreshCw },
+  { title: 'Direct Debit', href: '/direct-debit', icon: FileSignature },
   { title: 'Withdrawal', href: '/withdrawal', icon: ArrowDownToLine },
   { title: 'Refunds', href: '/refunds', icon: RotateCcw },
   { title: 'Branches', href: '/branches', icon: Building2 },

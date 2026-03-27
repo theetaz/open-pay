@@ -28,7 +28,14 @@ const (
 )
 
 // Valid currencies for payments.
-var validCurrencies = map[string]bool{"USDT": true, "LKR": true}
+var validCurrencies = map[string]bool{
+	"USDT": true,
+	"USDC": true,
+	"BTC":  true,
+	"ETH":  true,
+	"BNB":  true,
+	"LKR":  true,
+}
 
 // Valid payment providers.
 var validProviders = map[string]bool{

@@ -15,10 +15,11 @@ var (
 // Supported currencies.
 var validCurrencies = map[string]bool{
 	"USDT": true,
-	"LKR":  true,
+	"USDC": true,
 	"BTC":  true,
 	"ETH":  true,
-	"USDC": true,
+	"BNB":  true,
+	"LKR":  true,
 }
 
 // IsValidCurrency checks if a currency code is supported.

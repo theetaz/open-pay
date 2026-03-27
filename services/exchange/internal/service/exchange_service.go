@@ -79,12 +79,18 @@ func (s *ExchangeService) GetRateAtTime(ctx context.Context, base, quote string,
 // ConvertLKRToUSDT converts an LKR amount to USDT using the active rate.
 // Returns the USDT amount and the rate snapshot used.
 func (s *ExchangeService) ConvertLKRToUSDT(ctx context.Context, lkrAmount decimal.Decimal) (decimal.Decimal, *domain.RateSnapshot, error) {
-	rate, err := s.repo.GetActive(ctx, "USDT", "LKR")
+	return s.ConvertFiatToCrypto(ctx, lkrAmount, "USDT", "LKR")
+}
+
+// ConvertFiatToCrypto converts a fiat amount to a crypto currency using the active rate.
+// Returns the crypto amount and the rate snapshot used.
+func (s *ExchangeService) ConvertFiatToCrypto(ctx context.Context, fiatAmount decimal.Decimal, cryptoCurrency, fiatCurrency string) (decimal.Decimal, *domain.RateSnapshot, error) {
+	rate, err := s.repo.GetActive(ctx, cryptoCurrency, fiatCurrency)
 	if err != nil {
-		return decimal.Zero, nil, fmt.Errorf("getting USDT/LKR rate: %w", err)
+		return decimal.Zero, nil, fmt.Errorf("getting %s/%s rate: %w", cryptoCurrency, fiatCurrency, err)
 	}
 
-	usdt := rate.ConvertQuoteToBase(lkrAmount)
+	crypto := rate.ConvertQuoteToBase(fiatAmount)
 	snapshot := rate.Snapshot()
-	return usdt, &snapshot, nil
+	return crypto, &snapshot, nil
 }

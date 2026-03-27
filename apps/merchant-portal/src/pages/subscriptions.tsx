@@ -387,6 +387,10 @@ function CreatePlanDialog() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="USDT">USDT</SelectItem>
+                        <SelectItem value="USDC">USDC</SelectItem>
+                        <SelectItem value="BTC">BTC</SelectItem>
+                        <SelectItem value="ETH">ETH</SelectItem>
+                        <SelectItem value="BNB">BNB</SelectItem>
                         <SelectItem value="LKR">LKR</SelectItem>
                       </SelectContent>
                     </Select>
