@@ -112,6 +112,20 @@ db-reset: ## Reset all databases (drop all, re-run migrations with seeds)
 	@echo ""
 	@echo "All databases reset with seed data."
 
+# ─── Docker ───
+docker-build: ## Build all service Docker images
+	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do \
+		echo "Building openpay/$$svc..."; \
+		docker build --build-arg SERVICE=$$svc -t openpay/$$svc -f Dockerfile.service . ; \
+	done
+	@echo "All Docker images built."
+
+docker-push: ## Push all service Docker images to registry
+	@for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do \
+		echo "Pushing openpay/$$svc..."; \
+		docker push openpay/$$svc; \
+	done
+
 # ─── Cleanup ───
 clean: ## Remove build artifacts
 	rm -rf bin/ coverage.out coverage.html
