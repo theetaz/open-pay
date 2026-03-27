@@ -21,6 +21,7 @@ import { PaymentLinkCheckout } from '#/pages/pay-slug'
 import { CheckoutPage } from '#/pages/checkout'
 import { SandboxPayPage } from '#/pages/sandbox-pay'
 import { VerifyDirectorPage } from '#/pages/verify-director'
+import { AnalyticsPage } from '#/pages/analytics'
 import { DirectDebitPage } from '#/pages/direct-debit'
 import { RefundsPage } from '#/pages/refunds'
 import { POSPage } from '#/pages/pos'
@@ -48,6 +49,7 @@ export function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="integrations" element={<IntegrationsPage />} />
         <Route path="pos" element={<POSPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
         <Route path="example" element={<ExamplePage />} />
       </Route>

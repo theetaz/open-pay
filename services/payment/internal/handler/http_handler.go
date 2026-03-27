@@ -62,6 +62,11 @@ func NewRouter(h *PaymentHandler, jwtSecret string) http.Handler {
 		r.Get("/v1/payments", h.ListPayments)
 		r.Get("/v1/payments/{id}", h.GetPayment)
 		r.Get("/v1/payments/export/csv", h.ExportPaymentsCSV)
+
+		// Analytics endpoints
+		r.Get("/v1/analytics/revenue", h.AnalyticsRevenue)
+		r.Get("/v1/analytics/conversion", h.AnalyticsConversion)
+		r.Get("/v1/analytics/providers", h.AnalyticsProviders)
 	})
 
 	// Checkout sessions (SDK — uses X-Merchant-ID header from gateway)
@@ -546,6 +551,158 @@ type goodItemReq struct {
 }
 
 type envelope map[string]any
+
+// AnalyticsRevenue handles GET /v1/analytics/revenue — daily revenue time series.
+func (h *PaymentHandler) AnalyticsRevenue(w http.ResponseWriter, r *http.Request) {
+	merchantID, ok := merchantIDFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	days := intQuery(r, "days", 30)
+	if days > 90 {
+		days = 90
+	}
+
+	// Fetch all paid payments for the period
+	from := time.Now().AddDate(0, 0, -days)
+	params := service.ListParams{Page: 1, PerPage: 10000, DateFrom: &from}
+	paidStatus := domain.StatusPaid
+	params.Status = &paidStatus
+
+	payments, _, err := h.svc.ListPayments(r.Context(), merchantID, params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to fetch analytics")
+		return
+	}
+
+	// Aggregate by day
+	dailyRevenue := make(map[string]float64)
+	dailyCount := make(map[string]int)
+	for _, p := range payments {
+		day := p.PaidAt.Format("2006-01-02")
+		if p.PaidAt == nil {
+			day = p.CreatedAt.Format("2006-01-02")
+		}
+		val, _ := p.NetAmountUSDT.Float64()
+		dailyRevenue[day] += val
+		dailyCount[day]++
+	}
+
+	// Build sorted series
+	var series []map[string]any
+	for i := days - 1; i >= 0; i-- {
+		day := time.Now().AddDate(0, 0, -i).Format("2006-01-02")
+		series = append(series, map[string]any{
+			"date":    day,
+			"revenue": dailyRevenue[day],
+			"count":   dailyCount[day],
+		})
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": series})
+}
+
+// AnalyticsConversion handles GET /v1/analytics/conversion — payment funnel.
+func (h *PaymentHandler) AnalyticsConversion(w http.ResponseWriter, r *http.Request) {
+	merchantID, ok := merchantIDFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	days := intQuery(r, "days", 30)
+	from := time.Now().AddDate(0, 0, -days)
+	params := service.ListParams{Page: 1, PerPage: 10000, DateFrom: &from}
+
+	payments, _, err := h.svc.ListPayments(r.Context(), merchantID, params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to fetch analytics")
+		return
+	}
+
+	total := len(payments)
+	var paid, expired, failed int
+	for _, p := range payments {
+		switch p.Status {
+		case domain.StatusPaid:
+			paid++
+		case domain.StatusExpired:
+			expired++
+		case domain.StatusFailed:
+			failed++
+		}
+	}
+	pending := total - paid - expired - failed
+
+	writeJSON(w, http.StatusOK, envelope{"data": map[string]any{
+		"total":   total,
+		"paid":    paid,
+		"expired": expired,
+		"failed":  failed,
+		"pending": pending,
+		"successRate": func() float64 {
+			if total == 0 {
+				return 0
+			}
+			return float64(paid) / float64(total) * 100
+		}(),
+	}})
+}
+
+// AnalyticsProviders handles GET /v1/analytics/providers — breakdown by provider.
+func (h *PaymentHandler) AnalyticsProviders(w http.ResponseWriter, r *http.Request) {
+	merchantID, ok := merchantIDFromRequest(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
+		return
+	}
+
+	days := intQuery(r, "days", 30)
+	from := time.Now().AddDate(0, 0, -days)
+	params := service.ListParams{Page: 1, PerPage: 10000, DateFrom: &from}
+
+	payments, _, err := h.svc.ListPayments(r.Context(), merchantID, params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to fetch analytics")
+		return
+	}
+
+	providerStats := make(map[string]map[string]any)
+	for _, p := range payments {
+		stats, ok := providerStats[p.Provider]
+		if !ok {
+			stats = map[string]any{"count": 0, "paid": 0, "volume": 0.0}
+			providerStats[p.Provider] = stats
+		}
+		stats["count"] = stats["count"].(int) + 1
+		if p.Status == domain.StatusPaid {
+			stats["paid"] = stats["paid"].(int) + 1
+			vol, _ := p.NetAmountUSDT.Float64()
+			stats["volume"] = stats["volume"].(float64) + vol
+		}
+	}
+
+	var result []map[string]any
+	for provider, stats := range providerStats {
+		count := stats["count"].(int)
+		paid := stats["paid"].(int)
+		successRate := float64(0)
+		if count > 0 {
+			successRate = float64(paid) / float64(count) * 100
+		}
+		result = append(result, map[string]any{
+			"provider":    provider,
+			"count":       count,
+			"paid":        paid,
+			"volume":      stats["volume"],
+			"successRate": successRate,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, envelope{"data": result})
+}
 
 func paymentResponse(p *domain.Payment) map[string]any {
 	feeBreakdown := map[string]any{
