@@ -126,6 +126,17 @@ docker-push: ## Push all service Docker images to registry
 		docker push openpay/$$svc; \
 	done
 
+# ─── Load Testing ───
+load-test: ## Run k6 load tests (requires k6 installed)
+	@echo "Running exchange rates load test..."
+	k6 run tests/load/exchange-rates.js --quiet
+	@echo ""
+	@echo "Running list payments load test..."
+	k6 run tests/load/list-payments.js --quiet
+	@echo ""
+	@echo "Running create payment load test..."
+	k6 run tests/load/create-payment.js --quiet
+
 # ─── Cleanup ───
 clean: ## Remove build artifacts
 	rm -rf bin/ coverage.out coverage.html

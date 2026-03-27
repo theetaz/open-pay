@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"github.com/openlankapay/openlankapay/pkg/fraud"
 	"github.com/openlankapay/openlankapay/services/payment/internal/domain"
 )
 
@@ -70,11 +71,12 @@ type CreatePaymentInput struct {
 
 // PaymentService orchestrates payment operations.
 type PaymentService struct {
-	repo       PaymentRepository
-	providers  map[string]domain.PaymentProvider
-	exchange   ExchangeClient
-	events     EventPublisher
-	merchant   MerchantClient
+	repo        PaymentRepository
+	providers   map[string]domain.PaymentProvider
+	exchange    ExchangeClient
+	events      EventPublisher
+	merchant    MerchantClient
+	fraudEngine *fraud.Engine
 }
 
 // NewPaymentService creates a new PaymentService.
@@ -90,6 +92,14 @@ func NewPaymentService(repo PaymentRepository, providers map[string]domain.Payme
 	}
 	return s
 }
+
+// SetFraudEngine sets the fraud detection engine.
+func (s *PaymentService) SetFraudEngine(engine *fraud.Engine) {
+	s.fraudEngine = engine
+}
+
+// ErrPaymentBlocked is returned when fraud detection blocks a payment.
+var ErrPaymentBlocked = fmt.Errorf("payment blocked by fraud detection")
 
 // CreatePayment creates a new payment and initiates it with the provider.
 func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentInput) (*domain.Payment, error) {
@@ -131,6 +141,23 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 
 	// Set fees (default rates)
 	payment.SetFees(decimal.NewFromFloat(0.5), decimal.NewFromFloat(1.5))
+
+	// Fraud detection
+	if s.fraudEngine != nil {
+		assessment := s.fraudEngine.Assess(fraud.PaymentContext{
+			MerchantID:    input.MerchantID.String(),
+			Amount:        payment.AmountUSDT,
+			Currency:      input.Currency,
+			CustomerEmail: input.CustomerEmail,
+			Provider:      input.Provider,
+			IsNewCustomer: input.CustomerEmail == "",
+		})
+		payment.RiskScore = assessment.Score
+		payment.RiskFlags = assessment.Flags
+		if assessment.ShouldBlock {
+			return nil, fmt.Errorf("%w: risk score %d (%s)", ErrPaymentBlocked, assessment.Score, assessment.Level)
+		}
+	}
 
 	// Create payment with provider
 	provResp, err := prov.CreatePayment(ctx, domain.ProviderPaymentRequest{

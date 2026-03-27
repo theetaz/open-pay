@@ -22,6 +22,7 @@ type RemoteKeyValidator struct {
 type cachedKey struct {
 	hmacKey    string
 	merchantID string
+	allowedIPs []string
 	expiresAt  time.Time
 }
 
@@ -66,8 +67,9 @@ func (v *RemoteKeyValidator) GetSecretByKeyID(keyID string) (string, error) {
 
 	var result struct {
 		Data struct {
-			HMACKey    string `json:"hmacKey"`
-			MerchantID string `json:"merchantId"`
+			HMACKey    string   `json:"hmacKey"`
+			MerchantID string   `json:"merchantId"`
+			AllowedIPs []string `json:"allowedIps"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
@@ -82,6 +84,7 @@ func (v *RemoteKeyValidator) GetSecretByKeyID(keyID string) (string, error) {
 	v.cache.Store(keyID, cachedKey{
 		hmacKey:    result.Data.HMACKey,
 		merchantID: result.Data.MerchantID,
+		allowedIPs: result.Data.AllowedIPs,
 		expiresAt:  time.Now().Add(v.cacheTTL),
 	})
 
@@ -94,4 +97,13 @@ func (v *RemoteKeyValidator) GetMerchantID(keyID string) string {
 		return cached.(cachedKey).merchantID
 	}
 	return ""
+}
+
+// GetAllowedIPs returns the cached allowed IPs for a previously validated key.
+// Returns nil if no whitelist is configured (all IPs allowed).
+func (v *RemoteKeyValidator) GetAllowedIPs(keyID string) []string {
+	if cached, ok := v.cache.Load(keyID); ok {
+		return cached.(cachedKey).allowedIPs
+	}
+	return nil
 }

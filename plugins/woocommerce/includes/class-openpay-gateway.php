@@ -184,8 +184,11 @@ class WC_OpenPay_Gateway extends WC_Payment_Gateway
 
         $data = json_decode($payload, true);
 
-        // TODO: Verify ED25519 signature in production
-        // For now, process the event
+        // Verify ED25519 signature
+        if (!$this->verify_webhook_signature($payload)) {
+            status_header(401);
+            exit('Invalid webhook signature');
+        }
 
         switch ($event) {
             case 'payment.paid':
@@ -201,6 +204,79 @@ class WC_OpenPay_Gateway extends WC_Payment_Gateway
 
         status_header(200);
         exit('OK');
+    }
+
+    /**
+     * Verify the ED25519 signature on an incoming webhook payload.
+     * Fetches the public key from the API (cached in a transient for 10 minutes).
+     */
+    private function verify_webhook_signature(string $payload): bool
+    {
+        $signature_hex = sanitize_text_field($_SERVER['HTTP_X_SIGNATURE'] ?? '');
+
+        if (empty($signature_hex)) {
+            if ($this->get_option('test_mode', 'no') === 'yes') {
+                return true; // Skip verification in test mode
+            }
+            return false;
+        }
+
+        if (!function_exists('sodium_crypto_sign_verify_detached')) {
+            // sodium extension not available — log warning and allow in test mode
+            if ($this->get_option('test_mode', 'no') === 'yes') {
+                error_log('OpenPay: sodium extension not available, skipping signature verification in test mode');
+                return true;
+            }
+            error_log('OpenPay: sodium extension required for webhook signature verification');
+            return false;
+        }
+
+        $public_key_hex = $this->get_webhook_public_key();
+        if (empty($public_key_hex)) {
+            error_log('OpenPay: failed to fetch webhook public key');
+            return false;
+        }
+
+        try {
+            $signature = sodium_hex2bin($signature_hex);
+            $public_key = sodium_hex2bin($public_key_hex);
+            return sodium_crypto_sign_verify_detached($signature, $payload, $public_key);
+        } catch (\Exception $e) {
+            error_log('OpenPay: signature verification failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Fetch the ED25519 public key from the API, cached for 10 minutes.
+     */
+    private function get_webhook_public_key(): string
+    {
+        $cache_key = 'openpay_webhook_public_key';
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = wp_remote_get($this->api_base_url . '/v1/webhooks/public-key', [
+            'timeout' => 10,
+            'headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+
+        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+            return '';
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $key = $body['data']['publicKey'] ?? '';
+
+        if (!empty($key)) {
+            set_transient($cache_key, $key, 600); // Cache for 10 minutes
+        }
+
+        return $key;
     }
 
     private function handle_payment_paid(array $data): void

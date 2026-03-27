@@ -35,6 +35,7 @@ func NewGatewayRouter(cfg GatewayConfig) http.Handler {
 	r.Use(chimw.Timeout(30 * time.Second))
 	r.Use(requestID)
 	r.Use(corsMiddleware)
+	r.Use(securityHeaders)
 	r.Use(chimw.RealIP)
 
 	// Strip internal headers from external requests to prevent forgery
@@ -420,6 +421,20 @@ func corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// securityHeaders adds OWASP-recommended security headers to all responses.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -1,0 +1,2 @@
+ALTER TABLE payments DROP COLUMN IF EXISTS risk_flags;
+ALTER TABLE payments DROP COLUMN IF EXISTS risk_score;
