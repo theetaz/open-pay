@@ -1,20 +1,37 @@
-name: Deploy
+name: Deploy Production
 
 on:
-  workflow_dispatch:  # Manual trigger only during development phase
-  # push:
-  #   branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
-  deploy-backend:
-    name: Deploy Backend
+  ci-check:
+    name: CI Gate
     runs-on: ubuntu-latest
-    needs: []
     steps:
-      - name: Deploy to DigitalOcean
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run tests
+        run: go test -short -count=1 ./pkg/... ./services/...
+
+  deploy-backend:
+    name: Deploy Backend to Production
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+    steps:
+      - name: Deploy to Production VPS
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_IP }}
@@ -22,15 +39,15 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             cd /opt/openpay
-            git fetch origin main
-            git reset --hard origin/main
-            ./deploy.sh
+            ./deploy.sh production
           script_stop: true
           command_timeout: 15m
 
   deploy-merchant-portal:
-    name: Deploy Merchant Portal
+    name: Deploy Merchant Portal (Production)
     runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
     steps:
       - uses: actions/checkout@v6
 
@@ -47,7 +64,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Deploy to Vercel
+      - name: Deploy to Vercel (Production)
         working-directory: apps/merchant-portal
         run: |
           vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --scope=perfectus
@@ -58,8 +75,10 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_MERCHANT_PROJECT_ID }}
 
   deploy-admin-dashboard:
-    name: Deploy Admin Dashboard
+    name: Deploy Admin Dashboard (Production)
     runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
     steps:
       - uses: actions/checkout@v6
 
@@ -76,7 +95,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Deploy to Vercel
+      - name: Deploy to Vercel (Production)
         working-directory: apps/admin-dashboard
         run: |
           vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --scope=perfectus

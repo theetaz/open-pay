@@ -1,0 +1,16 @@
+# =============================================================================
+# Open Pay — Staging Terraform Variables
+# Copy to terraform.tfvars and fill in real values:
+#   cp terraform.tfvars.example terraform.tfvars
+# =============================================================================
+
+do_token          = ""  # DigitalOcean API token
+ssh_key_name      = ""  # Name of your SSH key in DigitalOcean
+region            = "sgp1"
+droplet_size      = "s-2vcpu-4gb"
+postgres_password = ""  # Strong password for PostgreSQL
+app_domain        = "staging.yourdomain.com"
+create_reserved_ip = false
+
+# Restrict SSH to your IP (recommended):
+# ssh_allow_cidrs = ["YOUR.IP.HERE/32"]
