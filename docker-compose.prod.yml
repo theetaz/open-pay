@@ -39,6 +39,7 @@ services:
       EXCHANGE_SERVICE_URL: http://exchange:8085
       MERCHANT_SERVICE_URL: http://merchant:8082
       ADMIN_SERVICE_URL: http://admin:8088
+      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-https://olp-merchant.nipuntheekshana.com}
     restart: unless-stopped
 
   merchant:

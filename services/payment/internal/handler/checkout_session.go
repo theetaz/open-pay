@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -101,19 +103,18 @@ func (h *PaymentHandler) CreateCheckoutSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Build the hosted checkout URL
-	checkoutURL := payment.CheckoutLink
-	if checkoutURL == "" {
-		// Fallback: generate our own hosted checkout URL
-		gatewayBase := r.Header.Get("X-Forwarded-Host")
-		if gatewayBase == "" {
-			gatewayBase = r.Host
+	// Build the hosted checkout URL — use the merchant portal checkout page.
+	// This provides the full UI with QR code, countdown, sandbox wallet, and redirect handling.
+	merchantPortalURL := os.Getenv("MERCHANT_PORTAL_URL")
+	if merchantPortalURL == "" {
+		merchantPortalURL = "https://olp-merchant.nipuntheekshana.com"
+	}
+	checkoutURL := merchantPortalURL + "/checkout/" + payment.ID.String()
+	if req.SuccessURL != "" {
+		checkoutURL += "?successUrl=" + url.QueryEscape(req.SuccessURL)
+		if req.CancelURL != "" {
+			checkoutURL += "&cancelUrl=" + url.QueryEscape(req.CancelURL)
 		}
-		scheme := "https"
-		if r.Header.Get("X-Forwarded-Proto") != "" {
-			scheme = r.Header.Get("X-Forwarded-Proto")
-		}
-		checkoutURL = scheme + "://" + gatewayBase + "/v1/payments/" + payment.ID.String() + "/checkout"
 	}
 
 	// Session response

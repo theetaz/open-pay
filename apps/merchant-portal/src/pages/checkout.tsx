@@ -1,11 +1,14 @@
 import * as React from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCheckout } from '#/hooks/use-payments'
 import { CheckCircle2, XCircle, Clock, Smartphone } from 'lucide-react'
 
 export function CheckoutPage() {
   const { paymentId } = useParams<{ paymentId: string }>()
+  const [searchParams] = useSearchParams()
+  const successUrl = searchParams.get('successUrl')
+  const cancelUrl = searchParams.get('cancelUrl')
   const { data, isLoading, isError } = useCheckout(paymentId!)
 
   const payment = data?.data
@@ -33,6 +36,19 @@ export function CheckoutPage() {
     )
   }
 
+  // Auto-redirect after payment completes
+  React.useEffect(() => {
+    if (!payment) return
+    if (payment.status === 'PAID' && successUrl) {
+      const timer = setTimeout(() => { window.location.href = successUrl }, 3000)
+      return () => clearTimeout(timer)
+    }
+    if ((payment.status === 'EXPIRED' || payment.status === 'FAILED') && cancelUrl) {
+      const timer = setTimeout(() => { window.location.href = cancelUrl }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [payment?.status, successUrl, cancelUrl])
+
   if (payment.status === 'PAID') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -41,6 +57,9 @@ export function CheckoutPage() {
           <h2 className="text-2xl font-bold mt-4">Payment Successful</h2>
           <p className="text-muted-foreground mt-2">{payment.amountUsdt} USDT received</p>
           <p className="text-xs text-muted-foreground mt-1">Payment No: {payment.paymentNo}</p>
+          {successUrl && (
+            <p className="text-sm text-muted-foreground mt-4">Redirecting back to store in 3 seconds...</p>
+          )}
         </div>
       </div>
     )
@@ -53,6 +72,9 @@ export function CheckoutPage() {
           <Clock className="h-16 w-16 text-amber-500 mx-auto" />
           <h2 className="text-2xl font-bold mt-4">Payment Expired</h2>
           <p className="text-muted-foreground mt-2">This payment link has expired.</p>
+          {cancelUrl && (
+            <p className="text-sm text-muted-foreground mt-4">Redirecting back to store in 3 seconds...</p>
+          )}
         </div>
       </div>
     )
@@ -65,6 +87,9 @@ export function CheckoutPage() {
           <XCircle className="h-16 w-16 text-destructive mx-auto" />
           <h2 className="text-2xl font-bold mt-4">Payment Failed</h2>
           <p className="text-muted-foreground mt-2">Something went wrong with this payment.</p>
+          {cancelUrl && (
+            <p className="text-sm text-muted-foreground mt-4">Redirecting back to store in 3 seconds...</p>
+          )}
         </div>
       </div>
     )
