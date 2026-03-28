@@ -12,9 +12,6 @@ echo "Waiting for Postgres..."
 until docker exec openpay-postgres-1 pg_isready -U olp >/dev/null 2>&1; do sleep 1; done
 echo "Postgres ready."
 
-echo "==> Cleaning up orphan containers..."
-docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans 2>/dev/null || true
-
 echo "==> Building service images..."
 docker compose -f docker-compose.prod.yml --env-file .env.prod build --parallel
 
@@ -24,8 +21,8 @@ for db in merchant payment settlement exchange webhook subscription admin notifi
     migrate -path migrations/${db} -database "postgres://olp:${POSTGRES_PASSWORD:-olp_prod_Str0ngP4ss2026}@localhost:5432/${db}_db?sslmode=disable" up 2>&1 || true
 done
 
-echo "==> Starting services..."
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+echo "==> Starting services (recreating only changed containers)..."
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate
 
 echo "==> Pruning old images..."
 docker image prune -f
