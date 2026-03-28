@@ -1,3 +1,5 @@
+-- Tenants table for white-label / multi-tenant support
+-- Note: tenant_id on merchants must be added via merchant_db migration, not here
 CREATE TABLE tenants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
@@ -13,7 +15,3 @@ CREATE TABLE tenants (
 );
 CREATE INDEX idx_tenants_slug ON tenants(slug);
 CREATE INDEX idx_tenants_domain ON tenants(domain);
-
--- Add tenant_id to merchants for isolation
-ALTER TABLE merchants ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id);
-CREATE INDEX idx_merchants_tenant ON merchants(tenant_id);
