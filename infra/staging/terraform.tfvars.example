@@ -4,11 +4,11 @@
 #   cp terraform.tfvars.example terraform.tfvars
 # =============================================================================
 
-do_token          = "dop_v1_CHANGE_ME"
-ssh_key_name      = "your-ssh-key-name-in-digitalocean"
+do_token          = ""  # DigitalOcean API token
+ssh_key_name      = ""  # Name of your SSH key in DigitalOcean
 region            = "sgp1"
 droplet_size      = "s-2vcpu-4gb"
-postgres_password = "CHANGE_ME_staging_db_password"
+postgres_password = ""  # Strong password for PostgreSQL
 app_domain        = "staging.yourdomain.com"
 create_reserved_ip = false
 
