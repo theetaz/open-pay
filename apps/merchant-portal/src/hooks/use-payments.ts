@@ -84,9 +84,15 @@ export function usePayment(id: string) {
 }
 
 export function useCheckout(id: string) {
+  const apiUrl = (typeof window !== 'undefined' && import.meta.env.VITE_API_URL) || 'http://localhost:8080'
   return useQuery({
     queryKey: ['checkout', id],
-    queryFn: () => api.get<CheckoutResponse>(`/v1/payments/${id}/checkout`),
+    queryFn: async () => {
+      // Public endpoint — fetch WITHOUT auth token (customer is not logged in)
+      const res = await fetch(`${apiUrl}/v1/payments/${id}/checkout`)
+      if (!res.ok) throw new Error('Failed to fetch checkout')
+      return res.json() as Promise<CheckoutResponse>
+    },
     enabled: !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.data?.status
