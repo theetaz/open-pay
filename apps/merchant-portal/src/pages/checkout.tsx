@@ -13,6 +13,19 @@ export function CheckoutPage() {
 
   const payment = data?.data
 
+  // Auto-redirect after payment completes (must be before early returns — React hooks rules)
+  React.useEffect(() => {
+    if (!payment) return
+    if (payment.status === 'PAID' && successUrl) {
+      const timer = setTimeout(() => { window.location.href = successUrl }, 3000)
+      return () => clearTimeout(timer)
+    }
+    if ((payment.status === 'EXPIRED' || payment.status === 'FAILED') && cancelUrl) {
+      const timer = setTimeout(() => { window.location.href = cancelUrl }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [payment?.status, successUrl, cancelUrl])
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -35,19 +48,6 @@ export function CheckoutPage() {
       </div>
     )
   }
-
-  // Auto-redirect after payment completes
-  React.useEffect(() => {
-    if (!payment) return
-    if (payment.status === 'PAID' && successUrl) {
-      const timer = setTimeout(() => { window.location.href = successUrl }, 3000)
-      return () => clearTimeout(timer)
-    }
-    if ((payment.status === 'EXPIRED' || payment.status === 'FAILED') && cancelUrl) {
-      const timer = setTimeout(() => { window.location.href = cancelUrl }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [payment?.status, successUrl, cancelUrl])
 
   if (payment.status === 'PAID') {
     return (
