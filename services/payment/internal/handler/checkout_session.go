@@ -101,20 +101,17 @@ func (h *PaymentHandler) CreateCheckoutSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Build the hosted checkout URL
-	checkoutURL := payment.CheckoutLink
-	if checkoutURL == "" {
-		// Fallback: generate our own hosted checkout URL
-		gatewayBase := r.Header.Get("X-Forwarded-Host")
-		if gatewayBase == "" {
-			gatewayBase = r.Host
-		}
-		scheme := "https"
-		if r.Header.Get("X-Forwarded-Proto") != "" {
-			scheme = r.Header.Get("X-Forwarded-Proto")
-		}
-		checkoutURL = scheme + "://" + gatewayBase + "/v1/payments/" + payment.ID.String() + "/checkout"
+	// Build the hosted checkout URL — always use our own checkout page for sessions.
+	// The provider's raw checkout link (payment.CheckoutLink) is for direct API use only.
+	gatewayBase := r.Header.Get("X-Forwarded-Host")
+	if gatewayBase == "" {
+		gatewayBase = r.Host
 	}
+	scheme := "https"
+	if r.Header.Get("X-Forwarded-Proto") != "" {
+		scheme = r.Header.Get("X-Forwarded-Proto")
+	}
+	checkoutURL := scheme + "://" + gatewayBase + "/v1/payments/" + payment.ID.String() + "/checkout"
 
 	// Session response
 	sessionResp := map[string]any{
