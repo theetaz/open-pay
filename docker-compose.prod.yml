@@ -53,9 +53,11 @@ services:
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/merchant_db?sslmode=disable
       NOTIFICATION_SERVICE_URL: http://notification:8087
       ADMIN_SERVICE_URL: http://admin:8088
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: kyc-documents
+      MINIO_USE_SSL: "false"
       SMTP_HOST: ${SMTP_HOST:-smtp.resend.com}
       SMTP_PORT: ${SMTP_PORT:-2587}
       SMTP_USERNAME: ${SMTP_USERNAME:-resend}
@@ -140,9 +142,11 @@ services:
       PORT: "8088"
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/admin_db?sslmode=disable
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: kyc-documents
+      MINIO_USE_SSL: "false"
     restart: unless-stopped
 
   directdebit:
