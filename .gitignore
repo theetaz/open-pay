@@ -27,10 +27,19 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment (actual env files with secrets — NEVER commit these)
 .env
 .env.local
 .env.*.local
+.env.staging
+.env.prod
+
+# Terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.backup
+infra/**/*.tfvars
+infra/**/.terraform.lock.hcl
 
 # Node
 node_modules/

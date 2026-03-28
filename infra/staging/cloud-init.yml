@@ -1,0 +1,90 @@
+#cloud-config
+# Open Pay — Staging VPS Cloud-Init
+# This runs automatically on first boot when provisioned via Terraform.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - ufw
+  - fail2ban
+  - unzip
+  - wget
+  - git
+  - jq
+
+write_files:
+  - path: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 3600
+      findtime = 600
+      maxretry = 5
+
+      [sshd]
+      enabled = true
+      port = 22
+      filter = sshd
+      logpath = /var/log/auth.log
+
+runcmd:
+  # --- Docker ---
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # --- Docker Compose (v2 comes with Docker, verify) ---
+  - docker compose version
+
+  # --- golang-migrate CLI ---
+  - curl -L https://github.com/golang-migrate/migrate/releases/latest/download/migrate.linux-amd64.deb -o /tmp/migrate.deb
+  - dpkg -i /tmp/migrate.deb
+  - rm /tmp/migrate.deb
+
+  # --- Firewall (UFW as fallback, DigitalOcean firewall is primary) ---
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 8080/tcp
+  - ufw --force enable
+
+  # --- Fail2ban ---
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+
+  # --- Create app directory ---
+  - mkdir -p /opt/openpay
+
+  # --- Swap (useful for small droplets during builds) ---
+  - fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+  # --- System tuning ---
+  - echo 'vm.swappiness=10' >> /etc/sysctl.conf
+  - echo 'fs.file-max=65535' >> /etc/sysctl.conf
+  - sysctl -p
+
+  # --- Log rotation for Docker ---
+  - |
+    cat > /etc/docker/daemon.json << 'EOF'
+    {
+      "log-driver": "json-file",
+      "log-opts": {
+        "max-size": "10m",
+        "max-file": "3"
+      }
+    }
+    EOF
+  - systemctl restart docker
+
+final_message: "Open Pay staging server provisioned successfully. Run 'cloud-init status --wait' to verify."
