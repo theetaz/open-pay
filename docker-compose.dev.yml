@@ -9,7 +9,7 @@
 x-go-service: &go-service
   build:
     context: .
-    dockerfile: Dockerfile.dev.go
+    dockerfile: Dockerfile.dev.api
   volumes:
     - ./:/app
     - go-build-cache:/root/.cache/go-build
