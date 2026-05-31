@@ -1,0 +1,267 @@
+# Containerized development stack — Go services (hot reload) + frontends.
+#
+# Always used together with the base infra file:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# The Makefile wraps this:  make up  ->  make migrate  ->  make start
+# Only Docker is required on the host.
+
+x-go-service: &go-service
+  build:
+    context: .
+    dockerfile: Dockerfile.dev.go
+  volumes:
+    - ./:/app
+    - go-build-cache:/root/.cache/go-build
+  restart: unless-stopped
+
+x-go-env: &go-env
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production-min32chars}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  # ─── API Gateway ───
+  gateway:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: gateway
+      PORT: "8080"
+      MERCHANT_SERVICE_URL: http://merchant:8082
+      PAYMENT_SERVICE_URL: http://payment:8081
+      EXCHANGE_SERVICE_URL: http://exchange:8085
+      SETTLEMENT_SERVICE_URL: http://settlement:8083
+      WEBHOOK_SERVICE_URL: http://webhook:8084
+      SUBSCRIPTION_SERVICE_URL: http://subscription:8086
+      NOTIFICATION_SERVICE_URL: http://notification:8087
+      ADMIN_SERVICE_URL: http://admin:8088
+      DIRECTDEBIT_SERVICE_URL: http://directdebit:8089
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ─── Payment ───
+  payment:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: payment
+      PORT: "8081"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/payment_db?sslmode=disable
+      EXCHANGE_SERVICE_URL: http://exchange:8085
+      MERCHANT_SERVICE_URL: http://merchant:8082
+      ADMIN_SERVICE_URL: http://admin:8088
+      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-http://localhost:4600}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Merchant ───
+  merchant:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: merchant
+      PORT: "8082"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/merchant_db?sslmode=disable
+      NOTIFICATION_SERVICE_URL: http://notification:8087
+      ADMIN_SERVICE_URL: http://admin:8088
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: kyc-documents
+      MINIO_USE_SSL: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ─── Settlement ───
+  settlement:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: settlement
+      PORT: "8083"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/settlement_db?sslmode=disable
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Webhook ───
+  webhook:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: webhook
+      PORT: "8084"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/webhook_db?sslmode=disable
+      NATS_URL: nats://nats:4222
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # ─── Exchange ───
+  exchange:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: exchange
+      PORT: "8085"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/exchange_db?sslmode=disable
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Subscription ───
+  subscription:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: subscription
+      PORT: "8086"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/subscription_db?sslmode=disable
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Notification ───
+  notification:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: notification
+      PORT: "8087"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/notification_db?sslmode=disable
+      NATS_URL: nats://nats:4222
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # ─── Admin ───
+  admin:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: admin
+      PORT: "8088"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/admin_db?sslmode=disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: kyc-documents
+      MINIO_USE_SSL: "false"
+    ports:
+      - "8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ─── Direct Debit ───
+  directdebit:
+    <<: *go-service
+    environment:
+      <<: *go-env
+      SERVICE: directdebit
+      PORT: "8089"
+      DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/directdebit_db?sslmode=disable
+    ports:
+      - "8089:8089"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Frontend: Merchant Portal ───
+  merchant-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.web
+    command: sh -c "pnpm install && pnpm dev"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_USE_POLLING: "true"
+      # Keep pnpm's content store inside the named volume, not the bind mount,
+      # so nothing leaks into the host working tree.
+      npm_config_store_dir: /app/node_modules/.pnpm-store
+    volumes:
+      - ./apps/merchant-portal:/app
+      - merchant-portal-modules:/app/node_modules
+    ports:
+      - "4600:4600"
+    restart: unless-stopped
+    depends_on:
+      - gateway
+
+  # ─── Frontend: Admin Dashboard ───
+  admin-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.web
+    command: sh -c "pnpm install && pnpm dev"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_USE_POLLING: "true"
+      # Keep pnpm's content store inside the named volume, not the bind mount,
+      # so nothing leaks into the host working tree.
+      npm_config_store_dir: /app/node_modules/.pnpm-store
+    volumes:
+      - ./apps/admin-dashboard:/app
+      - admin-dashboard-modules:/app/node_modules
+    ports:
+      - "4500:4500"
+    restart: unless-stopped
+    depends_on:
+      - gateway
+
+  # ─── Migrations (one-shot tool; run via `make migrate`) ───
+  migrate:
+    image: migrate/migrate:latest
+    profiles: ["tools"]
+    entrypoint: ["/bin/sh", "/docker-migrate.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olp_dev_password}
+    volumes:
+      - ./migrations:/migrations
+      - ./scripts/docker-migrate.sh:/docker-migrate.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  go-build-cache:
+  merchant-portal-modules:
+  admin-dashboard-modules:
