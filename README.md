@@ -11,7 +11,7 @@
 
 ## Overview
 
-OpenLankaPayment enables merchants to accept cryptocurrency payments and receive settlement in Sri Lankan Rupees (LKR). Built as a microservices architecture with enterprise-grade security, observability, and fault tolerance.
+OpenLankaPayment enables merchants to accept cryptocurrency payments and receive settlement in Sri Lankan Rupees (LKR). Built as a microservices architecture with enterprise-grade security, observability, and fault tolerance
 
 ### Key Features
 
