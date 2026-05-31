@@ -11,5 +11,10 @@ export default defineConfig({
   ],
   server: {
     port: 4500,
+    host: true,
+    watch: {
+      // Enabled inside Docker (bind mounts need polling on macOS/Windows).
+      usePolling: process.env.VITE_USE_POLLING === 'true',
+    },
   },
 })
