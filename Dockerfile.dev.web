@@ -1,0 +1,10 @@
+# Dev image for the React/Vite frontends.
+# App source + node_modules are provided via bind mount + named volume at runtime,
+# so this image only needs Node + pnpm. Debian-based (glibc) for reliable native
+# modules (esbuild, lightningcss).
+
+FROM node:24-slim
+
+RUN npm install -g pnpm@10
+
+WORKDIR /app

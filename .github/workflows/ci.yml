@@ -124,7 +124,7 @@ jobs:
       - name: Build services
         run: |
           built=0
-          for svc in gateway payment merchant settlement webhook exchange subscription notification admin; do
+          for svc in gateway payment merchant settlement webhook exchange subscription notification admin directdebit; do
             if [ -f "services/$svc/cmd/main.go" ]; then
               echo "Building $svc..."
               go build -o bin/$svc ./services/$svc/cmd/

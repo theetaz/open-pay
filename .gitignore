@@ -74,3 +74,5 @@ skills-lock.json
 .mcp.json.pids/
 .mcp.json
 CLAUDE.md
+# pnpm content-addressable store (can leak from containerized installs)
+.pnpm-store/

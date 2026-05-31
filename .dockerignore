@@ -1,0 +1,24 @@
+# Build artifacts
+bin/
+tmp/
+coverage.out
+coverage.html
+
+# Dev runtime
+.pids/
+.logs/
+
+# VCS
+.git/
+.github/
+
+# Node / frontends (not needed for Go build context)
+node_modules/
+apps/*/node_modules/
+apps/*/dist/
+apps/*/.vercel/
+
+# Docs & misc
+*.md
+infra/
+tests/load/
