@@ -18,7 +18,7 @@ export function PaymentLinkCheckout() {
   const { data, isLoading, isError } = usePublicPaymentLink(slug!)
 
   const [email, setEmail] = useState('')
-  const [provider, setProvider] = useState('TEST')
+  const [provider, setProvider] = useState('')
   const [customAmount, setCustomAmount] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [submitting, setSubmitting] = useState(false)
@@ -74,7 +74,7 @@ export function PaymentLinkCheckout() {
         merchantId: paymentLink.merchantId,
         amount: String(totalAmount),
         currency: paymentLink.currency,
-        provider,
+        provider: selectedProvider,
         merchantTradeNo: `PL-${paymentLink.slug}`,
         customerEmail: email || undefined,
       })
@@ -86,12 +86,22 @@ export function PaymentLinkCheckout() {
     }
   }
 
+  // The on-chain watcher supports these tokens for direct wallet payment.
+  const onchainCurrencies = ['USDC', 'USDT']
+  const supportsOnchain = onchainCurrencies.includes(paymentLink.currency)
+
   const providers = [
-    { id: 'TEST', name: 'Test Pay', desc: 'Sandbox' },
+    ...(supportsOnchain
+      ? [{ id: 'ONCHAIN', name: 'Crypto Wallet', desc: 'MetaMask / any wallet' }]
+      : []),
     { id: 'BYBIT', name: 'Bybit', desc: 'Exchange' },
     { id: 'BINANCE', name: 'Binance', desc: 'Exchange' },
     { id: 'KUCOIN', name: 'KuCoin', desc: 'Exchange' },
+    { id: 'TEST', name: 'Test Pay', desc: 'Sandbox' },
   ]
+
+  // Default selection: prefer on-chain for crypto links, else the first option.
+  const selectedProvider = provider || providers[0]?.id || 'TEST'
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -203,7 +213,7 @@ export function PaymentLinkCheckout() {
                     key={p.id}
                     onClick={() => setProvider(p.id)}
                     className={`rounded-md border px-3 py-2.5 text-sm transition-colors ${
-                      provider === p.id
+                      selectedProvider === p.id
                         ? 'border-primary bg-primary/10 text-primary font-medium'
                         : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                     }`}
