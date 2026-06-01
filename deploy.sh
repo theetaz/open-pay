@@ -1,32 +1,38 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # =============================================================================
-# Open Pay — Environment-Aware Deploy Script
-# Usage: ./deploy.sh <environment>
-#   environment: staging | production
+# Open Pay — Production Deploy Script (self-contained, shared-host safe)
+# Usage: ./deploy.sh [production]
+#
+# The whole stack (infra + services) runs under the `openpay` compose project
+# on its own private network. Nothing is published to the host except the
+# gateway on 127.0.0.1:${GATEWAY_BIND_PORT:-7000}, which the host nginx proxies.
+# Safe to run alongside other projects on the same box.
 # =============================================================================
 
-ENVIRONMENT="${1:-staging}"
+ENVIRONMENT="${1:-production}"
 
 case "$ENVIRONMENT" in
-  staging)
-    BRANCH="develop"
-    ENV_FILE=".env.staging"
-    ;;
   production)
     BRANCH="main"
     ENV_FILE=".env.prod"
     ;;
+  staging)
+    BRANCH="develop"
+    ENV_FILE=".env.staging"
+    ;;
   *)
-    echo "ERROR: Unknown environment '$ENVIRONMENT'. Use 'staging' or 'production'."
+    echo "ERROR: Unknown environment '$ENVIRONMENT'. Use 'production' or 'staging'."
     exit 1
     ;;
 esac
 
+COMPOSE="docker compose -f docker-compose.prod.yml --env-file $ENV_FILE"
+
 echo "============================================"
 echo "  Deploying Open Pay — $ENVIRONMENT"
-echo "  Branch: $BRANCH"
+echo "  Branch:   $BRANCH"
 echo "  Env file: $ENV_FILE"
 echo "============================================"
 
@@ -45,49 +51,59 @@ echo "==> Fetching latest code from $BRANCH..."
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-# --- Load env for migrations ---
-set -a
-source "$ENV_FILE"
-set +a
-
-# --- Ensure infrastructure is running ---
-echo "==> Ensuring infrastructure is running..."
-docker compose -f docker-compose.yml up -d postgres redis nats minio minio-init mailpit
-echo "Waiting for Postgres..."
-until docker exec openpay-postgres-1 pg_isready -U olp >/dev/null 2>&1; do
-  echo "  ...waiting"
-  sleep 1
-done
-echo "Postgres ready."
-
-# --- Build service images ---
+# --- Build images ---
 echo "==> Building service images..."
-docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" build --parallel
+$COMPOSE build --parallel
 
-# --- Run migrations ---
-echo "==> Running migrations..."
-MIGRATE_DB_HOST="${MIGRATE_DB_HOST:-localhost}"
-MIGRATE_DB_PORT="${MIGRATE_DB_PORT:-5432}"
-for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do
-  echo "Migrating ${db}..."
-  migrate -path "migrations/${db}" \
-    -database "postgres://olp:${POSTGRES_PASSWORD}@${MIGRATE_DB_HOST}:${MIGRATE_DB_PORT}/${db}_db?sslmode=disable" \
-    up 2>&1 || true
+# --- Start infrastructure first ---
+echo "==> Starting infrastructure (postgres, redis, nats, minio)..."
+$COMPOSE up -d postgres redis nats minio minio-init
+
+echo "==> Waiting for Postgres to be healthy..."
+until [ "$($COMPOSE ps -q postgres | xargs -r docker inspect -f '{{.State.Health.Status}}' 2>/dev/null)" = "healthy" ]; do
+  echo "  ...waiting for postgres"
+  sleep 2
+done
+echo "Postgres healthy."
+
+# --- Run migrations INSIDE the network (against this stack's own postgres) ---
+echo "==> Running database migrations..."
+$COMPOSE run --rm migrate up
+
+# --- Start application services ---
+echo "==> Starting application services..."
+$COMPOSE up -d --remove-orphans
+
+# --- Cleanup dangling images ---
+echo "==> Pruning old images..."
+docker image prune -f >/dev/null 2>&1 || true
+
+# --- Health check (gateway on loopback) ---
+GATEWAY_BIND_PORT="$(grep -E '^GATEWAY_BIND_PORT=' "$ENV_FILE" | cut -d= -f2)"
+GATEWAY_BIND_PORT="${GATEWAY_BIND_PORT:-7000}"
+echo "==> Checking gateway health on 127.0.0.1:${GATEWAY_BIND_PORT}..."
+HEALTHY=0
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsS "http://127.0.0.1:${GATEWAY_BIND_PORT}/healthz" >/dev/null 2>&1; then
+    HEALTHY=1
+    echo "Gateway is healthy."
+    break
+  fi
+  echo "  ...gateway not ready yet (attempt ${attempt})"
+  sleep 3
 done
 
-# --- Start services ---
-echo "==> Starting services (recreating containers)..."
-docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --force-recreate
+echo ""
+$COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
+echo ""
 
-# --- Cleanup ---
-echo "==> Pruning old images..."
-docker image prune -f
-
-# --- Health check ---
-echo "==> Checking service health..."
-sleep 10
-docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" ps --format "table {{.Name}}\t{{.Status}}"
+if [ "$HEALTHY" -ne 1 ]; then
+  echo "ERROR: Gateway did not become healthy. Recent logs:"
+  $COMPOSE logs --tail=40 gateway || true
+  exit 1
+fi
 
 echo "============================================"
 echo "  Deploy complete — $ENVIRONMENT"
+echo "  Gateway: http://127.0.0.1:${GATEWAY_BIND_PORT} (proxied by host nginx)"
 echo "============================================"
