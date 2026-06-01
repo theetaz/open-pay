@@ -54,7 +54,16 @@ services:
       EXCHANGE_SERVICE_URL: http://exchange:8085
       MERCHANT_SERVICE_URL: http://merchant:8082
       ADMIN_SERVICE_URL: http://admin:8088
+      SETTLEMENT_SERVICE_URL: http://settlement:8083
       MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-http://localhost:7010}
+      # On-chain scan-and-send (BSC testnet). Empty mnemonic disables it.
+      RPC_URL: ${RPC_URL:-https://bsc-testnet-rpc.publicnode.com}
+      CHAIN_ID: ${CHAIN_ID:-97}
+      USDC_ADDRESS: ${USDC_ADDRESS:-0x6c904e10631e199134891158B97311ed088A6a16}
+      USDT_ADDRESS: ${USDT_ADDRESS:-0x5fB234eceBE3475E51F2A76bCE4a5d446D37CAB1}
+      DEPOSIT_MASTER_MNEMONIC: ${DEPOSIT_MASTER_MNEMONIC:-}
+      PAYMENT_CONFIRMATIONS: ${PAYMENT_CONFIRMATIONS:-3}
+      WATCHER_POLL_INTERVAL: ${WATCHER_POLL_INTERVAL:-15s}
     ports:
       - "7001:8081"
     depends_on:
