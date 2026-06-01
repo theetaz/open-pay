@@ -10,14 +10,14 @@ import (
 )
 
 var (
-	ErrInsufficientBalance      = errors.New("insufficient balance")
-	ErrInvalidWithdrawal        = errors.New("invalid withdrawal")
+	ErrInsufficientBalance         = errors.New("insufficient balance")
+	ErrInvalidWithdrawal           = errors.New("invalid withdrawal")
 	ErrInvalidWithdrawalTransition = errors.New("invalid withdrawal status transition")
-	ErrBalanceNotFound          = errors.New("balance not found")
-	ErrWithdrawalNotFound       = errors.New("withdrawal not found")
-	ErrInvalidRefund            = errors.New("invalid refund")
-	ErrRefundNotFound           = errors.New("refund not found")
-	ErrInvalidRefundTransition  = errors.New("invalid refund status transition")
+	ErrBalanceNotFound             = errors.New("balance not found")
+	ErrWithdrawalNotFound          = errors.New("withdrawal not found")
+	ErrInvalidRefund               = errors.New("invalid refund")
+	ErrRefundNotFound              = errors.New("refund not found")
+	ErrInvalidRefundTransition     = errors.New("invalid refund status transition")
 )
 
 // WithdrawalStatus represents the state of a withdrawal request.
@@ -33,16 +33,16 @@ const (
 
 // MerchantBalance tracks a merchant's running balance.
 type MerchantBalance struct {
-	ID                uuid.UUID
-	MerchantID        uuid.UUID
-	AvailableUSDT     decimal.Decimal
-	PendingUSDT       decimal.Decimal
-	TotalEarnedUSDT   decimal.Decimal
+	ID                 uuid.UUID
+	MerchantID         uuid.UUID
+	AvailableUSDT      decimal.Decimal
+	PendingUSDT        decimal.Decimal
+	TotalEarnedUSDT    decimal.Decimal
 	TotalWithdrawnUSDT decimal.Decimal
-	TotalFeesUSDT     decimal.Decimal
-	TotalEarnedLKR    decimal.Decimal
-	TotalWithdrawnLKR decimal.Decimal
-	UpdatedAt         time.Time
+	TotalFeesUSDT      decimal.Decimal
+	TotalEarnedLKR     decimal.Decimal
+	TotalWithdrawnLKR  decimal.Decimal
+	UpdatedAt          time.Time
 }
 
 // NewMerchantBalance creates a zero-balance for a merchant.

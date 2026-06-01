@@ -50,6 +50,7 @@ var validProviders = map[string]bool{
 	"BINANCE": true,
 	"KUCOIN":  true,
 	"TEST":    true,
+	"ONCHAIN": true,
 }
 
 // Valid status transitions.
@@ -103,55 +104,56 @@ type CreatePaymentInput struct {
 
 // Payment represents a payment order.
 type Payment struct {
-	ID              uuid.UUID
-	MerchantID      uuid.UUID
-	BranchID        *uuid.UUID
-	PaymentNo       string
-	MerchantTradeNo string
-	Amount          decimal.Decimal
-	Currency        string
-	AmountUSDT      decimal.Decimal
+	ID                   uuid.UUID
+	MerchantID           uuid.UUID
+	BranchID             *uuid.UUID
+	PaymentNo            string
+	MerchantTradeNo      string
+	Amount               decimal.Decimal
+	Currency             string
+	AmountUSDT           decimal.Decimal
 	ExchangeRateSnapshot *decimal.Decimal
-	ExchangeFeePct  decimal.Decimal
-	ExchangeFeeUSDT decimal.Decimal
-	PlatformFeePct  decimal.Decimal
-	PlatformFeeUSDT decimal.Decimal
-	TotalFeesUSDT   decimal.Decimal
-	NetAmountUSDT   decimal.Decimal
-	Provider        string
-	ProviderPayID   string
-	QRContent       string
-	CheckoutLink    string
-	DeepLink        string
-	Status          PaymentStatus
-	CustomerEmail     string
-	CustomerFirstName string
-	CustomerLastName  string
-	CustomerPhone     string
-	CustomerAddress   string
-	Goods             []GoodItem
-	WebhookURL      string
-	SuccessURL      string
-	CancelURL       string
-	TxHash          string
-	BlockNumber     int64
-	WalletAddress   string
-	Splits          []SplitRule
-	RiskScore       int
-	RiskFlags       []string
+	ExchangeFeePct       decimal.Decimal
+	ExchangeFeeUSDT      decimal.Decimal
+	PlatformFeePct       decimal.Decimal
+	PlatformFeeUSDT      decimal.Decimal
+	TotalFeesUSDT        decimal.Decimal
+	NetAmountUSDT        decimal.Decimal
+	Provider             string
+	ProviderPayID        string
+	QRContent            string
+	CheckoutLink         string
+	DeepLink             string
+	Status               PaymentStatus
+	CustomerEmail        string
+	CustomerFirstName    string
+	CustomerLastName     string
+	CustomerPhone        string
+	CustomerAddress      string
+	Goods                []GoodItem
+	WebhookURL           string
+	SuccessURL           string
+	CancelURL            string
+	TxHash               string
+	BlockNumber          int64
+	WalletAddress        string
+	DepositIndex         int64 // HD-wallet index for on-chain deposit address
+	Splits               []SplitRule
+	RiskScore            int
+	RiskFlags            []string
 	// LKR-specific fee fields (populated when currency is LKR)
-	LKRAmount       *decimal.Decimal
-	LKRExchangeFee  *decimal.Decimal
-	LKRPlatformFee  *decimal.Decimal
-	LKRTotalFees    *decimal.Decimal
-	LKRNetAmount    *decimal.Decimal
-	ExpireTime      time.Time
-	PaidAt          *time.Time
-	FailedAt        *time.Time
-	IdempotencyKey  string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	DeletedAt       *time.Time
+	LKRAmount      *decimal.Decimal
+	LKRExchangeFee *decimal.Decimal
+	LKRPlatformFee *decimal.Decimal
+	LKRTotalFees   *decimal.Decimal
+	LKRNetAmount   *decimal.Decimal
+	ExpireTime     time.Time
+	PaidAt         *time.Time
+	FailedAt       *time.Time
+	IdempotencyKey string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeletedAt      *time.Time
 }
 
 // NewPayment creates a validated Payment from input.
