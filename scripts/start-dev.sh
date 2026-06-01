@@ -33,22 +33,23 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-# Services definition: name:port
+# Services definition: name:port (host-published 70xx scheme)
 GO_SERVICES=(
-    "gateway:8080"
-    "payment:8081"
-    "merchant:8082"
-    "settlement:8083"
-    "webhook:8084"
-    "exchange:8085"
-    "subscription:8086"
-    "notification:8087"
-    "admin:8088"
+    "gateway:7000"
+    "payment:7001"
+    "merchant:7002"
+    "settlement:7003"
+    "webhook:7004"
+    "exchange:7005"
+    "subscription:7006"
+    "notification:7007"
+    "admin:7008"
+    "directdebit:7009"
 )
 
 FRONTEND_APPS=(
-    "merchant-portal:4600"
-    "admin-dashboard:4500"
+    "merchant-portal:7010"
+    "admin-dashboard:7011"
 )
 
 print_banner() {
@@ -66,14 +67,14 @@ print_summary() {
     echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "${BOLD}  Infrastructure:${NC}"
-    echo -e "  ${CYAN}PostgreSQL${NC}       http://localhost:5433"
-    echo -e "  ${CYAN}Redis${NC}            localhost:6379"
-    echo -e "  ${CYAN}NATS${NC}             nats://localhost:4222"
-    echo -e "  ${CYAN}NATS Monitor${NC}     http://localhost:8222"
-    echo -e "  ${CYAN}MinIO Console${NC}    http://localhost:9001  ${DIM}(minioadmin / minioadmin123)${NC}"
-    echo -e "  ${CYAN}MinIO API${NC}        http://localhost:9000"
-    echo -e "  ${CYAN}Mailpit UI${NC}       http://localhost:8025  ${DIM}(catches all dev emails)${NC}"
-    echo -e "  ${CYAN}Mailpit SMTP${NC}     localhost:1025"
+    echo -e "  ${CYAN}PostgreSQL${NC}       localhost:7020"
+    echo -e "  ${CYAN}Redis${NC}            localhost:7021"
+    echo -e "  ${CYAN}NATS${NC}             nats://localhost:7022"
+    echo -e "  ${CYAN}NATS Monitor${NC}     http://localhost:7023"
+    echo -e "  ${CYAN}MinIO Console${NC}    http://localhost:7025  ${DIM}(minioadmin / minioadmin123)${NC}"
+    echo -e "  ${CYAN}MinIO API${NC}        http://localhost:7024"
+    echo -e "  ${CYAN}Mailpit UI${NC}       http://localhost:7027  ${DIM}(catches all dev emails)${NC}"
+    echo -e "  ${CYAN}Mailpit SMTP${NC}     localhost:7026"
     echo ""
     echo -e "${BOLD}  Go Services (hot reload via air):${NC}"
     for entry in "${GO_SERVICES[@]}"; do
@@ -83,8 +84,8 @@ print_summary() {
     done
     echo ""
     echo -e "${BOLD}  Frontend Apps (Vite HMR):${NC}"
-    echo -e "  ${YELLOW}Merchant Portal${NC}  http://localhost:4600"
-    echo -e "  ${YELLOW}Admin Dashboard${NC}  http://localhost:4500"
+    echo -e "  ${YELLOW}Merchant Portal${NC}  http://localhost:7010"
+    echo -e "  ${YELLOW}Admin Dashboard${NC}  http://localhost:7011"
     echo ""
     echo -e "${BOLD}  Logs:${NC}"
     echo -e "  ${DIM}Go services:   .logs/<service>.log${NC}"
@@ -177,11 +178,11 @@ show_status() {
         fi
     }
 
-    _infra_status "postgres" "PostgreSQL"    "localhost:5433"           ""
-    _infra_status "redis"    "Redis"         "localhost:6379"           ""
-    _infra_status "nats"     "NATS"          "nats://localhost:4222"    "monitor: http://localhost:8222"
-    _infra_status "minio"    "MinIO Console" "http://localhost:9001"    "minioadmin / minioadmin123"
-    _infra_status "mailpit"  "Mailpit UI"    "http://localhost:8025"    "catches all dev emails"
+    _infra_status "postgres" "PostgreSQL"    "localhost:7020"           ""
+    _infra_status "redis"    "Redis"         "localhost:7021"           ""
+    _infra_status "nats"     "NATS"          "nats://localhost:7022"    "monitor: http://localhost:7023"
+    _infra_status "minio"    "MinIO Console" "http://localhost:7025"    "minioadmin / minioadmin123"
+    _infra_status "mailpit"  "Mailpit UI"    "http://localhost:7027"    "catches all dev emails"
 
     echo ""
 
@@ -224,8 +225,8 @@ show_status() {
         fi
     }
 
-    _fe_status "merchant-portal" "4600" "Merchant Portal"
-    _fe_status "admin-dashboard" "4500" "Admin Dashboard"
+    _fe_status "merchant-portal" "7010" "Merchant Portal"
+    _fe_status "admin-dashboard" "7011" "Admin Dashboard"
 
     echo ""
 
@@ -314,8 +315,8 @@ echo ""
 # ─── Run Migrations ───
 if command -v migrate &> /dev/null; then
     echo -e "${BOLD}Running database migrations...${NC}"
-    DB_URL_BASE="postgres://olp:olp_dev_password@localhost:5433"
-    for db in merchant payment settlement exchange webhook subscription admin notification; do
+    DB_URL_BASE="postgres://olp:olp_dev_password@localhost:7020"
+    for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do
         migrate -path "migrations/$db" -database "${DB_URL_BASE}/${db}_db?sslmode=disable" up 2>/dev/null || true
     done
     echo -e "  ${GREEN}Migrations complete.${NC}"
