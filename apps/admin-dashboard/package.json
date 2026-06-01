@@ -6,7 +6,7 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vite --port 4500",
+    "dev": "vite --port 7011",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run"
@@ -45,7 +45,7 @@
     "@vitejs/plugin-react": "^5.1.4",
     "jsdom": "^28.1.0",
     "typescript": "^5.7.2",
-    "vite": "^7.3.1",
+    "vite": "^7.3.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.0.5"
   },
@@ -53,6 +53,12 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "lightningcss"
-    ]
+    ],
+    "overrides": {
+      "fast-uri": "^3.1.2",
+      "path-to-regexp@8": "^8.4.0",
+      "picomatch@2": "^2.3.2",
+      "picomatch@4": "^4.0.4"
+    }
   }
 }

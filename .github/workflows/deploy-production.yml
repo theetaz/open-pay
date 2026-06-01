@@ -1,0 +1,53 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ci-check:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run tests
+        run: go test -short -count=1 ./pkg/... ./services/...
+
+  deploy-backend:
+    name: Deploy Backend to Production
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+    steps:
+      - name: Deploy to Production VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_SSH_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/openpay
+            ./deploy.sh production
+          command_timeout: 20m
+
+  # ---------------------------------------------------------------------------
+  # Frontends (merchant-portal, admin-dashboard) deploy to Vercel via Vercel's
+  # native Git integration — auto-build on push to `main` (production) and on
+  # pull requests (preview). No GitHub Actions Vercel job or VERCEL_TOKEN is
+  # needed; configure each project's root directory & env vars in the Vercel
+  # dashboard. See docs/DEPLOYMENT.md.
+  # ---------------------------------------------------------------------------

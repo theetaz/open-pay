@@ -1,46 +1,77 @@
-.PHONY: help start stop status dev up down build test test-v test-coverage lint fmt generate migrate migrate-down migrate-create clean
+.PHONY: help start stop restart status logs dev up down down-clean up-observability build test test-v test-integration test-all test-coverage lint fmt vet generate migrate migrate-down migrate-create db-reset clean tidy docker-build docker-push load-test start-native stop-native status-native
+
+# Ignore any COMPOSE_FILE exported by the user's shell — our -f flags are authoritative.
+unexport COMPOSE_FILE
+
+# docker compose invocation for the full containerized dev stack (infra + apps)
+COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+INFRA_SERVICES = postgres redis nats minio minio-init mailpit
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-# ─── Development ───
-start: ## Start everything (infra + Go services + frontends) with hot reload
-	@./scripts/start-dev.sh
+# ─── Development (fully containerized — only Docker required) ───
+start: ## Build & run the entire system in containers with hot reload
+	$(COMPOSE) up -d --build
+	@echo ""
+	@echo "System is up (containers). Useful URLs:"
+	@echo "  API Gateway:      http://localhost:7000"
+	@echo "  Merchant Portal:  http://localhost:7010"
+	@echo "  Admin Dashboard:  http://localhost:7011"
+	@echo "  Mailpit UI:       http://localhost:7027"
+	@echo "  MinIO Console:    http://localhost:7025  (minioadmin / minioadmin123)"
+	@echo ""
+	@echo "  Logs:   make logs   (all)  |  make logs svc=merchant"
+	@echo "  Status: make status        Stop:  make stop"
+	@echo ""
 
-stop: ## Stop all running services
-	@./scripts/start-dev.sh stop
+stop: ## Stop & remove all containers
+	$(COMPOSE) down
 
-status: ## Show status of all services
-	@./scripts/start-dev.sh status
+restart: ## Restart a service (usage: make restart svc=merchant)
+	$(COMPOSE) restart $(svc)
+
+status: ## Show status of all containers
+	$(COMPOSE) ps
+
+logs: ## Tail logs (all, or one service: make logs svc=gateway)
+	$(COMPOSE) logs -f $(svc)
 
 dev: up ## Start dev environment (infra only)
 	@echo ""
 	@echo "Infrastructure ready:"
-	@echo "  PostgreSQL:    localhost:5433"
-	@echo "  Redis:         localhost:6379"
-	@echo "  NATS:          localhost:4222"
-	@echo "  NATS Monitor:  http://localhost:8222"
-	@echo "  MinIO Console: http://localhost:9001  (minioadmin / minioadmin123)"
-	@echo "  MinIO API:     http://localhost:9000"
-	@echo "  Mailpit UI:    http://localhost:8025"
-	@echo "  Mailpit SMTP:  localhost:1025"
+	@echo "  PostgreSQL:    localhost:7020"
+	@echo "  Redis:         localhost:7021"
+	@echo "  NATS:          localhost:7022"
+	@echo "  NATS Monitor:  http://localhost:7023"
+	@echo "  MinIO Console: http://localhost:7025  (minioadmin / minioadmin123)"
+	@echo "  MinIO API:     http://localhost:7024"
+	@echo "  Mailpit UI:    http://localhost:7027"
 	@echo ""
 
-up: ## Start infrastructure containers
-	docker compose up -d postgres redis nats minio minio-init mailpit
-	@echo "Waiting for services to be healthy..."
-	@docker compose exec -T postgres sh -c 'until pg_isready -U olp; do sleep 1; done' 2>/dev/null
+up: ## Start infrastructure containers only
+	$(COMPOSE) up -d $(INFRA_SERVICES)
 	@echo "Infrastructure is up."
 
 down: ## Stop all containers
-	docker compose down
+	$(COMPOSE) down
 
 down-clean: ## Stop all containers and remove volumes
-	docker compose down -v
+	$(COMPOSE) down -v
 
 up-observability: ## Start observability stack (Prometheus, Grafana)
 	docker compose --profile observability up -d
+
+# ─── Native (host) dev — fallback to the old air/pnpm workflow ───
+start-native: ## Start everything as host processes (requires go, air, pnpm)
+	@./scripts/start-dev.sh
+
+stop-native: ## Stop host processes started by start-native
+	@./scripts/start-dev.sh stop
+
+status-native: ## Status of host processes
+	@./scripts/start-dev.sh status
 
 # ─── Build ───
 build: ## Build all Go services
@@ -78,39 +109,22 @@ fmt: ## Format Go code
 vet: ## Run go vet
 	go vet ./pkg/... ./services/...
 
-# ─── Database ───
-DB_URL_BASE=postgres://olp:olp_dev_password@localhost:5433
-
+# ─── Database (runs in the migrate container — no host tools needed) ───
 migrate: ## Run all database migrations
-	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
-		echo "Migrating $$db..."; \
-		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
-	done
-	@echo "All migrations complete."
+	$(COMPOSE) run --rm migrate up
 
 migrate-down: ## Rollback last migration for all databases
-	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
-		echo "Rolling back $$db..."; \
-		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" down 1; \
-	done
+	$(COMPOSE) run --rm migrate down
 
 migrate-create: ## Create migration (usage: make migrate-create svc=payment name=create_payments)
 	@mkdir -p migrations/$(svc)
-	migrate create -ext sql -dir migrations/$(svc) -seq $(name)
+	$(COMPOSE) run --rm --entrypoint migrate migrate \
+		create -ext sql -dir /migrations/$(svc) -seq $(name)
 
-db-reset: ## Reset all databases (drop all, re-run migrations with seeds)
-	@echo "Resetting all databases..."
-	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
-		echo "Dropping all tables in $${db}_db..."; \
-		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" drop -f 2>/dev/null || true; \
-	done
-	@echo ""
-	@for db in merchant payment settlement exchange webhook subscription admin notification directdebit; do \
-		echo "Migrating $${db}_db..."; \
-		migrate -path migrations/$$db -database "$(DB_URL_BASE)/$${db}_db?sslmode=disable" up; \
-	done
-	@echo ""
-	@echo "All databases reset with seed data."
+db-reset: ## Drop everything and re-run all migrations
+	$(COMPOSE) run --rm migrate drop
+	$(COMPOSE) run --rm migrate up
+	@echo "All databases reset."
 
 # ─── Docker ───
 docker-build: ## Build all service Docker images

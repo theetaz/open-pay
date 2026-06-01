@@ -10,6 +10,11 @@ export default defineConfig({
     viteReact(),
   ],
   server: {
-    port: 4500,
+    port: 7011,
+    host: true,
+    watch: {
+      // Enabled inside Docker (bind mounts need polling on macOS/Windows).
+      usePolling: process.env.VITE_USE_POLLING === 'true',
+    },
   },
 })

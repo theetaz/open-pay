@@ -1,16 +1,128 @@
-# Production Docker Compose — Open Pay service containers
-# Usage: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-# Note: Infrastructure (postgres, redis, nats, minio) must be running separately
+# Production Docker Compose — Open Pay, fully self-contained.
+#
+# Designed to run on a SHARED host alongside other projects without conflicts:
+#   * Its own project namespace (name: openpay) and private network.
+#   * Bundled infra (postgres/redis/nats/minio) — NOT published to the host.
+#   * ONLY the gateway is published, bound to 127.0.0.1:${GATEWAY_BIND_PORT:-7000}.
+#     A host reverse proxy (nginx) terminates TLS and proxies to it.
+#   * Migrations run inside the network against this stack's own postgres.
+#
+# Usage on the VPS (wrapped by ./deploy.sh production):
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+name: openpay
+
+networks:
+  openpay:
+    name: openpay-net
+
+volumes:
+  openpay_postgres_data:
+  openpay_redis_data:
+  openpay_nats_data:
+  openpay_minio_data:
 
 services:
+  # ───────────────────────── Infrastructure ─────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: olp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: olp_default
+      POSTGRES_MULTIPLE_DATABASES: payment_db,merchant_db,settlement_db,subscription_db,exchange_db,webhook_db,admin_db,notification_db,directdebit_db
+    volumes:
+      - openpay_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    networks: [openpay]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U olp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - openpay_redis_data:/data
+    networks: [openpay]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    command: ["--js", "--sd", "/data", "--http_port", "8222"]
+    volumes:
+      - openpay_nats_data:/data
+    networks: [openpay]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - openpay_minio_data:/data
+    networks: [openpay]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [openpay]
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY};
+      mc mb --ignore-existing local/kyc-documents;
+      mc anonymous set download local/kyc-documents;
+      exit 0;
+      "
+    restart: "no"
+
+  # ─── Migrations (one-shot; runs inside the network, then exits) ───
+  migrate:
+    image: migrate/migrate:latest
+    profiles: ["tools"]
+    entrypoint: ["/bin/sh", "/docker-migrate.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./migrations:/migrations
+      - ./scripts/docker-migrate.sh:/docker-migrate.sh:ro
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ───────────────────────── Application ─────────────────────────
   gateway:
     build:
       context: .
       dockerfile: Dockerfile.service
       args:
         SERVICE: gateway
+    # Published ONLY on loopback; the host nginx reverse-proxies to it.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${GATEWAY_BIND_PORT:-7000}:8080"
     environment:
       PORT: "8080"
       JWT_SECRET: ${JWT_SECRET}
@@ -23,7 +135,11 @@ services:
       NOTIFICATION_SERVICE_URL: http://notification:8087
       ADMIN_SERVICE_URL: http://admin:8088
       DIRECTDEBIT_SERVICE_URL: http://directdebit:8089
-      REDIS_URL: redis:6379
+      REDIS_URL: redis://redis:6379
+    networks: [openpay]
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   payment:
@@ -39,7 +155,11 @@ services:
       EXCHANGE_SERVICE_URL: http://exchange:8085
       MERCHANT_SERVICE_URL: http://merchant:8082
       ADMIN_SERVICE_URL: http://admin:8088
-      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-https://olp-merchant.nipuntheekshana.com}
+      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL}
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   merchant:
@@ -55,15 +175,21 @@ services:
       NOTIFICATION_SERVICE_URL: http://notification:8087
       ADMIN_SERVICE_URL: http://admin:8088
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY}
       MINIO_BUCKET: kyc-documents
       MINIO_USE_SSL: "false"
-      SMTP_HOST: ${SMTP_HOST:-smtp.resend.com}
-      SMTP_PORT: ${SMTP_PORT:-2587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-resend}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
+      SMTP_FROM: ${SMTP_FROM}
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
 
   settlement:
@@ -76,6 +202,10 @@ services:
       PORT: "8083"
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/settlement_db?sslmode=disable
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   webhook:
@@ -89,6 +219,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/webhook_db?sslmode=disable
       NATS_URL: nats://nats:4222
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     restart: unless-stopped
 
   exchange:
@@ -101,6 +237,10 @@ services:
       PORT: "8085"
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/exchange_db?sslmode=disable
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   subscription:
@@ -113,6 +253,10 @@ services:
       PORT: "8086"
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/subscription_db?sslmode=disable
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   notification:
@@ -126,11 +270,17 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/notification_db?sslmode=disable
       NATS_URL: nats://nats:4222
-      SMTP_HOST: ${SMTP_HOST:-smtp.resend.com}
-      SMTP_PORT: ${SMTP_PORT:-2587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-resend}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
+      SMTP_FROM: ${SMTP_FROM}
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     restart: unless-stopped
 
   admin:
@@ -144,10 +294,16 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/admin_db?sslmode=disable
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin123}
+      MINIO_ACCESS_KEY: ${S3_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${S3_SECRET_KEY}
       MINIO_BUCKET: kyc-documents
       MINIO_USE_SSL: "false"
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
 
   directdebit:
@@ -160,4 +316,8 @@ services:
       PORT: "8089"
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD}@postgres:5432/directdebit_db?sslmode=disable
+    networks: [openpay]
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
