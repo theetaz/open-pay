@@ -79,6 +79,13 @@ func NewRouter(h *AdminHandler, jwtSecret string, uploadHandler ...*AdminUploadH
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// Health check (used by the container HEALTHCHECK and the gateway)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	// Public admin auth routes
 	r.Post("/v1/admin/auth/login", h.AdminLogin)
 	r.Post("/v1/admin/auth/refresh", h.AdminRefreshToken)

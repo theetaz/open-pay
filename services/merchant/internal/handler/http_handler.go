@@ -79,6 +79,13 @@ func NewRouter(h *MerchantHandler, branchRepo branchRepo, paymentLinkRepo paymen
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// Health check (used by the container HEALTHCHECK and the gateway)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	// Public auth routes
 	r.Post("/v1/auth/register", h.RegisterWithUser)
 	r.Post("/v1/auth/login", h.Login)
