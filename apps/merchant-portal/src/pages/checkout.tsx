@@ -55,7 +55,7 @@ export function CheckoutPage() {
         <div className="w-full max-w-md text-center">
           <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
           <h2 className="text-2xl font-bold mt-4">Payment Successful</h2>
-          <p className="text-muted-foreground mt-2">{payment.amountUsdt} USDT received</p>
+          <p className="text-muted-foreground mt-2">{payment.amountUsdt} {payment.currency} received</p>
           <p className="text-xs text-muted-foreground mt-1">Payment No: {payment.paymentNo}</p>
           {successUrl && (
             <p className="text-sm text-muted-foreground mt-4">Redirecting back to store in 3 seconds...</p>
@@ -105,6 +105,10 @@ export function CheckoutPage() {
     qrValue = `${window.location.origin}/sandbox/pay/${providerPayId}?pid=${paymentId}`
   }
 
+  // On-chain (EIP-681) mode: parse the deposit address + token amount so the
+  // payer can scan with any wallet OR copy the address manually.
+  const onchain = parseEIP681(payment.qrContent)
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -116,10 +120,10 @@ export function CheckoutPage() {
         <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="text-center mb-6">
             <p className="text-sm text-muted-foreground">Amount Due</p>
-            <p className="text-3xl font-bold mt-1">{payment.amountUsdt} USDT</p>
+            <p className="text-3xl font-bold mt-1">{payment.amountUsdt} {payment.currency}</p>
             {payment.exchangeRate && (
               <p className="text-xs text-muted-foreground mt-1">
-                ≈ {payment.amount} {payment.currency}
+                ≈ {payment.amount} {payment.currency} @ {payment.exchangeRate}
               </p>
             )}
           </div>
@@ -133,9 +137,37 @@ export function CheckoutPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {isSandbox ? 'Scan with your phone to open mock wallet' : 'Scan with your wallet app to pay'}
+              {isSandbox
+                ? 'Scan with your phone to open mock wallet'
+                : onchain
+                  ? 'Scan with MetaMask or any crypto wallet'
+                  : 'Scan with your wallet app to pay'}
             </p>
           </div>
+
+          {/* On-chain manual payment details (for desktop / wallets that can't scan) */}
+          {onchain && (
+            <div className="mt-4 rounded-md border border-border bg-muted/50 p-3 space-y-2">
+              <p className="text-xs font-medium">Or send manually from any wallet</p>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Send exactly</span>
+                <span className="font-mono font-semibold text-foreground">
+                  {onchain.amount} {payment.currency}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Network</span>
+                <span className="font-mono">BSC Testnet (97)</span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">To this address</p>
+                <CopyableAddress address={onchain.address} />
+              </div>
+              <p className="text-[11px] text-amber-500/80">
+                Send the exact amount of {payment.currency} on BSC Testnet only. Other tokens or networks will not be detected.
+              </p>
+            </div>
+          )}
 
           <div className="mt-4 flex items-center justify-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
@@ -176,6 +208,42 @@ export function CheckoutPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+// parseEIP681 extracts the deposit address and human-readable token amount from
+// an EIP-681 ERC20 transfer URI:
+//   ethereum:<token>@<chainId>/transfer?address=<deposit>&uint256=<baseUnits>
+// Returns null for non-on-chain QR content (e.g. sandbox or CEX checkout URLs).
+function parseEIP681(qr: string | undefined): { address: string; amount: string } | null {
+  if (!qr || !qr.startsWith('ethereum:')) return null
+  try {
+    const url = new URL(qr.replace('ethereum:', 'https://').replace('@', '/chain/'))
+    const address = url.searchParams.get('address') || ''
+    const raw = url.searchParams.get('uint256') || '0'
+    // Tokens here (USDC/USDT) use 6 decimals.
+    const amount = (Number(raw) / 1_000_000).toString()
+    if (!address) return null
+    return { address, amount }
+  } catch {
+    return null
+  }
+}
+
+function CopyableAddress({ address }: { address: string }) {
+  const [copied, setCopied] = React.useState(false)
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard?.writeText(address)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
+      className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs font-mono break-all text-left hover:bg-accent transition-colors"
+      title="Click to copy"
+    >
+      {copied ? 'Copied!' : address}
+    </button>
   )
 }
 
