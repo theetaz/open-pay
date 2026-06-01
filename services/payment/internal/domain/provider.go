@@ -15,12 +15,17 @@ type ProviderPaymentResponse struct {
 	QRContent     string
 	CheckoutLink  string
 	DeepLink      string
+	// WalletAddress is the on-chain deposit address (on-chain provider only).
+	WalletAddress string
+	// DepositIndex is the HD-wallet index used to derive WalletAddress.
+	DepositIndex int64
 }
 
 // ProviderPaymentStatus is the status returned by a provider.
 type ProviderPaymentStatus struct {
-	Status PaymentStatus
-	TxHash string
+	Status      PaymentStatus
+	TxHash      string
+	BlockNumber int64
 }
 
 // PaymentProvider defines the abstraction over exchange partner APIs.

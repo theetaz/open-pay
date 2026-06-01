@@ -55,9 +55,9 @@ type bybitEnvDetail struct {
 }
 
 type bybitCreateResp struct {
-	RetCode int              `json:"retCode"`
-	RetMsg  string           `json:"retMsg"`
-	Result  bybitCreateData  `json:"result"`
+	RetCode int             `json:"retCode"`
+	RetMsg  string          `json:"retMsg"`
+	Result  bybitCreateData `json:"result"`
 }
 
 type bybitCreateData struct {
@@ -72,9 +72,9 @@ type bybitQueryReq struct {
 }
 
 type bybitQueryResp struct {
-	RetCode int             `json:"retCode"`
-	RetMsg  string          `json:"retMsg"`
-	Result  bybitQueryData  `json:"result"`
+	RetCode int            `json:"retCode"`
+	RetMsg  string         `json:"retMsg"`
+	Result  bybitQueryData `json:"result"`
 }
 
 type bybitQueryData struct {

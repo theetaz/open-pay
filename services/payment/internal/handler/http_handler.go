@@ -191,8 +191,8 @@ func (h *PaymentHandler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		h.auditLog.Log(r.Context(), audit.LogEntry{
 			ActorID: actorID, ActorType: actorType, MerchantID: &merchantID,
 			Action: "payment.initiated", ResourceType: "payment", ResourceID: &payment.ID,
-			IPAddress:  stripPort(r.RemoteAddr),
-			Metadata:   map[string]string{"amount": payment.Amount.String(), "currency": payment.Currency, "provider": payment.Provider},
+			IPAddress: stripPort(r.RemoteAddr),
+			Metadata:  map[string]string{"amount": payment.Amount.String(), "currency": payment.Currency, "provider": payment.Provider},
 		})
 	}
 
@@ -529,26 +529,26 @@ func (h *PaymentHandler) SimulatePayment(w http.ResponseWriter, r *http.Request)
 // --- Request/Response types ---
 
 type createPaymentRequest struct {
-	Amount            string              `json:"amount"`
-	Currency          string              `json:"currency"`
-	Provider          string              `json:"provider"`
-	MerchantTradeNo   string              `json:"merchantTradeNo"`
-	WebhookURL        string              `json:"webhookUrl"`
-	SuccessURL        string              `json:"successUrl"`
-	CancelURL         string              `json:"cancelUrl"`
-	CustomerEmail     string              `json:"customerEmail"`
-	BranchID          *uuid.UUID          `json:"branchId"`
-	OrderExpireTime   string              `json:"orderExpireTime"`
-	CustomerBilling   *customerBillingReq `json:"customerBilling"`
-	Goods             []goodItemReq       `json:"goods"`
+	Amount          string              `json:"amount"`
+	Currency        string              `json:"currency"`
+	Provider        string              `json:"provider"`
+	MerchantTradeNo string              `json:"merchantTradeNo"`
+	WebhookURL      string              `json:"webhookUrl"`
+	SuccessURL      string              `json:"successUrl"`
+	CancelURL       string              `json:"cancelUrl"`
+	CustomerEmail   string              `json:"customerEmail"`
+	BranchID        *uuid.UUID          `json:"branchId"`
+	OrderExpireTime string              `json:"orderExpireTime"`
+	CustomerBilling *customerBillingReq `json:"customerBilling"`
+	Goods           []goodItemReq       `json:"goods"`
 }
 
 type customerBillingReq struct {
-	FirstName  string `json:"firstName"`
-	LastName   string `json:"lastName"`
-	Email      string `json:"email"`
-	Phone      string `json:"phone"`
-	Address    string `json:"address"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Address   string `json:"address"`
 }
 
 type goodItemReq struct {
