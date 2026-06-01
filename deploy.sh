@@ -48,8 +48,20 @@ fi
 
 # --- Pull latest code ---
 echo "==> Fetching latest code from $BRANCH..."
+BEFORE_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
+AFTER_SHA="$(git rev-parse HEAD 2>/dev/null || echo none)"
+
+# --- Re-exec the freshly pulled script ---
+# `git reset` may have rewritten THIS file while bash still runs the old copy
+# from memory. If the code changed, re-exec the updated deploy.sh exactly once
+# (guarded by OPENPAY_DEPLOY_REEXEC) so the new logic always runs.
+if [ "$BEFORE_SHA" != "$AFTER_SHA" ] && [ "${OPENPAY_DEPLOY_REEXEC:-0}" != "1" ]; then
+  echo "==> Code updated ($BEFORE_SHA -> $AFTER_SHA); re-executing updated deploy.sh..."
+  export OPENPAY_DEPLOY_REEXEC=1
+  exec bash "/opt/openpay/deploy.sh" "$ENVIRONMENT"
+fi
 
 # --- Build images ---
 echo "==> Building service images..."
