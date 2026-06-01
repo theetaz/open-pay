@@ -38,7 +38,7 @@ services:
       DIRECTDEBIT_SERVICE_URL: http://directdebit:8089
       REDIS_URL: redis://redis:6379
     ports:
-      - "8080:8080"
+      - "7000:8080"
     depends_on:
       redis:
         condition: service_healthy
@@ -54,9 +54,9 @@ services:
       EXCHANGE_SERVICE_URL: http://exchange:8085
       MERCHANT_SERVICE_URL: http://merchant:8082
       ADMIN_SERVICE_URL: http://admin:8088
-      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-http://localhost:4600}
+      MERCHANT_PORTAL_URL: ${MERCHANT_PORTAL_URL:-http://localhost:7010}
     ports:
-      - "8081:8081"
+      - "7001:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,7 +82,7 @@ services:
       SMTP_PASSWORD: ""
       SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
     ports:
-      - "8082:8082"
+      - "7002:8082"
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +98,7 @@ services:
       PORT: "8083"
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/settlement_db?sslmode=disable
     ports:
-      - "8083:8083"
+      - "7003:8083"
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,7 +113,7 @@ services:
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/webhook_db?sslmode=disable
       NATS_URL: nats://nats:4222
     ports:
-      - "8084:8084"
+      - "7004:8084"
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,7 +129,7 @@ services:
       PORT: "8085"
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/exchange_db?sslmode=disable
     ports:
-      - "8085:8085"
+      - "7005:8085"
     depends_on:
       postgres:
         condition: service_healthy
@@ -143,7 +143,7 @@ services:
       PORT: "8086"
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/subscription_db?sslmode=disable
     ports:
-      - "8086:8086"
+      - "7006:8086"
     depends_on:
       postgres:
         condition: service_healthy
@@ -163,7 +163,7 @@ services:
       SMTP_PASSWORD: ""
       SMTP_FROM: ${SMTP_FROM:-noreply@openlankapay.dev}
     ports:
-      - "8087:8087"
+      - "7007:8087"
     depends_on:
       postgres:
         condition: service_healthy
@@ -184,7 +184,7 @@ services:
       MINIO_BUCKET: kyc-documents
       MINIO_USE_SSL: "false"
     ports:
-      - "8088:8088"
+      - "7008:8088"
     depends_on:
       postgres:
         condition: service_healthy
@@ -200,7 +200,7 @@ services:
       PORT: "8089"
       DATABASE_URL: postgres://olp:${POSTGRES_PASSWORD:-olp_dev_password}@postgres:5432/directdebit_db?sslmode=disable
     ports:
-      - "8089:8089"
+      - "7009:8089"
     depends_on:
       postgres:
         condition: service_healthy
@@ -212,7 +212,7 @@ services:
       dockerfile: Dockerfile.dev.web
     command: sh -c "pnpm install && pnpm dev"
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:7000}
       VITE_USE_POLLING: "true"
       # Keep pnpm's content store inside the named volume, not the bind mount,
       # so nothing leaks into the host working tree.
@@ -221,7 +221,7 @@ services:
       - ./apps/merchant-portal:/app
       - merchant-portal-modules:/app/node_modules
     ports:
-      - "4600:4600"
+      - "7010:7010"
     restart: unless-stopped
     depends_on:
       - gateway
@@ -233,7 +233,7 @@ services:
       dockerfile: Dockerfile.dev.web
     command: sh -c "pnpm install && pnpm dev"
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:7000}
       VITE_USE_POLLING: "true"
       # Keep pnpm's content store inside the named volume, not the bind mount,
       # so nothing leaks into the host working tree.
@@ -242,7 +242,7 @@ services:
       - ./apps/admin-dashboard:/app
       - admin-dashboard-modules:/app/node_modules
     ports:
-      - "4500:4500"
+      - "7011:7011"
     restart: unless-stopped
     depends_on:
       - gateway

@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: olp_default
       POSTGRES_MULTIPLE_DATABASES: payment_db,merchant_db,settlement_db,subscription_db,exchange_db,webhook_db,admin_db,notification_db,directdebit_db
     ports:
-      - "5433:5432"
+      - "7020:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
@@ -21,7 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "7021:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -34,8 +34,8 @@ services:
     image: nats:2-alpine
     command: ["--js", "--sd", "/data", "--http_port", "8222"]
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "7022:4222"
+      - "7023:8222"
     volumes:
       - nats_data:/data
     healthcheck:
@@ -52,8 +52,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "7024:9000"
+      - "7025:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -79,8 +79,8 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "7026:1025"
+      - "7027:8025"
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
