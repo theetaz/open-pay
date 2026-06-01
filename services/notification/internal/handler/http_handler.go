@@ -40,6 +40,13 @@ func NewRouter(h *NotificationHandler, jwtSecret string) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
+	// Health check (used by the container HEALTHCHECK and the gateway)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTMiddleware(jwtSecret))
 		r.Get("/v1/notifications", h.ListNotifications)
