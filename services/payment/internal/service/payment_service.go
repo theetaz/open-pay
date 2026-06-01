@@ -38,6 +38,12 @@ type MerchantClient interface {
 	IncrementPaymentLinkUsage(ctx context.Context, slug string) error
 }
 
+// SettlementClient defines the contract for crediting a merchant's balance when
+// a payment is confirmed.
+type SettlementClient interface {
+	CreditPayment(ctx context.Context, merchantID uuid.UUID, netUSDT, feesUSDT decimal.Decimal) error
+}
+
 // ListParams holds pagination and filter parameters.
 type ListParams struct {
 	Page     int
@@ -76,7 +82,14 @@ type PaymentService struct {
 	exchange    ExchangeClient
 	events      EventPublisher
 	merchant    MerchantClient
+	settlement  SettlementClient
 	fraudEngine *fraud.Engine
+}
+
+// SetSettlementClient wires the settlement client used to credit merchants on
+// payment confirmation.
+func (s *PaymentService) SetSettlementClient(c SettlementClient) {
+	s.settlement = c
 }
 
 // NewPaymentService creates a new PaymentService.
@@ -159,10 +172,16 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 		}
 	}
 
-	// Create payment with provider
+	// Create payment with provider. Use the payment's own currency so on-chain
+	// providers can select the right token (USDC/USDT); CEX providers ignore it
+	// beyond their settlement asset.
+	providerCurrency := payment.Currency
+	if providerCurrency == "" || providerCurrency == "LKR" {
+		providerCurrency = "USDT"
+	}
 	provResp, err := prov.CreatePayment(ctx, domain.ProviderPaymentRequest{
 		Amount:   payment.AmountUSDT.String(),
-		Currency: "USDT",
+		Currency: providerCurrency,
 		OrderID:  payment.ID.String(),
 	})
 	if err != nil {
@@ -173,6 +192,10 @@ func (s *PaymentService) CreatePayment(ctx context.Context, input CreatePaymentI
 	payment.QRContent = provResp.QRContent
 	payment.CheckoutLink = provResp.CheckoutLink
 	payment.DeepLink = provResp.DeepLink
+	if provResp.WalletAddress != "" {
+		payment.WalletAddress = provResp.WalletAddress
+		payment.DepositIndex = provResp.DepositIndex
+	}
 
 	if err := s.repo.Create(ctx, payment); err != nil {
 		return nil, fmt.Errorf("storing payment: %w", err)
@@ -244,7 +267,23 @@ func (s *PaymentService) HandleProviderCallback(ctx context.Context, paymentID u
 		if err := payment.MarkPaid(status.TxHash); err != nil {
 			return err
 		}
+		payment.BlockNumber = status.BlockNumber
+
+		// Credit the merchant BEFORE persisting PAID. If the credit fails we
+		// return the error without saving, so the next poll re-fetches an
+		// INITIATED payment and retries cleanly — never a PAID row with no
+		// credit. The PAID-transition guard prevents any double credit.
+		if s.settlement != nil {
+			if err := s.settlement.CreditPayment(ctx, payment.MerchantID, payment.NetAmountUSDT, payment.TotalFeesUSDT); err != nil {
+				return fmt.Errorf("crediting merchant: %w", err)
+			}
+		}
+
+		if err := s.repo.Update(ctx, payment); err != nil {
+			return err
+		}
 		_ = s.events.Publish(ctx, "payment.paid", payment)
+		return nil
 	case domain.StatusExpired:
 		if err := payment.TransitionTo(domain.StatusExpired); err != nil {
 			return err

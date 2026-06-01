@@ -76,6 +76,12 @@ func NewRouter(h *SettlementHandler, jwtSecret string) http.Handler {
 		r.Post("/v1/refunds/{id}/reject", h.RejectRefund)
 	})
 
+	// Internal service-to-service routes (no JWT — trusted within the cluster
+	// network, never exposed via the gateway). Mirrors the merchant service's
+	// /internal/ convention. Used by the payment service to credit a merchant
+	// when an on-chain payment is confirmed.
+	r.Post("/internal/settlements/credit", h.CreditPayment)
+
 	return r
 }
 
@@ -309,8 +315,8 @@ type withdrawalRequest struct {
 }
 
 type refundRequest struct {
-	PaymentID string `json:"paymentId"`
-	PaymentNo string `json:"paymentNo"`
+	PaymentID  string `json:"paymentId"`
+	PaymentNo  string `json:"paymentNo"`
 	AmountUSDT string `json:"amountUsdt"`
 	Reason     string `json:"reason"`
 }
@@ -327,13 +333,13 @@ type envelope map[string]any
 
 func balanceResponse(b *domain.MerchantBalance) map[string]any {
 	return map[string]any{
-		"merchantId":        b.MerchantID.String(),
-		"availableUsdt":     b.AvailableUSDT.String(),
-		"pendingUsdt":       b.PendingUSDT.String(),
-		"totalEarnedUsdt":   b.TotalEarnedUSDT.String(),
+		"merchantId":         b.MerchantID.String(),
+		"availableUsdt":      b.AvailableUSDT.String(),
+		"pendingUsdt":        b.PendingUSDT.String(),
+		"totalEarnedUsdt":    b.TotalEarnedUSDT.String(),
 		"totalWithdrawnUsdt": b.TotalWithdrawnUSDT.String(),
-		"totalFeesUsdt":     b.TotalFeesUSDT.String(),
-		"updatedAt":         b.UpdatedAt.Format(time.RFC3339),
+		"totalFeesUsdt":      b.TotalFeesUSDT.String(),
+		"updatedAt":          b.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

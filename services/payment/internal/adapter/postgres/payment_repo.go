@@ -16,7 +16,8 @@ import (
 
 // PaymentRepository is the PostgreSQL implementation for payment persistence.
 type PaymentRepository struct {
-	pool *pgxpool.Pool
+	pool          *pgxpool.Pool
+	tokenResolver func(currency string) string
 }
 
 // NewPaymentRepository creates a new PostgreSQL-backed PaymentRepository.
@@ -40,7 +41,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			status, customer_email, customer_first_name, customer_last_name,
 			customer_phone, customer_address, goods,
 			webhook_url, success_url, cancel_url,
-			tx_hash, block_number, wallet_address,
+			tx_hash, block_number, wallet_address, deposit_index,
 			lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
 			risk_score, risk_flags,
 			expire_time, paid_at, failed_at, idempotency_key,
@@ -54,11 +55,11 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 			$21, $22, $23, $24,
 			$25, $26, $27,
 			$28, $29, $30,
-			$31, $32, $33,
-			$34, $35, $36, $37, $38,
-			$39, $40,
-			$41, $42, $43, $44,
-			$45, $46
+			$31, $32, $33, $34,
+			$35, $36, $37, $38, $39,
+			$40, $41,
+			$42, $43, $44, $45,
+			$46, $47
 		)`
 
 	_, err := r.pool.Exec(ctx, query,
@@ -70,7 +71,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *domain.Payment) error
 		string(p.Status), p.CustomerEmail, p.CustomerFirstName, p.CustomerLastName,
 		p.CustomerPhone, p.CustomerAddress, goodsJSON,
 		p.WebhookURL, p.SuccessURL, p.CancelURL,
-		p.TxHash, p.BlockNumber, p.WalletAddress,
+		p.TxHash, p.BlockNumber, p.WalletAddress, nilIfZeroIndex(p.DepositIndex),
 		p.LKRAmount, p.LKRExchangeFee, p.LKRPlatformFee, p.LKRTotalFees, p.LKRNetAmount,
 		p.RiskScore, p.RiskFlags,
 		p.ExpireTime, p.PaidAt, p.FailedAt, nilIfEmpty(p.IdempotencyKey),
@@ -90,7 +91,7 @@ const paymentSelectCols = `id, merchant_id, branch_id, payment_no, COALESCE(merc
 	status, COALESCE(customer_email,''), COALESCE(customer_first_name,''), COALESCE(customer_last_name,''),
 	COALESCE(customer_phone,''), COALESCE(customer_address,''), goods,
 	COALESCE(webhook_url,''), COALESCE(success_url,''), COALESCE(cancel_url,''),
-	COALESCE(tx_hash,''), COALESCE(block_number,0), COALESCE(wallet_address,''),
+	COALESCE(tx_hash,''), COALESCE(block_number,0), COALESCE(wallet_address,''), COALESCE(deposit_index,0),
 	lkr_amount, lkr_exchange_fee, lkr_platform_fee, lkr_total_fees, lkr_net_amount,
 	COALESCE(risk_score, 0), risk_flags,
 	expire_time, paid_at, failed_at, COALESCE(idempotency_key,''),
@@ -259,7 +260,7 @@ func scanPayment(rows pgx.Rows) (*domain.Payment, error) {
 		&status, &p.CustomerEmail, &p.CustomerFirstName, &p.CustomerLastName,
 		&p.CustomerPhone, &p.CustomerAddress, &goodsJSON,
 		&p.WebhookURL, &p.SuccessURL, &p.CancelURL,
-		&p.TxHash, &p.BlockNumber, &p.WalletAddress,
+		&p.TxHash, &p.BlockNumber, &p.WalletAddress, &p.DepositIndex,
 		&p.LKRAmount, &p.LKRExchangeFee, &p.LKRPlatformFee, &p.LKRTotalFees, &p.LKRNetAmount,
 		&p.RiskScore, &p.RiskFlags,
 		&p.ExpireTime, &p.PaidAt, &p.FailedAt, &p.IdempotencyKey,
